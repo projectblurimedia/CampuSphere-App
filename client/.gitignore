@@ -67,5 +67,3 @@ app-example
 # -----------------------
 *.log
 
-# .Expo
-.expo/

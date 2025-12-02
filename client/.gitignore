@@ -1,0 +1,68 @@
+# -----------------------
+# Node / Dependencies
+# -----------------------
+node_modules/
+
+# -----------------------
+# Expo build output
+# -----------------------
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# -----------------------
+# React Native / Native
+# -----------------------
+ios/
+android/
+
+# Gradle / Kotlin
+.kotlin/
+*.orig.*
+
+# Certificates
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# -----------------------
+# Metro Bundler
+# -----------------------
+.metro-health-check*
+
+# -----------------------
+# Debug / Log files
+# -----------------------
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# -----------------------
+# macOS
+# -----------------------
+.DS_Store
+*.pem
+
+# -----------------------
+# Local env files
+# -----------------------
+.env*
+.env*.local
+
+# -----------------------
+# TypeScript
+# -----------------------
+*.tsbuildinfo
+
+# -----------------------
+# Examples / temp
+# -----------------------
+app-example
+
+# -----------------------
+# Misc
+# -----------------------
+*.log

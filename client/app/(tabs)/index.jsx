@@ -1,98 +1,45 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
-
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { ScrollView, useColorScheme } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { Colors } from '@/constants/theme'
+import DashboardHeader from '@/components/dashboard-header'
+import StatsGrid from '@/components/stats-grid'
+import QuickActions from '@/components/quick-actions'
+import RecentActivity from '@/components/recent-activity'
+import UpcomingEvents from '@/components/upcoming-events'
 
 export default function HomeScreen() {
+  const colorScheme = useColorScheme()
+  const colors = Colors[colorScheme ?? 'light']
+  const isDark = colorScheme === 'dark'
+
+  const dashboardColors = {
+    cardBg: isDark ? '#1e293b' : '#ffffff',
+    border: isDark ? '#334155' : '#e9ecef',
+    success: isDark ? '#34d399' : '#10b981',
+    warning: isDark ? '#fbbf24' : '#f59e0b',
+    info: isDark ? '#60a5fa' : '#3b82f6',
+    danger: isDark ? '#f87171' : '#ef4444',
+    purple: isDark ? '#a78bfa' : '#8b5cf6',
+    cyan: isDark ? '#22d3ee' : '#06b6d4',
+    green: isDark ? '#34d399' : '#10b981',
+    orange: isDark ? '#fb923c' : '#f97316',
+    pink: isDark ? '#f472b6' : '#ec4899',
+    teal: isDark ? '#2dd4bf' : '#14b8a6',
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
-
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
-  );
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView 
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 20 }}
+      >
+        <DashboardHeader colors={colors} dashboardColors={dashboardColors} />
+        <StatsGrid colors={colors} dashboardColors={dashboardColors} />
+        <QuickActions colors={colors} dashboardColors={dashboardColors} />
+        <RecentActivity colors={colors} dashboardColors={dashboardColors} />
+        <UpcomingEvents colors={colors} dashboardColors={dashboardColors} />
+      </ScrollView>
+    </SafeAreaView>
+  )
 }
-
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});

@@ -4,9 +4,7 @@ import { StatusBar } from 'expo-status-bar'
 import 'react-native-reanimated'
 import React, { useState, useEffect } from 'react'
 import * as Font from 'expo-font'
-import { View, ActivityIndicator } from 'react-native'
-
-import { useColorScheme } from '@/hooks/use-color-scheme'
+import { View, ActivityIndicator, useColorScheme } from 'react-native'
 
 import PoppinsLight from '../assets/fonts/Poppins-Light.ttf'
 import PoppinsRegular from '../assets/fonts/Poppins-Regular.ttf'

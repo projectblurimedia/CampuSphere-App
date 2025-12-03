@@ -1,22 +1,25 @@
 import { Tabs } from 'expo-router'
 import React from 'react'
-import { FontAwesome5, FontAwesome6, Ionicons, MaterialIcons } from '@expo/vector-icons'
+import { FontAwesome5, FontAwesome6, MaterialIcons } from '@expo/vector-icons'
 import { Colors } from '@/constants/theme'
-import { useColorScheme } from '@/hooks/use-color-scheme'
+import { useColorScheme } from 'react-native'
 
 export default function TabLayout() {
   const colorScheme = useColorScheme()
-  const tintColor = Colors[colorScheme ?? 'light'].tint
+  const tintColor = Colors[colorScheme ?? 'light']?.tint
+  const iconColor = Colors[colorScheme ?? 'light']?.icon
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: tintColor,
+        tabBarInactiveTintColor: iconColor,
         headerShown: false,
         tabBarStyle: {
           height: 70, 
-          paddingTop: 5,
+          paddingTop: 7,
           paddingBottom: 10,
+          backgroundColor: Colors[colorScheme ?? 'light']?.tabBarBackground, 
         },
       }}
     >

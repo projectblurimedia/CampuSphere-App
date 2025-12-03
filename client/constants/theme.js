@@ -1,31 +1,27 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
+import { Platform } from 'react-native'
 
-import { Platform } from 'react-native';
-
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+const tintColor = '#1d9bf0'
 
 export const Colors = {
   light: {
     text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
+    background: '#fafdff',
+    tint: tintColor,
+    icon: '#496078',
+    tabIconDefault: '#637785',
+    tabIconSelected: tintColor,
+    tabBarBackground: '#fafdff',
   },
   dark: {
     text: '#ECEDEE',
-    background: '#151718',
-    tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
-    tabIconSelected: tintColorDark,
+    background: '#0c0f14',
+    tint: tintColor,
+    icon: '#cad5e0',
+    tabIconDefault: '#728390',
+    tabIconSelected: tintColor,
+    tabBarBackground: '#0c0f14',
   },
-};
+}
 
 export const Fonts = Platform.select({
   ios: {
@@ -50,4 +46,4 @@ export const Fonts = Platform.select({
     rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
     mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
   },
-});
+})

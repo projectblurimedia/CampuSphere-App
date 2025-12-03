@@ -12,14 +12,14 @@ export function ThemedText({
   const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text')
 
   const fontFamilyMap = {
-    default: 'Poppins-Regular',
+    default: 'Poppins-Medium',
     defaultSemiBold: 'Poppins-SemiBold',
     title: 'Poppins-Bold',
     subtitle: 'Poppins-SemiBold',
-    link: 'Poppins-Regular',
+    link: 'Poppins-SemiBold',
   }
 
-  const fontFamily = fontFamilyMap[type] || 'Poppins-Regular'
+  const fontFamily = fontFamilyMap[type] || 'Poppins-Medium'
 
   return (
     <Text
@@ -57,6 +57,7 @@ const styles = StyleSheet.create({
   link: {
     fontSize: 14,
     lineHeight: 24,
+    letterSpacing: .3,
     color: '#1d9bf0',
   },
 })

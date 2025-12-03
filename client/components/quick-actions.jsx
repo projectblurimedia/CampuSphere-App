@@ -37,7 +37,7 @@ export default function QuickActions({ colors, dashboardColors }) {
       <View style={styles.sectionHeader}>
         <ThemedText type="subtitle">Quick Actions</ThemedText>
         <TouchableOpacity activeOpacity={0.8}>
-          <ThemedText type="link" style={{ color: colors.tint, fontSize: 13 }}>View All</ThemedText>
+          <ThemedText type="link">View All</ThemedText>
         </TouchableOpacity>
       </View>
       <View style={styles.quickActionsGrid}>

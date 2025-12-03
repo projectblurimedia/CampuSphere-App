@@ -15,7 +15,7 @@ export default function UpcomingEvents({ colors, dashboardColors }) {
       <View style={styles.sectionHeader}>
         <ThemedText type="subtitle">Upcoming Events</ThemedText>
         <TouchableOpacity activeOpacity={0.8}>
-          <ThemedText type="link" style={{ color: colors.tint, fontSize: 13 }}>Calendar</ThemedText>
+          <ThemedText type="link">Calendar</ThemedText>
         </TouchableOpacity>
       </View>
       <View style={[styles.eventsContainer, { 
@@ -95,8 +95,8 @@ const styles = StyleSheet.create({
   },
   eventMonth: {
     fontSize: 12,
-    fontWeight: '600',
-    marginTop: 2,
+    fontWeight: '700',
+    marginTop: -10,
   },
   eventContent: {
     flex: 1,

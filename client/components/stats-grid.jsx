@@ -10,7 +10,7 @@ export default function StatsGrid({ colors, dashboardColors }) {
       title: 'Total Students',
       value: '1,248',
       change: '+5.2% this month',
-      icon: <FontAwesome6 name="users" size={26} color="#ffffff" />,
+      icon: <FontAwesome6 name="users" size={20} color="#ffffff" />,
       color: dashboardColors.info,
       trend: 'up',
       gradient: ['#3b82f6', '#1d4ed8'],
@@ -19,7 +19,7 @@ export default function StatsGrid({ colors, dashboardColors }) {
       title: 'Total Staff',
       value: '86',
       change: '+2 new hires',
-      icon: <FontAwesome5 name="chalkboard-teacher" size={24} color="#ffffff" />,
+      icon: <FontAwesome5 name="chalkboard-teacher" size={20} color="#ffffff" />,
       color: dashboardColors.purple,
       trend: 'up',
       gradient: ['#8b5cf6', '#7c3aed'],
@@ -28,7 +28,7 @@ export default function StatsGrid({ colors, dashboardColors }) {
       title: 'Monthly Revenue',
       value: '₹4.86L',
       change: '+12.5% from last month',
-      icon: <MaterialIcons name="attach-money" size={28} color="#ffffff" />,
+      icon: <MaterialIcons name="attach-money" size={24} color="#ffffff" />,
       color: dashboardColors.green,
       trend: 'up',
       gradient: ['#10b981', '#059669'],
@@ -37,7 +37,7 @@ export default function StatsGrid({ colors, dashboardColors }) {
       title: 'Attendance',
       value: '94.2%',
       change: '-1.8% from yesterday',
-      icon: <FontAwesome6 name="clipboard-check" size={24} color="#ffffff" />,
+      icon: <FontAwesome6 name="clipboard-check" size={20} color="#ffffff" />,
       color: dashboardColors.orange,
       trend: 'down',
       gradient: ['#f97316', '#ea580c'],
@@ -48,7 +48,7 @@ export default function StatsGrid({ colors, dashboardColors }) {
     <View style={styles.container}>
       <View style={styles.header}>
         <ThemedText type="subtitle" style={styles.sectionTitle}>Overview</ThemedText>
-        <ThemedText type="link" style={[styles.viewAll, { color: colors.tint }]}>This Month</ThemedText>
+        <ThemedText type="link" style={styles.viewAll}>This Month</ThemedText>
       </View>
       
       <View style={styles.statsGrid}>
@@ -59,6 +59,8 @@ export default function StatsGrid({ colors, dashboardColors }) {
               styles.statCard, 
               { 
                 backgroundColor: dashboardColors.cardBg,
+                // Set width to 50% minus half the gap (10/2 = 5)
+                width: (width - 40 - 10) / 2,
               }
             ]}
           >
@@ -99,17 +101,10 @@ export default function StatsGrid({ colors, dashboardColors }) {
 
             {/* Bottom: Change container */}
             <View style={styles.changeContainer}>
-              <View style={[
-                styles.trendIndicator,
-                { 
-                  backgroundColor: stat.trend === 'up' ? 
-                    dashboardColors.success + '20' : 
-                    dashboardColors.danger + '20'
-                }
-              ]}>
+              <View style={styles.trendIndicator}>
                 <Feather 
                   name={stat.trend === 'up' ? 'trending-up' : 'trending-down'} 
-                  size={12} 
+                  size={10} 
                   color={stat.trend === 'up' ? dashboardColors.success : dashboardColors.danger} 
                 />
               </View>
@@ -119,7 +114,6 @@ export default function StatsGrid({ colors, dashboardColors }) {
                   styles.changeText, 
                   { 
                     color: stat.trend === 'up' ? dashboardColors.success : dashboardColors.danger,
-                    fontWeight: '600'
                   }
                 ]}
                 numberOfLines={1}
@@ -162,14 +156,14 @@ const styles = StyleSheet.create({
   },
   viewAll: {
     fontSize: 13,
-    fontWeight: '600',
   },
   statsGrid: {
-    flexDirection: 'column',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
   statCard: {
-    flex: 1,
-    padding: 20,
+    padding: 16,
     borderRadius: 16,
     marginBottom: 10,
     borderWidth: 1,
@@ -183,61 +177,57 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   topRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: 'column',
+    alignItems: 'center',
     marginBottom: 8,
   },
   iconContainer: {
-    width: 56,
-    height: 56,
+    width: 52,
+    height: 52,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
-    marginRight: 12,
+    marginBottom: 8,
   },
   gradientIcon: {
-    width: 50,
-    height: 50,
+    width: 45,
+    height: 45,
     borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
   },
   valueTitleColumn: {
-    flex: 1,
     flexDirection: 'column',
+    alignItems: 'center',
   },
   statValue: {
-    fontSize: 22,
+    textAlign: 'center',
+    fontSize: 20,
     fontWeight: '800',
-    marginBottom: -2,
     letterSpacing: -0.5,
   },
   statTitle: {
-    fontSize: 13,
+    fontSize: 12,
     opacity: 0.7,
     fontWeight: '500',
     letterSpacing: 0.3,
+    textAlign: 'center',
   },
   changeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.05)',
   },
   trendIndicator: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
+    marginRight: 6,
   },
   changeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    flex: 1,
   },
   cornerDecor: {
     position: 'absolute',

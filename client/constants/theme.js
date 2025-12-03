@@ -4,6 +4,7 @@ const tintColor = '#1d9bf0'
 
 export const Colors = {
   light: {
+    title: '#0d3755',
     text: '#11181C',
     background: '#fafdff',
     tint: tintColor,
@@ -13,6 +14,7 @@ export const Colors = {
     tabBarBackground: '#fafdff',
   },
   dark: {
+    title: '#c1d7e7',
     text: '#ECEDEE',
     background: '#0c0f14',
     tint: tintColor,

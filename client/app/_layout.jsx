@@ -8,6 +8,7 @@ import { View, ActivityIndicator, useColorScheme } from 'react-native'
 
 import PoppinsLight from '../assets/fonts/Poppins-Light.ttf'
 import PoppinsRegular from '../assets/fonts/Poppins-Regular.ttf'
+import PoppinsMedium from '../assets/fonts/Poppins-Medium.ttf'
 import PoppinsSemiBold from '../assets/fonts/Poppins-SemiBold.ttf'
 import PoppinsBold from '../assets/fonts/Poppins-Bold.ttf'
 import PoppinsExtraBold from '../assets/fonts/Poppins-ExtraBold.ttf'
@@ -23,8 +24,9 @@ export default function RootLayout() {
   useEffect(() => {
     async function loadFonts() {
       await Font.loadAsync({
-        'Poppins-light': PoppinsLight,
+        'Poppins-Light': PoppinsLight,
         'Poppins-Regular': PoppinsRegular,
+        'Poppins-Medium': PoppinsMedium,
         'Poppins-SemiBold': PoppinsSemiBold,
         'Poppins-Bold': PoppinsBold,
         'Poppins-ExtraBold': PoppinsExtraBold,

@@ -32,7 +32,7 @@ export default function HomeScreen() {
       <ScrollView 
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ paddingBottom: 10 }}
       >
         <DashboardHeader colors={colors} dashboardColors={dashboardColors} />
         <StatsGrid colors={colors} dashboardColors={dashboardColors} />

@@ -1,58 +1,69 @@
-// components/staff/StaffHeader.js
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native'
+import { View, StyleSheet, TouchableOpacity } from 'react-native'
+import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons } from '@expo/vector-icons'
-import { LinearGradient } from 'expo-linear-gradient'
 
-export default function StaffHeader() {
+export default function StaffHeader({ colors, dashboardColors }) {
   return (
-    <LinearGradient
-      colors={['#2196F3', '#1976D2']}
-      style={styles.header}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-    >
+    <View style={[styles.header, { backgroundColor: colors.background }]}>
       <View style={styles.headerContent}>
-        <View>
-          <Text style={styles.headerTitle}>Staff Management</Text>
-          <Text style={styles.headerSubtitle}>Manage all staff members efficiently</Text>
+        <View style={styles.headerTextContainer}>
+          <ThemedText type="title" style={styles.headerTitle}>Staff</ThemedText>
+          <ThemedText style={[styles.headerSubtitle, { color: colors.icon }]}>
+            Manage staff here
+          </ThemedText>
         </View>
-        <TouchableOpacity style={styles.filterButton}>
-          <Ionicons name="filter" size={22} color="#fff" />
+        
+        <TouchableOpacity 
+          style={[styles.addBtn, { backgroundColor: colors.tint }]}
+          activeOpacity={0.8}
+        >
+          <ThemedText style={styles.addBtnText}>Add</ThemedText>
+          <Ionicons name="person-add" size={18} color="#fff" />
         </TouchableOpacity>
       </View>
-    </LinearGradient>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
   header: {
-    paddingTop: 60,
-    paddingBottom: 30,
     paddingHorizontal: 20,
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
+    paddingTop: 5,
+    paddingBottom: 15,
   },
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  headerTextContainer: {
+    flex: 1,
+  },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 24,
+    opacity: 0.9,
     fontWeight: '700',
-    color: '#fff',
-    marginBottom: 5,
   },
   headerSubtitle: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
+    opacity: 0.8,
   },
-  filterButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
+  addBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  addBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 })

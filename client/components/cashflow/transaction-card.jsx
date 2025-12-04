@@ -1,5 +1,5 @@
-import { View, StyleSheet, TouchableOpacity } from 'react-native'
-import { ThemedText } from '@/components/themed-text'
+import { View, StyleSheet } from 'react-native'
+import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons'
 
 export default function TransactionCard({ transaction, colors, dashboardColors }) {

@@ -1,5 +1,5 @@
 import { View, StyleSheet, Dimensions } from 'react-native'
-import { ThemedText } from '@/components/themed-text'
+import { ThemedText } from '@/components/ui/themed-text'
 
 const { width } = Dimensions.get('window')
 

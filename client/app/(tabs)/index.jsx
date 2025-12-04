@@ -4,7 +4,7 @@ import { Colors } from '@/constants/theme'
 import DashboardHeader from '@/components/dashboard/dashboard-header'
 import StatsGrid from '@/components/dashboard/stats-grid'
 import QuickActions from '@/components/dashboard/quick-actions'
-import RecentActivity from '@/components/recent-activity'
+import RecentActivity from '@/components/dashboard/recent-activity'
 import UpcomingEvents from '@/components/dashboard/upcoming-events'
 
 export default function HomeScreen() {

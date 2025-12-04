@@ -6,7 +6,7 @@ import {
   FlatList,
   useColorScheme
 } from 'react-native'
-import { ThemedText } from '@/components/themed-text'
+import { ThemedText } from '@/components/ui/themed-text'
 import { Colors } from '@/constants/theme'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import StudentsHeader from '@/components/students/students-header'

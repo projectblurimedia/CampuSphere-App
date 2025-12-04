@@ -1,5 +1,5 @@
 import { View, StyleSheet, TouchableOpacity } from 'react-native'
-import { ThemedText } from '@/components/themed-text'
+import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons, Feather } from '@expo/vector-icons'
 
 export default function StudentCard({ student, colors, dashboardColors }) {

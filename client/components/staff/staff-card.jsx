@@ -1,5 +1,5 @@
 import { View, StyleSheet, TouchableOpacity } from 'react-native'
-import { ThemedText } from '@/components/themed-text'
+import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons, FontAwesome5, MaterialIcons } from '@expo/vector-icons'
 
 export default function StaffCard({ staff, colors, dashboardColors }) {

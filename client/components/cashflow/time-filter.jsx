@@ -1,5 +1,5 @@
 import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native'
-import { ThemedText } from '@/components/themed-text'
+import { ThemedText } from '@/components/ui/themed-text'
 
 export default function TimeFilter({ 
   timeFilters, 

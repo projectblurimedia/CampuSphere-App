@@ -1,11 +1,11 @@
 import { ScrollView, useColorScheme } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Colors } from '@/constants/theme'
-import DashboardHeader from '@/components/dashboard-header'
-import StatsGrid from '@/components/stats-grid'
-import QuickActions from '@/components/quick-actions'
+import DashboardHeader from '@/components/dashboard/dashboard-header'
+import StatsGrid from '@/components/dashboard/stats-grid'
+import QuickActions from '@/components/dashboard/quick-actions'
 import RecentActivity from '@/components/recent-activity'
-import UpcomingEvents from '@/components/upcoming-events'
+import UpcomingEvents from '@/components/dashboard/upcoming-events'
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme()

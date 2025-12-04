@@ -13,5 +13,5 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
-, "app/(tabs)/index.jsx", "app/modal.jsx", "app/_layout.jsx", "app/(tabs)/_layout.jsx", "components/themed-text.jsx", "constants/theme.js", "hooks/use-theme-color.js"  ]
+, "app/(tabs)/index.jsx", "app/modal.jsx", "app/_layout.jsx", "app/(tabs)/_layout.jsx", "components/ui/themed-text.jsx", "constants/theme.js", "hooks/use-theme-color.js"  ]
 }

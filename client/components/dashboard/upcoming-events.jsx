@@ -1,5 +1,5 @@
 import { View, StyleSheet, TouchableOpacity } from 'react-native'
-import { ThemedText } from '@/components/themed-text'
+import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons } from '@expo/vector-icons'
 
 export default function UpcomingEvents({ colors, dashboardColors }) {

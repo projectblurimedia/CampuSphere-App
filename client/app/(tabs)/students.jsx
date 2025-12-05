@@ -14,6 +14,7 @@ import SearchBar from '@/components/students/search-bar'
 import StatsCards from '@/components/students/stats-cards'
 import ClassGroup from '@/components/students/class-group'
 import StudentCard from '@/components/students/student-card'
+import QuickActions from '@/components/students/quick-actions'
 
 // Mock student data
 const studentsData = [
@@ -163,6 +164,11 @@ export default function Students() {
           dashboardColors={dashboardColors}
         />
 
+        <QuickActions 
+          colors={colors}
+          dashboardColors={dashboardColors}
+        />
+
         {searchQuery ? (
           <View style={styles.searchResults}>
             <ThemedText type='subtitle' style={[styles.resultsTitle, { color: colors.text }]}>
@@ -210,8 +216,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
     paddingBottom: 30,
+    paddingHorizontal: 20,
   },
   searchResults: {
     marginBottom: 20,

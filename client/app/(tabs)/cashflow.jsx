@@ -15,6 +15,7 @@ import TransactionCard from '@/components/cashflow/transaction-card'
 import TimeFilter from '@/components/cashflow/time-filter'
 import CategoryFilter from '@/components/cashflow/category-filter'
 import IncomeExpenseChart from '@/components/cashflow/income-expense-chart'
+import QuickActions from '@/components/cashflow/quick-actions'
 
 // Mock transaction data
 const transactionsData = [
@@ -214,6 +215,12 @@ export default function Cashflow() {
           dashboardColors={dashboardColors}
         />
 
+        {/* Quick Actions */}
+        <QuickActions 
+          colors={colors}
+          dashboardColors={dashboardColors}
+        />
+
         {/* Chart Section */}
         <IncomeExpenseChart 
           data={chartData}
@@ -281,8 +288,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
     paddingBottom: 30,
+    paddingHorizontal: 20,
   },
   resultsHeader: {
     flexDirection: 'row',
@@ -302,6 +309,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 40,
+    paddingHorizontal: 20,
   },
   emptyText: {
     fontSize: 16,

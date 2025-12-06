@@ -1,11 +1,17 @@
 import { View, StyleSheet, Dimensions, TouchableOpacity } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
-import { MaterialIcons, FontAwesome5, Ionicons } from '@expo/vector-icons'
+import { MaterialIcons, FontAwesome5, Ionicons, Feather } from '@expo/vector-icons'
 
 const { width } = Dimensions.get('window')
 
 export default function QuickActions({ colors, dashboardColors }) {
   const actions = [
+    {
+      title: 'New Staff',
+      icon: <MaterialIcons name="person-add" size={24} color="#fff" />,
+      bgColor: dashboardColors.purple,
+      iconBg: dashboardColors.purple + '15',
+    },
     {
       title: 'Attendance',
       icon: <FontAwesome5 name="clipboard-check" size={20} color="#fff" />,
@@ -13,20 +19,14 @@ export default function QuickActions({ colors, dashboardColors }) {
       iconBg: dashboardColors.info + '15',
     },
     {
-      title: 'Fee',
+      title: 'Salary',
       icon: <MaterialIcons name="attach-money" size={24} color="#fff" />,
       bgColor: dashboardColors.success,
       iconBg: dashboardColors.success + '15',
     },
     {
-      title: 'New Student',
-      icon: <Ionicons name="person-add" size={24} color="#fff" />,
-      bgColor: dashboardColors.purple,
-      iconBg: dashboardColors.purple + '15',
-    },
-    {
-      title: 'Marks',
-      icon: <MaterialIcons name="grade" size={24} color="#fff" />,
+      title: 'Leave',
+      icon: <Feather name="calendar" size={24} color="#fff" />,
       bgColor: dashboardColors.warning,
       iconBg: dashboardColors.warning + '15',
     },

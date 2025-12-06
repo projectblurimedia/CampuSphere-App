@@ -51,6 +51,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => <MaterialIcons name="payments" size={26} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="academics"
+        options={{
+          title: 'Academics',
+          tabBarIcon: ({ color, size }) => <MaterialIcons name="payments" size={26} color={color} />,
+        }}
+      />
     </Tabs>
   )
 }

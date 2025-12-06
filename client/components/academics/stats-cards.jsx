@@ -1,0 +1,101 @@
+import { View, StyleSheet } from 'react-native'
+import { ThemedText } from '@/components/ui/themed-text'
+import { MaterialIcons, FontAwesome5, Ionicons } from '@expo/vector-icons'
+
+export default function StatsCards({ colors, dashboardColors, statsData }) {
+  const stats = statsData || {
+    totalClasses: 12,
+    totalStudents: 450,
+    totalTeachers: 35,
+    avgClassSize: 38,
+  }
+
+  const cards = [
+    {
+      title: 'Total Classes',
+      value: stats.totalClasses,
+      icon: <MaterialIcons name="class" size={22} color={dashboardColors.info} />,
+      bgColor: dashboardColors.info + '15',
+    },
+    {
+      title: 'Total Students',
+      value: stats.totalStudents,
+      icon: <FontAwesome5 name="user-graduate" size={20} color={dashboardColors.success} />,
+      bgColor: dashboardColors.success + '15',
+    },
+    {
+      title: 'Teachers',
+      value: stats.totalTeachers,
+      icon: <Ionicons name="people" size={22} color={dashboardColors.warning} />,
+      bgColor: dashboardColors.warning + '15',
+    },
+    {
+      title: 'Avg Class Size',
+      value: stats.avgClassSize,
+      icon: <MaterialIcons name="groups" size={22} color={dashboardColors.purple} />,
+      bgColor: dashboardColors.purple + '15',
+    },
+  ]
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.grid}>
+        {cards.map((card, index) => (
+          <View 
+            key={index} 
+            style={[
+              styles.card,
+              { 
+                backgroundColor: card.bgColor,
+                borderColor: dashboardColors.border 
+              }
+            ]}
+          >
+            <View style={styles.cardHeader}>
+              {card.icon}
+              <ThemedText style={[styles.cardValue, { color: colors.text }]}>
+                {card.value}
+              </ThemedText>
+            </View>
+            <ThemedText style={[styles.cardTitle, { color: colors.icon }]}>
+              {card.title}
+            </ThemedText>
+          </View>
+        ))}
+      </View>
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: 20,
+    marginTop: 20,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  card: {
+    width: '48%',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  cardValue: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  cardTitle: {
+    fontSize: 13,
+    opacity: 0.8,
+  },
+})

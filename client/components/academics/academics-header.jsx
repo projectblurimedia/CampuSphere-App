@@ -1,29 +1,29 @@
 import { View, StyleSheet, TouchableOpacity } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
-import { FontAwesome6, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 
-export default function CashFlowHeader({ colors, dashboardColors }) {
+export default function AcademicsHeader({ colors, dashboardColors }) {
   return (
     <View style={[styles.header, { 
-      backgroundColor: colors?.background,
+      backgroundColor: colors.background,
       borderBottomLeftRadius: 24,
       borderBottomRightRadius: 24 
     }]}>
       <View style={styles.headerContent}>
         <View style={styles.headerLeft}>
           <View style={styles.iconContainer}>
-            <MaterialCommunityIcons
-              name="cash" 
-              size={32} 
+            <MaterialCommunityIcons 
+              name="school" 
+              size={28} 
               color={dashboardColors.info} 
             />
           </View>
           <View style={styles.headerTextContainer}>
             <ThemedText type="subtitle" style={[styles.headerTitle, { color: colors.text }]}>
-              CashFlow Section
+              Academics
             </ThemedText>
             <ThemedText style={[styles.headerSubtitle, { color: colors.icon }]}>
-              Manage all Transactions
+              Manage classes & subjects 
             </ThemedText>
           </View>
         </View>
@@ -35,7 +35,7 @@ export default function CashFlowHeader({ colors, dashboardColors }) {
           }]}
           activeOpacity={0.7}
         >
-          <Ionicons name="notifications-outline" size={22} color={colors.text} />
+          <Ionicons name="calendar-outline" size={22} color={colors.text} />
         </TouchableOpacity>
       </View>
       

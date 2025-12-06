@@ -1,25 +1,50 @@
 import { View, StyleSheet, TouchableOpacity } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
-import { Ionicons } from '@expo/vector-icons'
+import { FontAwesome5, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 
 export default function StaffHeader({ colors, dashboardColors }) {
   return (
-    <View style={[styles.header, { backgroundColor: colors.background }]}>
+    <View style={[styles.header, { 
+      backgroundColor: colors?.background,
+      borderBottomLeftRadius: 24,
+      borderBottomRightRadius: 24 
+    }]}>
       <View style={styles.headerContent}>
-        <View style={styles.headerTextContainer}>
-          <ThemedText type="title" style={styles.headerTitle}>Staff</ThemedText>
-          <ThemedText style={[styles.headerSubtitle, { color: colors.icon }]}>
-            Manage staff here
-          </ThemedText>
+        <View style={styles.headerLeft}>
+          <View style={styles.iconContainer}>
+            <FontAwesome5
+              name="chalkboard-teacher" 
+              size={22} 
+              color={dashboardColors.info} 
+            />
+          </View>
+          <View style={styles.headerTextContainer}>
+            <ThemedText type="subtitle" style={[styles.headerTitle, { color: colors.text }]}>
+              Staff Management
+            </ThemedText>
+            <ThemedText style={[styles.headerSubtitle, { color: colors.icon }]}>
+              Manage all staff members
+            </ThemedText>
+          </View>
         </View>
         
         <TouchableOpacity 
-          style={[styles.addBtn, { backgroundColor: colors.tint }]}
-          activeOpacity={0.8}
+          style={[styles.notificationBtn, { 
+            backgroundColor: colors.card,
+            borderColor: dashboardColors.border 
+          }]}
+          activeOpacity={0.7}
         >
-          <ThemedText style={styles.addBtnText}>Add</ThemedText>
-          <Ionicons name="person-add" size={18} color="#fff" />
+          <Ionicons name="notifications-outline" size={22} color={colors.text} />
         </TouchableOpacity>
+      </View>
+      
+      {/* Colorful Decorative Dots */}
+      <View style={styles.decorationRow}>
+        <View style={[styles.dot, { backgroundColor: dashboardColors.info }]} />
+        <View style={[styles.dot, { backgroundColor: dashboardColors.success }]} />
+        <View style={[styles.dot, { backgroundColor: dashboardColors.warning }]} />
+        <View style={[styles.dot, { backgroundColor: dashboardColors.purple }]} />
       </View>
     </View>
   )
@@ -28,42 +53,56 @@ export default function StaffHeader({ colors, dashboardColors }) {
 const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
-    paddingTop: 5,
-    paddingBottom: 15,
+    paddingTop: 15,
+    paddingBottom: 20,
   },
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  iconContainer: {
+    width: 55,
+    height: 55,
+    borderRadius: 12,
+    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   headerTextContainer: {
     flex: 1,
   },
   headerTitle: {
-    fontSize: 24,
-    opacity: 0.9,
-    fontWeight: '700',
+    fontSize: 22,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     opacity: 0.8,
   },
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+  notificationBtn: {
+    width: 44,
+    height: 44,
     borderRadius: 12,
-    gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
   },
-  addBtnText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+  decorationRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    opacity: 0.6,
   },
 })

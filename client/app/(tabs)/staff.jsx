@@ -14,6 +14,7 @@ import StaffSearchBar from '@/components/staff/search-bar'
 import StaffStatsCards from '@/components/staff/stats-cards'
 import StaffCard from '@/components/staff/staff-card'
 import DepartmentFilter from '@/components/staff/department-filter'
+import QuickActions from '@/components/staff/quick-actions'
 
 // Mock staff data
 const staffData = [
@@ -205,6 +206,11 @@ export default function Staff() {
           dashboardColors={dashboardColors}
         />
 
+        <QuickActions 
+          colors={colors}
+          dashboardColors={dashboardColors}
+        />
+
         {/* Department Filter */}
         <DepartmentFilter 
           departments={allDepartments.filter(dept => dept !== 'All')}
@@ -258,8 +264,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
     paddingBottom: 30,
+    paddingHorizontal: 20,
   },
   resultsHeader: {
     flexDirection: 'row',
@@ -279,6 +285,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 40,
+    paddingHorizontal: 20,
   },
   emptyText: {
     fontSize: 16,

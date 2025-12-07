@@ -9,7 +9,7 @@ export default function DepartmentFilter({
   dashboardColors 
 }) {
   return (
-    <View style={[styles.container, { paddingHorizontal: 20 }]}>
+    <View style={[styles.container]}>
       <ScrollView 
         horizontal 
         showsHorizontalScrollIndicator={false}

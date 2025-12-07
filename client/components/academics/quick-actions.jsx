@@ -72,7 +72,6 @@ export default function QuickActions({ colors, dashboardColors }) {
 const styles = StyleSheet.create({
   section: {
     marginTop: 30,
-    paddingHorizontal: 20,
   },
   sectionHeader: {
     flexDirection: 'row',

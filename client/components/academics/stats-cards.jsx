@@ -69,7 +69,6 @@ export default function StatsCards({ colors, dashboardColors, statsData }) {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 20,
     marginTop: 20,
   },
   grid: {

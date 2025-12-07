@@ -9,6 +9,7 @@ export default function _layout() {
       screenOptions={{
         headerShown: false
       }}
+      initialRouteName="index"
     >
       <Tabs.Screen 
         name="students" 

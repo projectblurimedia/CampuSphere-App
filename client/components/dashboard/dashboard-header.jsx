@@ -1,21 +1,64 @@
-import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native'
+import { View, StyleSheet, TouchableOpacity, Platform, useColorScheme } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 
-export default function DashboardHeader({ colors, dashboardColors }) {
+const Colors = {
+  light: {
+    title: '#0d3755',
+    text: '#11181C',
+    textSecondary: '#687076',
+    background: '#fafdff',
+    tint: '#1d9bf0',
+    icon: '#496078',
+    tabIconDefault: '#637785',
+    tabIconSelected: '#1d9bf0',
+    tabBarBackground: '#fafdff',
+    cardBackground: '#FFFFFF',
+    border: '#E6E8EB',
+    accent: '#1d9bf0',
+  },
+  dark: {
+    title: '#c1d7e7',
+    text: '#ECEDEE',
+    textSecondary: '#9BA1A6',
+    background: '#0c0f14',
+    tint: '#1d9bf0',
+    icon: '#cad5e0',
+    tabIconDefault: '#728390',
+    tabIconSelected: '#1d9bf0',
+    tabBarBackground: '#0c0f14',
+    cardBackground: '#1A1D21',
+    border: '#2D3748',
+    accent: '#1d9bf0',
+  },
+}
+
+export default function DashboardHeader() {
+  const colorScheme = useColorScheme()
+  const colors = Colors[colorScheme || 'light']
+  
+  // Dashboard specific colors derived from theme
+  const dashboardColors = {
+    primary: colors.tint,
+    secondary: colors.textSecondary,
+    background: colors.cardBackground,
+    border: colors.border,
+    accent: colors.accent,
+  }
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.cardBackground }]}>
       {/* Elegant gradient background */}
       <LinearGradient
-        colors={[colors.tint + '08', colors.tint + '02', '#FFFFFF']}
+        colors={[colors.tint + '08', colors.tint + '02', colors.cardBackground]}
         style={styles.gradientBackground}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
       />
       
       {/* Subtle border */}
-      <View style={[styles.border, { borderColor: colors.tint + '15' }]} />
+      <View style={[styles.border, { borderColor: colors.border }]} />
       
       {/* Main content */}
       <View style={styles.content}>
@@ -37,7 +80,7 @@ export default function DashboardHeader({ colors, dashboardColors }) {
           
           <View style={styles.schoolInfo}>
             <View style={styles.schoolHeader}>
-              <ThemedText type="title" style={styles.schoolName}>
+              <ThemedText type="title" style={[styles.schoolName, { color: colors.title }]}>
                 Bluri High School
               </ThemedText>
             </View>
@@ -52,7 +95,7 @@ export default function DashboardHeader({ colors, dashboardColors }) {
                 </ThemedText>
               </View>
               
-              <View style={styles.separator} />
+              <View style={[styles.separator, { backgroundColor: colors.border }]} />
               
               <View style={styles.detailItem}>
                 <View style={[styles.iconContainer, { backgroundColor: colors.tint + '10' }]}>
@@ -66,19 +109,22 @@ export default function DashboardHeader({ colors, dashboardColors }) {
           </View>
         </View>
         
-        {/* Enhanced Menu button with icon */}
+        {/* Enhanced Menu button with bars icon */}
         <TouchableOpacity 
-          activeOpacity={0.7}
+          activeOpacity={0.9}
           style={styles.menuButton}
         >
-          <View style={[styles.menuButtonContainer, { backgroundColor: 'aliceblue'}]}>
-            <Ionicons name="ellipsis-horizontal" size={20} color={colors.tint} />
+          <View style={[styles.menuButtonContainer, { 
+            backgroundColor: colors.background,
+            borderColor: colors.border 
+          }]}>
+            <Ionicons name="menu" size={20} color={colors.tint} />
           </View>
         </TouchableOpacity>
       </View>
       
       {/* Separator above motto */}
-      <View style={[styles.mottoSeparator, { backgroundColor: colors.tint + '15' }]} />
+      <View style={[styles.mottoSeparator, { backgroundColor: colors.border }]} />
       
       {/* School motto with enhanced styling */}
       <View style={styles.mottoContainer}>
@@ -99,7 +145,6 @@ const styles = StyleSheet.create({
   container: {
     marginHorizontal: 16,
     marginTop: 20,
-    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     overflow: 'hidden',
     position: 'relative',
@@ -231,7 +276,6 @@ const styles = StyleSheet.create({
   separator: {
     width: 1,
     height: 12,
-    backgroundColor: 'rgba(0,0,0,0.1)',
     marginHorizontal: 8,
   },
   menuButton: {
@@ -244,7 +288,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.5)',
     ...Platform.select({
       ios: {
         shadowColor: '#000',

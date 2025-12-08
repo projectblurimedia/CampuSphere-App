@@ -1,143 +1,119 @@
-import { View, StyleSheet, TouchableOpacity, Platform, useColorScheme } from 'react-native'
+import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
+import { useState } from 'react'
+import DashboardMenu from './dashboard-menu'
 
-const Colors = {
-  light: {
+export default function DashboardHeader({ colors, dashboardColors }) {
+  const [menuVisible, setMenuVisible] = useState(false)
+
+  // Safe colors with fallbacks
+  const safeColors = colors || {
     title: '#0d3755',
     text: '#11181C',
-    textSecondary: '#687076',
     background: '#fafdff',
     tint: '#1d9bf0',
     icon: '#496078',
-    tabIconDefault: '#637785',
-    tabIconSelected: '#1d9bf0',
-    tabBarBackground: '#fafdff',
+    textSecondary: '#687076',
     cardBackground: '#FFFFFF',
     border: '#E6E8EB',
-    accent: '#1d9bf0',
-  },
-  dark: {
-    title: '#c1d7e7',
-    text: '#ECEDEE',
-    textSecondary: '#9BA1A6',
-    background: '#0c0f14',
-    tint: '#1d9bf0',
-    icon: '#cad5e0',
-    tabIconDefault: '#728390',
-    tabIconSelected: '#1d9bf0',
-    tabBarBackground: '#0c0f14',
-    cardBackground: '#1A1D21',
-    border: '#2D3748',
-    accent: '#1d9bf0',
-  },
-}
-
-export default function DashboardHeader() {
-  const colorScheme = useColorScheme()
-  const colors = Colors[colorScheme || 'light']
-  
-  // Dashboard specific colors derived from theme
-  const dashboardColors = {
-    primary: colors.tint,
-    secondary: colors.textSecondary,
-    background: colors.cardBackground,
-    border: colors.border,
-    accent: colors.accent,
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.cardBackground }]}>
-      {/* Elegant gradient background */}
-      <LinearGradient
-        colors={[colors.tint + '08', colors.tint + '02', colors.cardBackground]}
-        style={styles.gradientBackground}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-      />
-      
-      {/* Subtle border */}
-      <View style={[styles.border, { borderColor: colors.border }]} />
-      
-      {/* Main content */}
-      <View style={styles.content}>
-        {/* School logo with elegant design */}
-        <View style={styles.logoSection}>
-          <View style={styles.logoWrapper}>
-            <LinearGradient
-              colors={[colors.tint, colors.tint + 'CC']}
-              style={styles.logoGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <FontAwesome5 name="school" size={24} color="#FFFFFF" />
-            </LinearGradient>
-            <View style={styles.logoBadge}>
-              <MaterialCommunityIcons name="star" size={10} color="#FFFFFF" />
+    <>
+      <View style={[styles.container, { backgroundColor: safeColors.cardBackground || '#FFFFFF' }]}>
+        {/* Subtle border */}
+        <View style={[styles.border, { borderColor: safeColors.border || '#E6E8EB' }]} />
+        
+        {/* Main content */}
+        <View style={styles.content}>
+          {/* School logo with elegant design */}
+          <View style={styles.logoSection}>
+            <View style={styles.logoWrapper}>
+              <LinearGradient
+                colors={[safeColors.tint, '#0066cc']}
+                style={styles.logoGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <FontAwesome5 name="school" size={24} color="#FFFFFF" />
+              </LinearGradient>
+              <View style={styles.logoBadge}>
+                <MaterialCommunityIcons name="star" size={10} color="#FFFFFF" />
+              </View>
+            </View>
+            
+            <View style={styles.schoolInfo}>
+              <View style={styles.schoolHeader}>
+                <ThemedText type="title" style={[styles.schoolName, { color: safeColors.title }]}>
+                  Bluri High School
+                </ThemedText>
+              </View>
+              
+              <View style={styles.detailsRow}>
+                <View style={styles.detailItem}>
+                  <View style={[styles.iconContainer, { backgroundColor: safeColors.tint + '20' }]}>
+                    <Ionicons name="location" size={12} color={safeColors.tint} />
+                  </View>
+                  <ThemedText style={[styles.detailText, { color: safeColors.textSecondary || '#687076' }]}>
+                    Kannapuram
+                  </ThemedText>
+                </View>
+                
+                <View style={[styles.separator, { backgroundColor: safeColors.border || '#E6E8EB' }]} />
+                
+                <View style={styles.detailItem}>
+                  <View style={[styles.iconContainer, { backgroundColor: safeColors.tint + '20' }]}>
+                    <Ionicons name="calendar" size={12} color={safeColors.tint} />
+                  </View>
+                  <ThemedText style={[styles.detailText, { color: safeColors.textSecondary || '#687076' }]}>
+                    Est. 2002
+                  </ThemedText>
+                </View>
+              </View>
             </View>
           </View>
           
-          <View style={styles.schoolInfo}>
-            <View style={styles.schoolHeader}>
-              <ThemedText type="title" style={[styles.schoolName, { color: colors.title }]}>
-                Bluri High School
-              </ThemedText>
+          {/* Enhanced Menu button with bars icon */}
+          <TouchableOpacity 
+            activeOpacity={0.9}
+            style={styles.menuButton}
+            onPress={() => setMenuVisible(true)}
+          >
+            <View style={[styles.menuButtonContainer, { 
+              backgroundColor: safeColors.background || '#fafdff',
+              borderColor: safeColors.border || '#E6E8EB' 
+            }]}>
+              <Ionicons name="menu" size={20} color={safeColors.tint} />
             </View>
-            
-            <View style={styles.detailsRow}>
-              <View style={styles.detailItem}>
-                <View style={[styles.iconContainer, { backgroundColor: colors.tint + '10' }]}>
-                  <Ionicons name="location" size={12} color={colors.tint} />
-                </View>
-                <ThemedText style={[styles.detailText, { color: colors.textSecondary }]}>
-                  Kannapuram
-                </ThemedText>
-              </View>
-              
-              <View style={[styles.separator, { backgroundColor: colors.border }]} />
-              
-              <View style={styles.detailItem}>
-                <View style={[styles.iconContainer, { backgroundColor: colors.tint + '10' }]}>
-                  <Ionicons name="calendar" size={12} color={colors.tint} />
-                </View>
-                <ThemedText style={[styles.detailText, { color: colors.textSecondary }]}>
-                  Est. 2002
-                </ThemedText>
-              </View>
-            </View>
-          </View>
+          </TouchableOpacity>
         </View>
         
-        {/* Enhanced Menu button with bars icon */}
-        <TouchableOpacity 
-          activeOpacity={0.9}
-          style={styles.menuButton}
-        >
-          <View style={[styles.menuButtonContainer, { 
-            backgroundColor: colors.background,
-            borderColor: colors.border 
-          }]}>
-            <Ionicons name="menu" size={20} color={colors.tint} />
-          </View>
-        </TouchableOpacity>
+        {/* Separator above motto */}
+        <View style={[styles.mottoSeparator, { backgroundColor: safeColors.border || '#E6E8EB' }]} />
+        
+        {/* School motto with enhanced styling */}
+        <View style={styles.mottoContainer}>
+          <View style={[styles.mottoDecoration, { backgroundColor: safeColors.tint + '20' }]} />
+          <ThemedText style={[styles.mottoText, { color: safeColors.textSecondary || '#687076' }]}>
+            Excellence in Education • Character Building
+          </ThemedText>
+          <View style={[styles.mottoDecoration, { backgroundColor: safeColors.tint + '20' }]} />
+        </View>
+        
+        {/* Bottom accent line */}
+        <View style={[styles.bottomAccent, { backgroundColor: safeColors.tint }]} />
       </View>
-      
-      {/* Separator above motto */}
-      <View style={[styles.mottoSeparator, { backgroundColor: colors.border }]} />
-      
-      {/* School motto with enhanced styling */}
-      <View style={styles.mottoContainer}>
-        <View style={[styles.mottoDecoration, { backgroundColor: colors.tint + '20' }]} />
-        <ThemedText style={[styles.mottoText, { color: colors.textSecondary }]}>
-          Excellence in Education • Character Building
-        </ThemedText>
-        <View style={[styles.mottoDecoration, { backgroundColor: colors.tint + '20' }]} />
-      </View>
-      
-      {/* Bottom accent line */}
-      <View style={[styles.bottomAccent, { backgroundColor: colors.tint }]} />
-    </View>
+
+      {/* Dashboard Menu */}
+      <DashboardMenu
+        visible={menuVisible}
+        onClose={() => setMenuVisible(false)}
+        colors={safeColors}
+        dashboardColors={dashboardColors}
+      />
+    </>
   )
 }
 
@@ -160,13 +136,6 @@ const styles = StyleSheet.create({
         shadowColor: '#000',
       },
     }),
-  },
-  gradientBackground: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
   },
   border: {
     position: 'absolute',

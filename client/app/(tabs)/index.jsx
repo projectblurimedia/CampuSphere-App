@@ -1,6 +1,6 @@
-import { ScrollView, useColorScheme } from 'react-native'
+import { ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Colors } from '@/constants/theme'
+import { useTheme } from '@/hooks/useTheme'
 import DashboardHeader from '@/components/dashboard/dashboard-header'
 import StatsGrid from '@/components/dashboard/stats-grid'
 import QuickActions from '@/components/dashboard/quick-actions'
@@ -8,9 +8,7 @@ import RecentActivity from '@/components/dashboard/recent-activity'
 import UpcomingEvents from '@/components/dashboard/upcoming-events'
 
 export default function HomeScreen() {
-  const colorScheme = useColorScheme()
-  const colors = Colors[colorScheme ?? 'light']
-  const isDark = colorScheme === 'dark'
+  const { colors, isDark } = useTheme()
 
   const dashboardColors = {
     cardBg: isDark ? '#1e293b' : '#ffffff',

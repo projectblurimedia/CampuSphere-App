@@ -1,8 +1,10 @@
 import { View, StyleSheet, TouchableOpacity } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons, FontAwesome5, MaterialIcons } from '@expo/vector-icons'
+import { useTheme } from '@/hooks/useTheme'
 
-export default function StaffCard({ staff, colors, dashboardColors }) {
+export default function StaffCard({ staff, dashboardColors }) {
+  const { colors } = useTheme()
   
   const getStaffIcon = (type) => {
     switch(type) {
@@ -56,7 +58,7 @@ export default function StaffCard({ staff, colors, dashboardColors }) {
           <ThemedText type="defaultSemiBold" style={{ color: colors.text, fontSize: 15 }}>
             {staff.name}
           </ThemedText>
-          <ThemedText style={{ color: colors.icon, fontSize: 12 }}>
+          <ThemedText style={{ color: colors.textSecondary, fontSize: 12 }}>
             {staff.designation}
           </ThemedText>
         </View>
@@ -65,8 +67,8 @@ export default function StaffCard({ staff, colors, dashboardColors }) {
       <View style={styles.staffDetails}>
         <View style={styles.detailRow}>
           <View style={styles.detailItem}>
-            <Ionicons name="business-outline" size={14} color={colors.icon} />
-            <ThemedText style={{ color: colors.icon, fontSize: 12, marginLeft: 6 }}>
+            <Ionicons name="business-outline" size={14} color={colors.textSecondary} />
+            <ThemedText style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 6 }}>
               {staff.department}
             </ThemedText>
           </View>
@@ -87,8 +89,8 @@ export default function StaffCard({ staff, colors, dashboardColors }) {
         
         <View style={styles.detailRow}>
           <View style={styles.detailItem}>
-            <Ionicons name="call-outline" size={14} color={colors.icon} />
-            <ThemedText style={{ color: colors.icon, fontSize: 12, marginLeft: 6 }}>
+            <Ionicons name="call-outline" size={14} color={colors.textSecondary} />
+            <ThemedText style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 6 }}>
               {staff.contact}
             </ThemedText>
           </View>

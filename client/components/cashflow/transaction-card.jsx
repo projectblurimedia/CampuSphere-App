@@ -1,8 +1,10 @@
 import { View, StyleSheet } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons'
+import { useTheme } from '@/hooks/useTheme'
 
-export default function TransactionCard({ transaction, colors, dashboardColors }) {
+export default function TransactionCard({ transaction, dashboardColors }) {
+  const { colors } = useTheme()
   
   const getTransactionIcon = (category, type) => {
     if (type === 'income') {
@@ -51,7 +53,7 @@ export default function TransactionCard({ transaction, colors, dashboardColors }
           <ThemedText type="defaultSemiBold" style={{ color: colors.text, fontSize: 15 }}>
             {transaction.description}
           </ThemedText>
-          <ThemedText style={{ color: colors.icon, fontSize: 12 }}>
+          <ThemedText style={{ color: colors.textSecondary, fontSize: 12 }}>
             {transaction.category} • {transaction.date}
           </ThemedText>
         </View>
@@ -66,8 +68,8 @@ export default function TransactionCard({ transaction, colors, dashboardColors }
       <View style={styles.transactionFooter}>
         <View style={styles.paymentInfo}>
           <Ionicons name={transaction.paymentMethod === 'Cash' ? "cash" : "card"} 
-            size={14} color={colors.icon} />
-          <ThemedText style={{ color: colors.icon, fontSize: 12, marginLeft: 6 }}>
+            size={14} color={colors.textSecondary} />
+          <ThemedText style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 6 }}>
             {transaction.paymentMethod} • {transaction.reference}
           </ThemedText>
         </View>

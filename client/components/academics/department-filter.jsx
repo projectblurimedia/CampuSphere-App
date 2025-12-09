@@ -1,15 +1,17 @@
 import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
+import { useTheme } from '@/hooks/useTheme'
 
 export default function DepartmentFilter({ 
   departments, 
   selectedDepartment, 
   setSelectedDepartment, 
-  colors, 
   dashboardColors 
 }) {
+  const { colors } = useTheme()
+  
   return (
-    <View style={[styles.container]}>
+    <View style={styles.container}>
       <ScrollView 
         horizontal 
         showsHorizontalScrollIndicator={false}
@@ -19,7 +21,7 @@ export default function DepartmentFilter({
           style={[
             styles.filterButton,
             { 
-              backgroundColor: selectedDepartment === 'All' ? dashboardColors.info : colors.card,
+              backgroundColor: selectedDepartment === 'All' ? colors.tint : dashboardColors.cardBg,
               borderColor: dashboardColors.border 
             }
           ]}
@@ -41,7 +43,7 @@ export default function DepartmentFilter({
             style={[
               styles.filterButton,
               { 
-                backgroundColor: selectedDepartment === dept ? dashboardColors.info : colors.card,
+                backgroundColor: selectedDepartment === dept ? colors.tint : dashboardColors.cardBg,
                 borderColor: dashboardColors.border 
               }
             ]}
@@ -65,6 +67,7 @@ export default function DepartmentFilter({
 const styles = StyleSheet.create({
   container: {
     marginTop: 20,
+    marginBottom: 16,
   },
   scrollContent: {
     paddingVertical: 4,

@@ -1,13 +1,15 @@
 import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
+import { useTheme } from '@/hooks/useTheme'
 
 export default function DepartmentFilter({ 
   departments, 
   selectedDepartment, 
   setSelectedDepartment, 
-  colors, 
   dashboardColors 
 }) {
+  const { colors } = useTheme()
+  
   return (
     <View style={styles.container}>
       <ScrollView 

@@ -1,11 +1,14 @@
 import { View, StyleSheet, TouchableOpacity } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { FontAwesome5, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
+import { useTheme } from '@/hooks/useTheme'
 
-export default function StaffHeader({ colors, dashboardColors }) {
+export default function StaffHeader({ dashboardColors }) {
+  const { colors } = useTheme()
+  
   return (
     <View style={[styles.header, { 
-      backgroundColor: colors?.background,
+      backgroundColor: colors.background,
       borderBottomLeftRadius: 24,
       borderBottomRightRadius: 24 
     }]}>
@@ -22,7 +25,7 @@ export default function StaffHeader({ colors, dashboardColors }) {
             <ThemedText type="subtitle" style={[styles.headerTitle, { color: colors.text }]}>
               Staff Management
             </ThemedText>
-            <ThemedText style={[styles.headerSubtitle, { color: colors.icon }]}>
+            <ThemedText style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
               Manage all staff members
             </ThemedText>
           </View>
@@ -30,7 +33,7 @@ export default function StaffHeader({ colors, dashboardColors }) {
         
         <TouchableOpacity 
           style={[styles.notificationBtn, { 
-            backgroundColor: colors.card,
+            backgroundColor: colors.cardBackground,
             borderColor: dashboardColors.border 
           }]}
           activeOpacity={0.7}
@@ -39,7 +42,6 @@ export default function StaffHeader({ colors, dashboardColors }) {
         </TouchableOpacity>
       </View>
       
-      {/* Colorful Decorative Dots */}
       <View style={styles.decorationRow}>
         <View style={[styles.dot, { backgroundColor: dashboardColors.info }]} />
         <View style={[styles.dot, { backgroundColor: dashboardColors.success }]} />

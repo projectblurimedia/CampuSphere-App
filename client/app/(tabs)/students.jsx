@@ -4,11 +4,10 @@ import {
   View, 
   ScrollView, 
   FlatList,
-  useColorScheme
 } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
-import { Colors } from '@/constants/theme'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useTheme } from '@/hooks/useTheme'
 import StudentsHeader from '@/components/students/students-header'
 import SearchBar from '@/components/students/search-bar'
 import StatsCards from '@/components/students/stats-cards'
@@ -16,7 +15,6 @@ import ClassGroup from '@/components/students/class-group'
 import StudentCard from '@/components/students/student-card'
 import QuickActions from '@/components/students/quick-actions'
 
-// Mock student data
 const studentsData = [
   {
     id: '1',
@@ -100,7 +98,6 @@ const studentsData = [
   },
 ]
 
-// Group students by class
 const groupedStudents = studentsData.reduce((acc, student) => {
   if (!acc[student.class]) {
     acc[student.class] = []
@@ -110,10 +107,7 @@ const groupedStudents = studentsData.reduce((acc, student) => {
 }, {})
 
 export default function Students() {
-  const colorScheme = useColorScheme()
-  const colors = Colors[colorScheme ?? 'light']
-  const isDark = colorScheme === 'dark'
-  
+  const { colors, isDark } = useTheme()
   const [expandedClasses, setExpandedClasses] = useState(['Class 12 - Science'])
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -145,12 +139,11 @@ export default function Students() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <StudentsHeader colors={colors} dashboardColors={dashboardColors} />
+      <StudentsHeader dashboardColors={dashboardColors} />
       
       <SearchBar 
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        colors={colors}
         dashboardColors={dashboardColors}
       />
 
@@ -160,12 +153,10 @@ export default function Students() {
       >
         <StatsCards 
           studentsData={studentsData}
-          colors={colors}
           dashboardColors={dashboardColors}
         />
 
         <QuickActions 
-          colors={colors}
           dashboardColors={dashboardColors}
         />
 
@@ -179,7 +170,6 @@ export default function Students() {
               renderItem={({ item }) => (
                 <StudentCard 
                   student={item} 
-                  colors={colors} 
                   dashboardColors={dashboardColors} 
                 />
               )}
@@ -199,7 +189,6 @@ export default function Students() {
                 students={groupedStudents[className]}
                 isExpanded={expandedClasses.includes(className)}
                 onToggle={toggleClassExpansion}
-                colors={colors}
                 dashboardColors={dashboardColors}
                 searchQuery={searchQuery}
               />

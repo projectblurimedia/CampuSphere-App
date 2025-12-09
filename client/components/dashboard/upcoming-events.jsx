@@ -1,8 +1,11 @@
 import { View, StyleSheet, TouchableOpacity } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons } from '@expo/vector-icons'
+import { useTheme } from '@/hooks/useTheme'
 
-export default function UpcomingEvents({ colors, dashboardColors }) {
+export default function UpcomingEvents({ dashboardColors }) {
+  const { colors } = useTheme()
+  
   const events = [
     { date: '15', month: 'DEC', title: 'Annual Sports Day', time: '9:00 AM', color: dashboardColors.info },
     { date: '18', month: 'DEC', title: 'Science Exhibition', time: '10:00 AM', color: dashboardColors.green },
@@ -13,9 +16,9 @@ export default function UpcomingEvents({ colors, dashboardColors }) {
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <ThemedText type="subtitle">Upcoming Events</ThemedText>
+        <ThemedText type="subtitle" style={{ color: colors.text }}>Upcoming Events</ThemedText>
         <TouchableOpacity activeOpacity={0.8}>
-          <ThemedText type="link">Calendar</ThemedText>
+          <ThemedText type="link" style={{ color: colors.tint }}>Calendar</ThemedText>
         </TouchableOpacity>
       </View>
       <View style={[styles.eventsContainer, { 
@@ -42,12 +45,12 @@ export default function UpcomingEvents({ colors, dashboardColors }) {
               <ThemedText type="defaultSemiBold" style={{ color: colors.text, fontSize: 15 }}>
                 {event.title}
               </ThemedText>
-              <ThemedText type="default" style={{ color: colors.icon, fontSize: 13 }}>
+              <ThemedText type="default" style={{ color: colors.textSecondary, fontSize: 13 }}>
                 {event.time}
               </ThemedText>
             </View>
             <TouchableOpacity activeOpacity={0.6}>
-              <Ionicons name="chevron-forward" size={20} color={colors.icon} />
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
         ))}

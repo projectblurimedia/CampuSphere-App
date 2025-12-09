@@ -1,10 +1,13 @@
 import { View, StyleSheet, Dimensions } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { FontAwesome5, Feather } from '@expo/vector-icons'
+import { useTheme } from '@/hooks/useTheme'
 
 const { width } = Dimensions.get('window')
 
-export default function StatsCards({ studentsData, colors, dashboardColors }) {
+export default function StatsCards({ studentsData, dashboardColors }) {
+  const { colors } = useTheme()
+  
   return (
     <View style={styles.statsContainer}>
       <View style={[styles.statCard, { 
@@ -19,7 +22,7 @@ export default function StatsCards({ studentsData, colors, dashboardColors }) {
           <ThemedText style={[styles.statValue, { color: colors.text }]}>
             {studentsData.length}
           </ThemedText>
-          <ThemedText style={[styles.statLabel, { color: colors.icon }]}>
+          <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
             Total Students
           </ThemedText>
         </View>
@@ -37,7 +40,7 @@ export default function StatsCards({ studentsData, colors, dashboardColors }) {
           <ThemedText style={[styles.statValue, { color: colors.text }]}>
             94.2%
           </ThemedText>
-          <ThemedText style={[styles.statLabel, { color: colors.icon }]}>
+          <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
             Avg Attendance
           </ThemedText>
         </View>

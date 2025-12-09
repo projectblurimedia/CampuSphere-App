@@ -1,13 +1,14 @@
 import { View, StyleSheet, Dimensions } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
+import { useTheme } from '@/hooks/useTheme'
 
 const { width } = Dimensions.get('window')
 
-export default function IncomeExpenseChart({ data = [], colors, dashboardColors }) {
-  // Ensure data is an array
+export default function IncomeExpenseChart({ data = [], dashboardColors }) {
+  const { colors } = useTheme()
+  
   const safeData = Array.isArray(data) ? data : []
   
-  // Find max value for scaling
   const maxValue = safeData.length > 0 ? 
     Math.max(...safeData.map(item => Math.max(item.income || 0, item.expenses || 0))) : 
     1
@@ -21,7 +22,7 @@ export default function IncomeExpenseChart({ data = [], colors, dashboardColors 
         <ThemedText style={[styles.chartTitle, { color: colors.text }]}>
           Income vs Expenses
         </ThemedText>
-        <ThemedText style={[styles.chartPeriod, { color: colors.icon }]}>
+        <ThemedText style={[styles.chartPeriod, { color: colors.textSecondary }]}>
           Last 6 months
         </ThemedText>
       </View>

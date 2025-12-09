@@ -4,11 +4,10 @@ import {
   View, 
   ScrollView, 
   FlatList,
-  useColorScheme
 } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
-import { Colors } from '@/constants/theme'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useTheme } from '@/hooks/useTheme'
 import CashflowHeader from '@/components/cashflow/cashflow-header'
 import FinancialStats from '@/components/cashflow/financial-stats'
 import TransactionCard from '@/components/cashflow/transaction-card'
@@ -17,7 +16,6 @@ import CategoryFilter from '@/components/cashflow/category-filter'
 import IncomeExpenseChart from '@/components/cashflow/income-expense-chart'
 import QuickActions from '@/components/cashflow/quick-actions'
 
-// Mock transaction data
 const transactionsData = [
   {
     id: '1',
@@ -131,7 +129,6 @@ const transactionsData = [
   },
 ]
 
-// Chart data
 const chartData = [
   { month: 'Jul', income: 420000, expenses: 380000 },
   { month: 'Aug', income: 450000, expenses: 395000 },
@@ -141,7 +138,6 @@ const chartData = [
   { month: 'Dec', income: 585000, expenses: 485000 },
 ]
 
-// Time filters
 const timeFilters = [
   { id: 'today', label: 'Today' },
   { id: 'week', label: 'This Week' },
@@ -151,14 +147,10 @@ const timeFilters = [
   { id: 'all', label: 'All Time' },
 ]
 
-// Categories
 const categories = ['All', 'Income', 'Expenses', 'Tuition', 'Salaries', 'Infrastructure', 'Utilities']
 
 export default function Cashflow() {
-  const colorScheme = useColorScheme()
-  const colors = Colors[colorScheme ?? 'light']
-  const isDark = colorScheme === 'dark'
-  
+  const { colors, isDark } = useTheme()
   const [selectedTimeFilter, setSelectedTimeFilter] = useState('month')
   const [selectedCategory, setSelectedCategory] = useState('All')
 
@@ -173,7 +165,6 @@ export default function Cashflow() {
     cyan: isDark ? '#22d3ee' : '#06b6d4',
   }
 
-  // Calculate totals
   const totalIncome = transactionsData
     .filter(t => t.type === 'income')
     .reduce((sum, t) => sum + (t.amount || 0), 0)
@@ -184,9 +175,7 @@ export default function Cashflow() {
 
   const netBalance = totalIncome - totalExpenses
 
-  // Filter transactions based on selected filters
   const filteredTransactions = transactionsData.filter(transaction => {
-    // Category filter
     if (selectedCategory !== 'All') {
       if (selectedCategory === 'Income' && transaction.type !== 'income') return false
       if (selectedCategory === 'Expenses' && transaction.type !== 'expense') return false
@@ -194,14 +183,12 @@ export default function Cashflow() {
           transaction.category !== selectedCategory) return false
     }
     
-    // Time filter logic would go here based on dates
-    // For now, we'll just return all
     return true
   })
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <CashflowHeader colors={colors} dashboardColors={dashboardColors} />
+      <CashflowHeader dashboardColors={dashboardColors} />
 
       <ScrollView 
         showsVerticalScrollIndicator={false}
@@ -211,29 +198,22 @@ export default function Cashflow() {
           totalIncome={totalIncome}
           totalExpenses={totalExpenses}
           netBalance={netBalance}
-          colors={colors}
           dashboardColors={dashboardColors}
         />
 
-        {/* Quick Actions */}
         <QuickActions 
-          colors={colors}
           dashboardColors={dashboardColors}
         />
 
-        {/* Chart Section */}
         <IncomeExpenseChart 
           data={chartData}
-          colors={colors}
           dashboardColors={dashboardColors}
         />
 
-        {/* Filters */}
         <TimeFilter 
           timeFilters={timeFilters}
           selectedFilter={selectedTimeFilter}
           setSelectedFilter={setSelectedTimeFilter}
-          colors={colors}
           dashboardColors={dashboardColors}
         />
 
@@ -241,27 +221,23 @@ export default function Cashflow() {
           categories={categories}
           selectedCategory={selectedCategory}
           setSelectedCategory={setSelectedCategory}
-          colors={colors}
           dashboardColors={dashboardColors}
         />
 
-        {/* Transactions Header */}
         <View style={styles.resultsHeader}>
           <ThemedText type='subtitle' style={[styles.resultsTitle, { color: colors.text }]}>
             Recent Transactions ({filteredTransactions.length})
           </ThemedText>
-          <ThemedText style={[styles.resultsSubtitle, { color: colors.icon }]}>
+          <ThemedText style={[styles.resultsSubtitle, { color: colors.textSecondary }]}>
             Sorted by: Latest
           </ThemedText>
         </View>
 
-        {/* Transactions List */}
         <FlatList
           data={filteredTransactions}
           renderItem={({ item }) => (
             <TransactionCard 
               transaction={item} 
-              colors={colors} 
               dashboardColors={dashboardColors} 
             />
           )}
@@ -269,10 +245,10 @@ export default function Cashflow() {
           scrollEnabled={false}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <ThemedText style={[styles.emptyText, { color: colors.icon }]}>
+              <ThemedText style={[styles.emptyText, { color: colors.textSecondary }]}>
                 No transactions found
               </ThemedText>
-              <ThemedText style={[styles.emptySubtext, { color: colors.icon }]}>
+              <ThemedText style={[styles.emptySubtext, { color: colors.textSecondary }]}>
                 Try changing your filter criteria
               </ThemedText>
             </View>

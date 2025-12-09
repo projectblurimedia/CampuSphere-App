@@ -1,37 +1,40 @@
 import { View, StyleSheet } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { MaterialIcons, FontAwesome5, Ionicons } from '@expo/vector-icons'
+import { useTheme } from '@/hooks/useTheme'
 
-export default function StatsCards({ colors, dashboardColors, statsData }) {
+export default function StatsCards({ statsData, dashboardColors }) {
+  const { colors } = useTheme()
+  
   const stats = statsData || {
-    totalClasses: 12,
-    totalStudents: 450,
-    totalTeachers: 35,
-    avgClassSize: 38,
+    totalClasses: 0,
+    totalStudents: 0,
+    totalTeachers: 0,
+    avgClassSize: 0,
   }
 
   const cards = [
     {
       title: 'Total Classes',
-      value: stats.totalClasses,
+      value: stats.totalClasses || 0,
       icon: <MaterialIcons name="class" size={22} color={dashboardColors.info} />,
       bgColor: dashboardColors.info + '15',
     },
     {
       title: 'Total Students',
-      value: stats.totalStudents,
+      value: stats.totalStudents || 0,
       icon: <FontAwesome5 name="user-graduate" size={20} color={dashboardColors.success} />,
       bgColor: dashboardColors.success + '15',
     },
     {
       title: 'Teachers',
-      value: stats.totalTeachers,
+      value: stats.totalTeachers || 0,
       icon: <Ionicons name="people" size={22} color={dashboardColors.warning} />,
       bgColor: dashboardColors.warning + '15',
     },
     {
       title: 'Avg Class Size',
-      value: stats.avgClassSize,
+      value: stats.avgClassSize || 0,
       icon: <MaterialIcons name="groups" size={22} color={dashboardColors.purple} />,
       bgColor: dashboardColors.purple + '15',
     },
@@ -47,7 +50,8 @@ export default function StatsCards({ colors, dashboardColors, statsData }) {
               styles.card,
               { 
                 backgroundColor: card.bgColor,
-                borderColor: dashboardColors.border 
+                borderColor: dashboardColors.border,
+                shadowColor: '#00000000'
               }
             ]}
           >
@@ -57,7 +61,7 @@ export default function StatsCards({ colors, dashboardColors, statsData }) {
                 {card.value}
               </ThemedText>
             </View>
-            <ThemedText style={[styles.cardTitle, { color: colors.icon }]}>
+            <ThemedText style={[styles.cardTitle, { color: colors.textSecondary }]}>
               {card.title}
             </ThemedText>
           </View>
@@ -82,6 +86,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 16,
     borderWidth: 1,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -96,5 +104,6 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 13,
     opacity: 0.8,
+    fontWeight: '500',
   },
 })

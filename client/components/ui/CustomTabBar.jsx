@@ -1,47 +1,22 @@
-import { View, TouchableOpacity, StyleSheet, useColorScheme } from "react-native"
+import { View, TouchableOpacity, StyleSheet } from "react-native"
 import Animated, {
   FadeIn,
   FadeOut,
   LinearTransition,
 } from "react-native-reanimated"
 import { FontAwesome5, FontAwesome6, MaterialIcons, Feather } from "@expo/vector-icons"
+import { useTheme } from '@/hooks/useTheme'
 
 const AnimatedTouchableOpacity =
   Animated.createAnimatedComponent(TouchableOpacity)
 
-const tintColor = '#1d9bf0'
-
-const Colors = {
-  light: {
-    title: '#0d3755',
-    text: '#11181C',
-    background: '#fafdff',
-    tint: tintColor,
-    icon: '#496078',
-    tabIconDefault: '#637785',
-    tabIconSelected: tintColor,
-    tabBarBackground: '#fafdff',
-  },
-  dark: {
-    title: '#c1d7e7',
-    text: '#ECEDEE',
-    background: '#0c0f14',
-    tint: tintColor,
-    icon: '#cad5e0',
-    tabIconDefault: '#728390',
-    tabIconSelected: tintColor,
-    tabBarBackground: '#0c0f14',
-  },
-}
-
 const CustomTabBar = ({ state, descriptors, navigation }) => {
-  const colorScheme = useColorScheme()
-  const colors = Colors[colorScheme || 'light']
+  const { colors, isDark } = useTheme()
 
   return (
     <View style={[styles.container, { 
       backgroundColor: colors.tabBarBackground,
-      shadowColor: colorScheme === 'dark' ? '#ffffff' : '#000000',
+      shadowColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
     }]}>
       {state.routes.map((route, index) => {
         if (["_sitemap", "+not-found"].includes(route.name)) return null
@@ -93,20 +68,20 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
             style={[
               styles.tabItem,
               { 
-                backgroundColor: isFocused ? colors.tint : "transparent",
+                backgroundColor: isFocused ? colors.tabBarActive : "transparent",
                 minWidth: isFocused ? 120 : 60,
               },
             ]}
           >
             {getIconByRouteName(
               route.name,
-              isFocused ? colors.background : colors.tabIconDefault
+              isFocused ? '#FFFFFF' : colors.tabBarInactive
             )}
             {isFocused && (
               <Animated.Text
                 entering={FadeIn.duration(200)}
                 exiting={FadeOut.duration(200)}
-                style={[styles.text, { color: colors.background }]}
+                style={[styles.text, { color: '#FFFFFF' }]}
               >
                 {label}
               </Animated.Text>
@@ -131,15 +106,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    // Shadow for iOS
     shadowOffset: {
       width: 0,
-      height: -5, // Negative height for top shadow
+      height: -5,
     },
     shadowOpacity: 0.1,
     shadowRadius: 10,
-    elevation: 20, // Shadow for Android
-    borderTopWidth: 0, // Remove border top
+    elevation: 20,
+    borderTopWidth: 0,
   },
   tabItem: {
     flexDirection: "row",

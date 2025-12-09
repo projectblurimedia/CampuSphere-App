@@ -1,13 +1,15 @@
 import { View, StyleSheet, Dimensions } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
-import { FontAwesome5, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
+import { FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons'
+import { useTheme } from '@/hooks/useTheme'
 
 const { width } = Dimensions.get('window')
 
-export default function StaffStatsCards({ staffData, colors, dashboardColors }) {
+export default function StaffStatsCards({ staffData, dashboardColors }) {
+  const { colors } = useTheme()
+  
   const teachingStaff = staffData.filter(s => s.type === 'Teaching').length
   const nonTeachingStaff = staffData.filter(s => s.type === 'Non-Teaching').length
-  const presentToday = staffData.filter(s => s.status === 'Present').length
   
   return (
     <View style={styles.statsContainer}>
@@ -23,7 +25,7 @@ export default function StaffStatsCards({ staffData, colors, dashboardColors }) 
           <ThemedText style={[styles.statValue, { color: colors.text }]}>
             {teachingStaff}
           </ThemedText>
-          <ThemedText style={[styles.statLabel, { color: colors.icon }]}>
+          <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
             Teaching Staff
           </ThemedText>
         </View>
@@ -41,7 +43,7 @@ export default function StaffStatsCards({ staffData, colors, dashboardColors }) 
           <ThemedText style={[styles.statValue, { color: colors.text }]}>
             {nonTeachingStaff}
           </ThemedText>
-          <ThemedText style={[styles.statLabel, { color: colors.icon }]}>
+          <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
             Non-Teaching
           </ThemedText>
         </View>

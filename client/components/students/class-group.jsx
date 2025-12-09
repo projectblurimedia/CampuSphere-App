@@ -1,16 +1,17 @@
 import { View, StyleSheet, TouchableOpacity } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons } from '@expo/vector-icons'
+import { useTheme } from '@/hooks/useTheme'
 
 export default function ClassGroup({ 
   className, 
   students, 
   isExpanded, 
   onToggle, 
-  colors, 
   dashboardColors,
   searchQuery 
 }) {
+  const { colors } = useTheme()
   
   const filteredStudents = searchQuery
     ? students.filter(student => 
@@ -40,7 +41,7 @@ export default function ClassGroup({
             <ThemedText type="defaultSemiBold" style={{ color: colors.text, fontSize: 16 }}>
               {className}
             </ThemedText>
-            <ThemedText style={{ color: colors.icon, fontSize: 12 }}>
+            <ThemedText style={{ color: colors.textSecondary, fontSize: 12 }}>
               {filteredStudents.length} students
             </ThemedText>
           </View>
@@ -48,7 +49,7 @@ export default function ClassGroup({
         <Ionicons 
           name={isExpanded ? "chevron-up" : "chevron-down"} 
           size={20} 
-          color={colors.icon} 
+          color={colors.textSecondary} 
         />
       </TouchableOpacity>
       
@@ -66,7 +67,7 @@ export default function ClassGroup({
                   <ThemedText style={{ color: colors.text, fontSize: 14, fontWeight: '500' }}>
                     {student.name}
                   </ThemedText>
-                  <ThemedText style={{ color: colors.icon, fontSize: 12 }}>
+                  <ThemedText style={{ color: colors.textSecondary, fontSize: 12 }}>
                     {student.rollNo}
                   </ThemedText>
                 </View>
@@ -83,7 +84,7 @@ export default function ClassGroup({
                     {student.attendance}
                   </ThemedText>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.icon} />
+                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
               </View>
             </View>
           ))}

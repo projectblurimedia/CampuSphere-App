@@ -1,8 +1,11 @@
 import { View, StyleSheet, TouchableOpacity } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons, Feather } from '@expo/vector-icons'
+import { useTheme } from '@/hooks/useTheme'
 
-export default function StudentCard({ student, colors, dashboardColors }) {
+export default function StudentCard({ student, dashboardColors }) {
+  const { colors } = useTheme()
+  
   return (
     <View style={[styles.studentCard, { 
       backgroundColor: dashboardColors.cardBg, 
@@ -19,7 +22,7 @@ export default function StudentCard({ student, colors, dashboardColors }) {
           <ThemedText type="defaultSemiBold" style={{ color: colors.text, fontSize: 15 }}>
             {student.name}
           </ThemedText>
-          <ThemedText style={{ color: colors.icon, fontSize: 12 }}>
+          <ThemedText style={{ color: colors.textSecondary, fontSize: 12 }}>
             Roll No: {student.rollNo}
           </ThemedText>
         </View>
@@ -28,8 +31,8 @@ export default function StudentCard({ student, colors, dashboardColors }) {
       <View style={styles.studentDetails}>
         <View style={styles.detailRow}>
           <View style={styles.detailItem}>
-            <Ionicons name="school-outline" size={14} color={colors.icon} />
-            <ThemedText style={{ color: colors.icon, fontSize: 12, marginLeft: 6 }}>
+            <Ionicons name="school-outline" size={14} color={colors.textSecondary} />
+            <ThemedText style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 6 }}>
               {student.class}
             </ThemedText>
           </View>
@@ -48,8 +51,8 @@ export default function StudentCard({ student, colors, dashboardColors }) {
         
         <View style={styles.detailRow}>
           <View style={styles.detailItem}>
-            <Feather name="calendar" size={14} color={colors.icon} />
-            <ThemedText style={{ color: colors.icon, fontSize: 12, marginLeft: 6 }}>
+            <Feather name="calendar" size={14} color={colors.textSecondary} />
+            <ThemedText style={{ color: colors.textSecondary, fontSize: 12, marginLeft: 6 }}>
               Attendance: {student.attendance}
             </ThemedText>
           </View>

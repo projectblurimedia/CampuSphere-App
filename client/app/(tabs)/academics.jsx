@@ -4,11 +4,10 @@ import {
   View, 
   ScrollView, 
   FlatList,
-  useColorScheme
 } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
-import { Colors } from '@/constants/theme'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useTheme } from '@/hooks/useTheme'
 import AcademicsHeader from '@/components/academics/academics-header'
 import SearchBar from '@/components/academics/search-bar'
 import StatsCards from '@/components/academics/stats-cards'
@@ -16,7 +15,6 @@ import ClassCard from '@/components/academics/class-card'
 import DepartmentFilter from '@/components/academics/department-filter'
 import QuickActions from '@/components/academics/quick-actions'
 
-// Mock classes data
 const classesData = [
   {
     id: '1',
@@ -108,29 +106,10 @@ const classesData = [
   },
 ]
 
-// Calculate stats
-const calculateStats = () => {
-  const totalClasses = classesData.length
-  const totalStudents = classesData.reduce((sum, cls) => sum + cls.totalStudents, 0)
-  const uniqueTeachers = [...new Set(classesData.map(cls => cls.classTeacher))].length
-  const avgClassSize = Math.round(totalStudents / totalClasses)
-  
-  return {
-    totalClasses,
-    totalStudents,
-    totalTeachers: uniqueTeachers,
-    avgClassSize
-  }
-}
-
-// Extract unique departments
 const allDepartments = ['All', ...new Set(classesData.map(cls => cls.department))]
 
 export default function Academics() {
-  const colorScheme = useColorScheme()
-  const colors = Colors[colorScheme ?? 'light']
-  const isDark = colorScheme === 'dark'
-  
+  const { colors, isDark } = useTheme()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedDepartment, setSelectedDepartment] = useState('All')
 
@@ -144,17 +123,29 @@ export default function Academics() {
     purple: isDark ? '#a78bfa' : '#8b5cf6',
   }
 
+  const calculateStats = () => {
+    const totalClasses = classesData.length
+    const totalStudents = classesData.reduce((sum, cls) => sum + cls.totalStudents, 0)
+    const uniqueTeachers = [...new Set(classesData.map(cls => cls.classTeacher))].length
+    const avgClassSize = Math.round(totalStudents / totalClasses)
+    
+    return {
+      totalClasses,
+      totalStudents,
+      totalTeachers: uniqueTeachers,
+      avgClassSize
+    }
+  }
+
   const statsData = calculateStats()
 
   const filteredClasses = classesData.filter(cls => {
-    // Search filter
     const matchesSearch = searchQuery
       ? cls.className.toLowerCase().includes(searchQuery.toLowerCase()) ||
         cls.classTeacher.toLowerCase().includes(searchQuery.toLowerCase()) ||
         cls.room.toLowerCase().includes(searchQuery.toLowerCase())
       : true
     
-    // Department filter
     const matchesDepartment = selectedDepartment === 'All' || cls.department === selectedDepartment
     
     return matchesSearch && matchesDepartment
@@ -162,12 +153,11 @@ export default function Academics() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <AcademicsHeader colors={colors} dashboardColors={dashboardColors} />
+      <AcademicsHeader dashboardColors={dashboardColors} />
       
       <SearchBar 
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        colors={colors}
         dashboardColors={dashboardColors}
       />
 
@@ -176,42 +166,35 @@ export default function Academics() {
         contentContainerStyle={styles.scrollContent}
       >
         <StatsCards 
-          colors={colors}
-          dashboardColors={dashboardColors}
           statsData={statsData}
+          dashboardColors={dashboardColors}
         />
 
         <QuickActions 
-          colors={colors}
           dashboardColors={dashboardColors}
         />
 
-        {/* Department Filter */}
         <DepartmentFilter 
           departments={allDepartments.filter(dept => dept !== 'All')}
           selectedDepartment={selectedDepartment}
           setSelectedDepartment={setSelectedDepartment}
-          colors={colors}
           dashboardColors={dashboardColors}
         />
 
-        {/* Results Header */}
         <View style={styles.resultsHeader}>
           <ThemedText type='subtitle' style={[styles.resultsTitle, { color: colors.text }]}>
             Classes ({filteredClasses.length})
           </ThemedText>
-          <ThemedText style={[styles.resultsSubtitle, { color: colors.icon }]}>
+          <ThemedText style={[styles.resultsSubtitle, { color: colors.textSecondary }]}>
             Sorted by: Grade
           </ThemedText>
         </View>
 
-        {/* Classes List */}
         <FlatList
           data={filteredClasses}
           renderItem={({ item }) => (
             <ClassCard 
               classData={item} 
-              colors={colors} 
               dashboardColors={dashboardColors} 
             />
           )}
@@ -219,10 +202,10 @@ export default function Academics() {
           scrollEnabled={false}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <ThemedText style={[styles.emptyText, { color: colors.icon }]}>
+              <ThemedText style={[styles.emptyText, { color: colors.textSecondary }]}>
                 No classes found
               </ThemedText>
-              <ThemedText style={[styles.emptySubtext, { color: colors.icon }]}>
+              <ThemedText style={[styles.emptySubtext, { color: colors.textSecondary }]}>
                 Try changing your search or filter criteria
               </ThemedText>
             </View>
@@ -249,7 +232,7 @@ const styles = StyleSheet.create({
   },
   resultsTitle: {
     fontSize: 18,
-    opacity: .8,
+    fontWeight: '700',
   },
   resultsSubtitle: {
     fontSize: 13,

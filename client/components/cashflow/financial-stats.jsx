@@ -1,6 +1,7 @@
 import { View, StyleSheet, Dimensions } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons'
+import { useTheme } from '@/hooks/useTheme'
 
 const { width } = Dimensions.get('window')
 
@@ -8,10 +9,10 @@ export default function FinancialStats({
   totalIncome = 0, 
   totalExpenses = 0, 
   netBalance = 0, 
-  colors, 
   dashboardColors 
 }) {
-  // Ensure numbers are valid
+  const { colors } = useTheme()
+  
   const safeTotalIncome = Number(totalIncome) || 0
   const safeTotalExpenses = Number(totalExpenses) || 0
   const safeNetBalance = Number(netBalance) || 0
@@ -27,7 +28,7 @@ export default function FinancialStats({
           <MaterialIcons name="trending-up" size={22} color={dashboardColors.success} />
         </View>
         <View style={styles.statContent}>
-          <ThemedText style={[styles.statLabel, { color: colors.icon }]}>
+          <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
             Total Income
           </ThemedText>
           <ThemedText style={[styles.statValue, { color: dashboardColors.success }]}>
@@ -51,7 +52,7 @@ export default function FinancialStats({
           <MaterialIcons name="trending-down" size={22} color={dashboardColors.danger} />
         </View>
         <View style={styles.statContent}>
-          <ThemedText style={[styles.statLabel, { color: colors.icon }]}>
+          <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
             Total Expenses
           </ThemedText>
           <ThemedText style={[styles.statValue, { color: dashboardColors.danger }]}>
@@ -75,7 +76,7 @@ export default function FinancialStats({
           <FontAwesome5 name="balance-scale" size={20} color={dashboardColors.info} />
         </View>
         <View style={styles.statContent}>
-          <ThemedText style={[styles.statLabel, { color: colors.icon }]}>
+          <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
             Net Balance
           </ThemedText>
           <ThemedText style={[styles.statValue, { 

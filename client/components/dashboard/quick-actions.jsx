@@ -1,10 +1,13 @@
 import { View, StyleSheet, Dimensions, TouchableOpacity } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { MaterialIcons, FontAwesome5, Ionicons } from '@expo/vector-icons'
+import { useTheme } from '@/hooks/useTheme'
 
 const { width } = Dimensions.get('window')
 
-export default function QuickActions({ colors, dashboardColors }) {
+export default function QuickActions({ dashboardColors }) {
+  const { colors, isDark } = useTheme()
+
   const actions = [
     {
       title: 'Add Student',
@@ -35,9 +38,9 @@ export default function QuickActions({ colors, dashboardColors }) {
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <ThemedText type="subtitle">Quick Actions</ThemedText>
+        <ThemedText type="subtitle" style={{ color: colors.text }}>Quick Actions</ThemedText>
         <TouchableOpacity activeOpacity={0.8}>
-          <ThemedText type="link">View All</ThemedText>
+          <ThemedText type="link" style={{ color: colors.tint }}>View All</ThemedText>
         </TouchableOpacity>
       </View>
       <View style={styles.quickActionsGrid}>

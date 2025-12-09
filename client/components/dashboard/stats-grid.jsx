@@ -1,10 +1,13 @@
 import { View, StyleSheet, Dimensions } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { FontAwesome5, FontAwesome6, MaterialIcons, Feather } from '@expo/vector-icons'
+import { useTheme } from '@/hooks/useTheme'
 
 const { width } = Dimensions.get('window')
 
-export default function StatsGrid({ colors, dashboardColors }) {
+export default function StatsGrid({ dashboardColors }) {
+  const { colors } = useTheme()
+  
   const statsData = [
     {
       title: 'Total Students',
@@ -47,8 +50,8 @@ export default function StatsGrid({ colors, dashboardColors }) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <ThemedText type="subtitle" style={styles.sectionTitle}>Overview</ThemedText>
-        <ThemedText type="link" style={styles.viewAll}>This Month</ThemedText>
+        <ThemedText type="subtitle" style={[styles.sectionTitle, { color: colors.text }]}>Overview</ThemedText>
+        <ThemedText type="link" style={[styles.viewAll, { color: colors.tint }]}>This Month</ThemedText>
       </View>
       
       <View style={styles.statsGrid}>
@@ -59,23 +62,17 @@ export default function StatsGrid({ colors, dashboardColors }) {
               styles.statCard, 
               { 
                 backgroundColor: dashboardColors.cardBg,
-                // Set width to 50% minus half the gap (10/2 = 5)
+                borderColor: dashboardColors.border,
                 width: (width - 40 - 10) / 2,
               }
             ]}
           >
-            {/* Top Row: Icon (left) and Value/Title (right column) */}
             <View style={styles.topRow}>
-              {/* Icon on left */}
               <View style={[
                 styles.iconContainer,
                 {
                   backgroundColor: stat.gradient[0],
                   shadowColor: stat.color,
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 8,
-                  elevation: 6,
                 }
               ]}>
                 <View style={[
@@ -88,19 +85,17 @@ export default function StatsGrid({ colors, dashboardColors }) {
                 </View>
               </View>
 
-              {/* Value and Title on right (in column) */}
               <View style={styles.valueTitleColumn}>
                 <ThemedText type="title" style={[styles.statValue, { color: colors.text }]}>
                   {stat.value}
                 </ThemedText>
-                <ThemedText type="default" style={styles.statTitle}>
+                <ThemedText type="default" style={[styles.statTitle, { color: colors.textSecondary }]}>
                   {stat.title}
                 </ThemedText>
               </View>
             </View>
 
-            {/* Bottom: Change container */}
-            <View style={styles.changeContainer}>
+            <View style={[styles.changeContainer, { borderTopColor: dashboardColors.border }]}>
               <View style={styles.trendIndicator}>
                 <Feather 
                   name={stat.trend === 'up' ? 'trending-up' : 'trending-down'} 
@@ -123,13 +118,10 @@ export default function StatsGrid({ colors, dashboardColors }) {
               </ThemedText>
             </View>
 
-            {/* Decorative corner element */}
             <View style={[
               styles.cornerDecor,
               { 
                 backgroundColor: stat.color + '10',
-                borderTopRightRadius: 20,
-                borderBottomLeftRadius: 40,
               }
             ]} />
           </View>
@@ -167,7 +159,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: 'transparent',
     shadowColor: '#00000090',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
@@ -189,6 +180,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
     marginBottom: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   gradientIcon: {
     width: 45,
@@ -220,7 +215,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
   },
   trendIndicator: {
     marginRight: 6,
@@ -236,5 +230,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     zIndex: -1,
+    borderTopRightRadius: 20,
+    borderBottomLeftRadius: 40,
   },
 })

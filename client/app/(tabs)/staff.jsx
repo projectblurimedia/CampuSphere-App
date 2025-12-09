@@ -4,11 +4,10 @@ import {
   View, 
   ScrollView, 
   FlatList,
-  useColorScheme
 } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
-import { Colors } from '@/constants/theme'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useTheme } from '@/hooks/useTheme'
 import StaffHeader from '@/components/staff/staff-header'
 import StaffSearchBar from '@/components/staff/search-bar'
 import StaffStatsCards from '@/components/staff/stats-cards'
@@ -16,7 +15,6 @@ import StaffCard from '@/components/staff/staff-card'
 import DepartmentFilter from '@/components/staff/department-filter'
 import QuickActions from '@/components/staff/quick-actions'
 
-// Mock staff data
 const staffData = [
   {
     id: '1',
@@ -150,14 +148,10 @@ const staffData = [
   },
 ]
 
-// Extract unique departments
 const allDepartments = ['All', ...new Set(staffData.map(staff => staff.department))]
 
 export default function Staff() {
-  const colorScheme = useColorScheme()
-  const colors = Colors[colorScheme ?? 'light']
-  const isDark = colorScheme === 'dark'
-  
+  const { colors, isDark } = useTheme()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedDepartment, setSelectedDepartment] = useState('All')
 
@@ -172,14 +166,12 @@ export default function Staff() {
   }
 
   const filteredStaff = staffData.filter(staff => {
-    // Search filter
     const matchesSearch = searchQuery
       ? staff.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         staff.designation.toLowerCase().includes(searchQuery.toLowerCase()) ||
         staff.department.toLowerCase().includes(searchQuery.toLowerCase())
       : true
     
-    // Department filter
     const matchesDepartment = selectedDepartment === 'All' || staff.department === selectedDepartment
     
     return matchesSearch && matchesDepartment
@@ -187,12 +179,11 @@ export default function Staff() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <StaffHeader colors={colors} dashboardColors={dashboardColors} />
+      <StaffHeader dashboardColors={dashboardColors} />
       
       <StaffSearchBar 
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
-        colors={colors}
         dashboardColors={dashboardColors}
       />
 
@@ -202,42 +193,35 @@ export default function Staff() {
       >
         <StaffStatsCards 
           staffData={staffData}
-          colors={colors}
           dashboardColors={dashboardColors}
         />
 
         <QuickActions 
-          colors={colors}
           dashboardColors={dashboardColors}
         />
 
-        {/* Department Filter */}
         <DepartmentFilter 
           departments={allDepartments.filter(dept => dept !== 'All')}
           selectedDepartment={selectedDepartment}
           setSelectedDepartment={setSelectedDepartment}
-          colors={colors}
           dashboardColors={dashboardColors}
         />
 
-        {/* Results Header */}
         <View style={styles.resultsHeader}>
           <ThemedText type='subtitle' style={[styles.resultsTitle, { color: colors.text }]}>
             {selectedDepartment === 'All' ? 'All Staff' : selectedDepartment}
             {' '}({filteredStaff.length}) 
           </ThemedText>
-          <ThemedText style={[styles.resultsSubtitle, { color: colors.icon }]}>
+          <ThemedText style={[styles.resultsSubtitle, { color: colors.textSecondary }]}>
             Sorted by: Latest
           </ThemedText>
         </View>
 
-        {/* Staff List */}
         <FlatList
           data={filteredStaff}
           renderItem={({ item }) => (
             <StaffCard 
               staff={item} 
-              colors={colors} 
               dashboardColors={dashboardColors} 
             />
           )}
@@ -245,10 +229,10 @@ export default function Staff() {
           scrollEnabled={false}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <ThemedText style={[styles.emptyText, { color: colors.icon }]}>
+              <ThemedText style={[styles.emptyText, { color: colors.textSecondary }]}>
                 No staff members found
               </ThemedText>
-              <ThemedText style={[styles.emptySubtext, { color: colors.icon }]}>
+              <ThemedText style={[styles.emptySubtext, { color: colors.textSecondary }]}>
                 Try changing your search or filter criteria
               </ThemedText>
             </View>

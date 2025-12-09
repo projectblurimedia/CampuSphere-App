@@ -1,8 +1,11 @@
 import { View, StyleSheet, TouchableOpacity } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
+import { useTheme } from '@/hooks/useTheme'
 
-export default function AcademicsHeader({ colors, dashboardColors }) {
+export default function AcademicsHeader({ dashboardColors }) {
+  const { colors } = useTheme()
+  
   return (
     <View style={[styles.header, { 
       backgroundColor: colors.background,
@@ -11,7 +14,7 @@ export default function AcademicsHeader({ colors, dashboardColors }) {
     }]}>
       <View style={styles.headerContent}>
         <View style={styles.headerLeft}>
-          <View style={styles.iconContainer}>
+          <View style={[styles.iconContainer, { backgroundColor: dashboardColors.info + '15' }]}>
             <MaterialCommunityIcons 
               name="school" 
               size={28} 
@@ -22,7 +25,7 @@ export default function AcademicsHeader({ colors, dashboardColors }) {
             <ThemedText type="subtitle" style={[styles.headerTitle, { color: colors.text }]}>
               Academics
             </ThemedText>
-            <ThemedText style={[styles.headerSubtitle, { color: colors.icon }]}>
+            <ThemedText style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
               Manage classes & subjects 
             </ThemedText>
           </View>
@@ -30,7 +33,7 @@ export default function AcademicsHeader({ colors, dashboardColors }) {
         
         <TouchableOpacity 
           style={[styles.notificationBtn, { 
-            backgroundColor: colors.card,
+            backgroundColor: colors.cardBackground,
             borderColor: dashboardColors.border 
           }]}
           activeOpacity={0.7}
@@ -39,7 +42,6 @@ export default function AcademicsHeader({ colors, dashboardColors }) {
         </TouchableOpacity>
       </View>
       
-      {/* Colorful Decorative Dots */}
       <View style={styles.decorationRow}>
         <View style={[styles.dot, { backgroundColor: dashboardColors.info }]} />
         <View style={[styles.dot, { backgroundColor: dashboardColors.success }]} />
@@ -72,7 +74,6 @@ const styles = StyleSheet.create({
     width: 55,
     height: 55,
     borderRadius: 12,
-    backgroundColor: 'rgba(59, 130, 246, 0.08)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -81,6 +82,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 22,
+    fontWeight: '700',
   },
   headerSubtitle: {
     fontSize: 13,

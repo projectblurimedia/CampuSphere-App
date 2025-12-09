@@ -1,8 +1,11 @@
 import { View, StyleSheet, TouchableOpacity } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons } from '@expo/vector-icons'
+import { useTheme } from '@/hooks/useTheme'
 
-export default function RecentActivity({ colors, dashboardColors }) {
+export default function RecentActivity({ dashboardColors }) {
+  const { colors } = useTheme()
+  
   const activities = [
     { 
       icon: '💰', 
@@ -58,9 +61,8 @@ export default function RecentActivity({ colors, dashboardColors }) {
 
   return (
     <View style={styles.section}>
-      {/* Header */}
       <View style={styles.sectionHeader}>
-        <ThemedText type="subtitle">Recent Activity</ThemedText>
+        <ThemedText type="subtitle" style={{ color: colors.text }}>Recent Activity</ThemedText>
         <TouchableOpacity activeOpacity={0.8}>
           <ThemedText type="link" style={{ color: colors.tint, fontSize: 13 }}>See All</ThemedText>
         </TouchableOpacity>
@@ -78,14 +80,11 @@ export default function RecentActivity({ colors, dashboardColors }) {
               index < activities.length - 1 && [styles.activityDivider, { borderColor: dashboardColors.border }]
             ]}
           >
-            {/* Row: Icon on left, Label & Title in column on right */}
             <View style={styles.topRow}>
-              {/* Icon */}
               <View style={[styles.activityIcon, { backgroundColor: activity.color + '15' }]}>
                 <ThemedText style={{ fontSize: 20 }}>{activity.icon}</ThemedText>
               </View>
               
-              {/* Label and Title in Column */}
               <View style={styles.labelTitleColumn}>
                 <View style={[styles.typeBadge, { backgroundColor: activity.color + '10' }]}>
                   <ThemedText style={[styles.typeText, { color: activity.color }]}>
@@ -98,18 +97,16 @@ export default function RecentActivity({ colors, dashboardColors }) {
               </View>
             </View>
 
-            {/* Description (below the row) */}
-            <ThemedText type="default" style={[styles.activityDesc, { color: colors.icon }]}>
+            <ThemedText type="default" style={[styles.activityDesc, { color: colors.textSecondary }]}>
               {activity.desc}
             </ThemedText>
 
-            {/* Bottom row: Time and Details button */}
             <View style={styles.bottomRow}>
               <View style={styles.timeContainer}>
-                <Ionicons name="time-outline" size={12} color={colors.icon} style={{ opacity: 0.7 }} />
+                <Ionicons name="time-outline" size={12} color={colors.textSecondary} style={{ opacity: 0.7 }} />
                 <ThemedText 
                   type="default" 
-                  style={[styles.activityTime, { color: colors.icon }]}
+                  style={[styles.activityTime, { color: colors.textSecondary }]}
                 >
                   {activity.time}
                 </ThemedText>

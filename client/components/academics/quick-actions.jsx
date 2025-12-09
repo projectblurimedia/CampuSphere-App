@@ -1,10 +1,13 @@
 import { View, StyleSheet, Dimensions, TouchableOpacity } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { MaterialIcons, FontAwesome5, Ionicons, Feather } from '@expo/vector-icons'
+import { useTheme } from '@/hooks/useTheme'
 
 const { width } = Dimensions.get('window')
 
-export default function QuickActions({ colors, dashboardColors }) {
+export default function QuickActions({ dashboardColors }) {
+  const { colors } = useTheme()
+
   const actions = [
     {
       title: 'Add Class',
@@ -35,9 +38,9 @@ export default function QuickActions({ colors, dashboardColors }) {
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <ThemedText type="subtitle">Quick Actions</ThemedText>
+        <ThemedText type="subtitle" style={{ color: colors.text }}>Quick Actions</ThemedText>
         <TouchableOpacity activeOpacity={0.8}>
-          <ThemedText type="link">View All</ThemedText>
+          <ThemedText type="link" style={{ color: colors.tint }}>View All</ThemedText>
         </TouchableOpacity>
       </View>
       <View style={styles.quickActionsGrid}>
@@ -50,6 +53,7 @@ export default function QuickActions({ colors, dashboardColors }) {
               { 
                 backgroundColor: action.iconBg,
                 width: (width - 60) / 2,
+                borderColor: dashboardColors.border
               }
             ]}
           >
@@ -71,7 +75,7 @@ export default function QuickActions({ colors, dashboardColors }) {
 
 const styles = StyleSheet.create({
   section: {
-    marginTop: 30,
+    marginVertical: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -90,7 +94,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'transparent',
   },
   actionIcon: {
     width: 52,
@@ -103,5 +106,6 @@ const styles = StyleSheet.create({
   actionTitle: {
     fontSize: 13,
     textAlign: 'center',
+    fontWeight: '600',
   },
 })

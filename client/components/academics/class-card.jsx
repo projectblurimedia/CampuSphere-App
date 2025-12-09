@@ -1,10 +1,11 @@
 import { View, StyleSheet, TouchableOpacity } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons'
+import { useTheme } from '@/hooks/useTheme'
 
-export default function ClassCard({ classData, colors, dashboardColors }) {
+export default function ClassCard({ classData, dashboardColors }) {
+  const { colors } = useTheme()
   const { 
-    id, 
     className, 
     grade, 
     section, 
@@ -19,8 +20,9 @@ export default function ClassCard({ classData, colors, dashboardColors }) {
   return (
     <TouchableOpacity 
       style={[styles.card, { 
-        backgroundColor: colors.card,
-        borderColor: dashboardColors.border 
+        backgroundColor: dashboardColors.cardBg,
+        borderColor: dashboardColors.border,
+        shadowColor: '#00000040'
       }]}
       activeOpacity={0.8}
     >
@@ -32,13 +34,15 @@ export default function ClassCard({ classData, colors, dashboardColors }) {
               {className}
             </ThemedText>
           </View>
-          <ThemedText style={[styles.gradeSection, { color: colors.icon }]}>
+          <ThemedText style={[styles.gradeSection, { color: colors.textSecondary }]}>
             {grade} • Section {section}
           </ThemedText>
         </View>
         
-        <View style={styles.statusBadge}>
-          <ThemedText style={styles.statusText}>Active</ThemedText>
+        <View style={[styles.statusBadge, { backgroundColor: dashboardColors.success + '20' }]}>
+          <ThemedText style={[styles.statusText, { color: dashboardColors.success }]}>
+            Active
+          </ThemedText>
         </View>
       </View>
 
@@ -61,26 +65,30 @@ export default function ClassCard({ classData, colors, dashboardColors }) {
 
         <View style={styles.teacherInfo}>
           <MaterialIcons name="person" size={16} color={dashboardColors.purple} />
-          <ThemedText style={[styles.teacherText, { color: colors.icon }]}>
+          <ThemedText style={[styles.teacherText, { color: colors.textSecondary }]}>
             Class Teacher: {classTeacher}
           </ThemedText>
         </View>
 
         <View style={styles.roomInfo}>
           <MaterialIcons name="meeting-room" size={16} color={dashboardColors.info} />
-          <ThemedText style={[styles.roomText, { color: colors.icon }]}>
+          <ThemedText style={[styles.roomText, { color: colors.textSecondary }]}>
             Room: {room}
           </ThemedText>
         </View>
       </View>
 
       <View style={styles.cardFooter}>
-        <TouchableOpacity style={styles.actionBtn}>
-          <ThemedText style={styles.actionText}>View Details</ThemedText>
+        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: dashboardColors.info + '10' }]}>
+          <ThemedText style={[styles.actionText, { color: dashboardColors.info }]}>
+            View Details
+          </ThemedText>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.actionBtn}>
-          <ThemedText style={styles.actionText}>View Timetable</ThemedText>
+        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: dashboardColors.purple + '10' }]}>
+          <ThemedText style={[styles.actionText, { color: dashboardColors.purple }]}>
+            View Timetable
+          </ThemedText>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -93,6 +101,10 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -118,13 +130,11 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   statusBadge: {
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
   },
   statusText: {
-    color: '#22c55e',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -144,6 +154,7 @@ const styles = StyleSheet.create({
   statText: {
     fontSize: 13,
     opacity: 0.9,
+    fontWeight: '500',
   },
   teacherInfo: {
     flexDirection: 'row',
@@ -172,11 +183,9 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
     alignItems: 'center',
   },
   actionText: {
-    color: '#3b82f6',
     fontSize: 13,
     fontWeight: '600',
   },

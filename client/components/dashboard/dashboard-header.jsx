@@ -4,35 +4,22 @@ import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-ico
 import { LinearGradient } from 'expo-linear-gradient'
 import { useState } from 'react'
 import DashboardMenu from './dashboard-menu'
+import { useTheme } from '@/hooks/useTheme' 
 
-export default function DashboardHeader({ colors, dashboardColors }) {
+export default function DashboardHeader({ dashboardColors }) {
   const [menuVisible, setMenuVisible] = useState(false)
-
-  // Safe colors with fallbacks
-  const safeColors = colors || {
-    title: '#0d3755',
-    text: '#11181C',
-    background: '#fafdff',
-    tint: '#1d9bf0',
-    icon: '#496078',
-    textSecondary: '#687076',
-    cardBackground: '#FFFFFF',
-    border: '#E6E8EB',
-  }
+  const { colors } = useTheme() 
 
   return (
     <>
-      <View style={[styles.container, { backgroundColor: safeColors.cardBackground || '#FFFFFF' }]}>
-        {/* Subtle border */}
-        <View style={[styles.border, { borderColor: safeColors.border || '#E6E8EB' }]} />
+      <View style={[styles.container, { backgroundColor: colors.cardBackground }]}>
+        <View style={[styles.border, { borderColor: colors.border }]} />
         
-        {/* Main content */}
         <View style={styles.content}>
-          {/* School logo with elegant design */}
           <View style={styles.logoSection}>
             <View style={styles.logoWrapper}>
               <LinearGradient
-                colors={[safeColors.tint, '#0066cc']}
+                colors={[colors.tint, '#0066cc']}
                 style={styles.logoGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -46,28 +33,28 @@ export default function DashboardHeader({ colors, dashboardColors }) {
             
             <View style={styles.schoolInfo}>
               <View style={styles.schoolHeader}>
-                <ThemedText type="title" style={[styles.schoolName, { color: safeColors.title }]}>
+                <ThemedText type="title" style={[styles.schoolName, { color: colors.text }]}>
                   Bluri High School
                 </ThemedText>
               </View>
               
               <View style={styles.detailsRow}>
                 <View style={styles.detailItem}>
-                  <View style={[styles.iconContainer, { backgroundColor: safeColors.tint + '20' }]}>
-                    <Ionicons name="location" size={12} color={safeColors.tint} />
+                  <View style={[styles.iconContainer, { backgroundColor: colors.tint + '20' }]}>
+                    <Ionicons name="location" size={12} color={colors.tint} />
                   </View>
-                  <ThemedText style={[styles.detailText, { color: safeColors.textSecondary || '#687076' }]}>
+                  <ThemedText style={[styles.detailText, { color: colors.textSecondary }]}>
                     Kannapuram
                   </ThemedText>
                 </View>
                 
-                <View style={[styles.separator, { backgroundColor: safeColors.border || '#E6E8EB' }]} />
+                <View style={[styles.separator, { backgroundColor: colors.border }]} />
                 
                 <View style={styles.detailItem}>
-                  <View style={[styles.iconContainer, { backgroundColor: safeColors.tint + '20' }]}>
-                    <Ionicons name="calendar" size={12} color={safeColors.tint} />
+                  <View style={[styles.iconContainer, { backgroundColor: colors.tint + '20' }]}>
+                    <Ionicons name="calendar" size={12} color={colors.tint} />
                   </View>
-                  <ThemedText style={[styles.detailText, { color: safeColors.textSecondary || '#687076' }]}>
+                  <ThemedText style={[styles.detailText, { color: colors.textSecondary }]}>
                     Est. 2002
                   </ThemedText>
                 </View>
@@ -75,43 +62,37 @@ export default function DashboardHeader({ colors, dashboardColors }) {
             </View>
           </View>
           
-          {/* Enhanced Menu button with bars icon */}
           <TouchableOpacity 
             activeOpacity={0.9}
             style={styles.menuButton}
             onPress={() => setMenuVisible(true)}
           >
             <View style={[styles.menuButtonContainer, { 
-              backgroundColor: safeColors.background || '#fafdff',
-              borderColor: safeColors.border || '#E6E8EB' 
+              backgroundColor: colors.background,
+              borderColor: colors.border
             }]}>
-              <Ionicons name="menu" size={20} color={safeColors.tint} />
+              <Ionicons name="menu" size={20} color={colors.tint} />
             </View>
           </TouchableOpacity>
         </View>
         
-        {/* Separator above motto */}
-        <View style={[styles.mottoSeparator, { backgroundColor: safeColors.border || '#E6E8EB' }]} />
+        <View style={[styles.mottoSeparator, { backgroundColor: colors.border }]} />
         
-        {/* School motto with enhanced styling */}
         <View style={styles.mottoContainer}>
-          <View style={[styles.mottoDecoration, { backgroundColor: safeColors.tint + '20' }]} />
-          <ThemedText style={[styles.mottoText, { color: safeColors.textSecondary || '#687076' }]}>
+          <View style={[styles.mottoDecoration, { backgroundColor: colors.tint + '20' }]} />
+          <ThemedText style={[styles.mottoText, { color: colors.textSecondary }]}>
             Excellence in Education • Character Building
           </ThemedText>
-          <View style={[styles.mottoDecoration, { backgroundColor: safeColors.tint + '20' }]} />
+          <View style={[styles.mottoDecoration, { backgroundColor: colors.tint + '20' }]} />
         </View>
         
-        {/* Bottom accent line */}
-        <View style={[styles.bottomAccent, { backgroundColor: safeColors.tint }]} />
+        <View style={[styles.bottomAccent, { backgroundColor: colors.tint }]} />
       </View>
 
-      {/* Dashboard Menu */}
       <DashboardMenu
         visible={menuVisible}
         onClose={() => setMenuVisible(false)}
-        colors={safeColors}
-        dashboardColors={dashboardColors}
+        dashboardColors={dashboardColors} 
       />
     </>
   )

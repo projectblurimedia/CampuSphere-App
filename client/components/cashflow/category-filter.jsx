@@ -1,14 +1,15 @@
 import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons, MaterialIcons } from '@expo/vector-icons'
+import { useTheme } from '@/hooks/useTheme'
 
 export default function CategoryFilter({ 
   categories, 
   selectedCategory, 
   setSelectedCategory, 
-  colors, 
   dashboardColors 
 }) {
+  const { colors } = useTheme()
   
   const getCategoryIcon = (category) => {
     switch(category) {

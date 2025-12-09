@@ -1,11 +1,14 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native'
 import { Stack } from 'expo-router'
-import { StatusBar } from 'expo-status-bar'
 import 'react-native-reanimated'
 import React, { useState, useEffect } from 'react'
 import * as Font from 'expo-font'
-import { View, ActivityIndicator, useColorScheme } from 'react-native'
+import { View, ActivityIndicator } from 'react-native'
+import { StatusBar } from 'expo-status-bar'
+import { Provider } from 'react-redux'
+import { store } from '@/redux/store'
+import { useTheme } from '@/hooks/useTheme'
 
+// Fonts
 import PoppinsLight from '../assets/fonts/Poppins-Light.ttf'
 import PoppinsRegular from '../assets/fonts/Poppins-Regular.ttf'
 import PoppinsMedium from '../assets/fonts/Poppins-Medium.ttf'
@@ -17,9 +20,21 @@ export const unstable_settings = {
   anchor: '(tabs)',
 }
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme()
+function ThemeContainer({ children }) {
+  const { colors, isDark } = useTheme()
+  
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* StatusBar component */}
+      <StatusBar style={isDark ? "light" : "dark"} />
+      {children}
+    </View>
+  )
+}
+
+function AppContent() {
   const [fontsLoaded, setFontsLoaded] = useState(false)
+  const { colors } = useTheme()
 
   useEffect(() => {
     async function loadFonts() {
@@ -45,12 +60,43 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+    <ThemeContainer>
+      <Stack
+        screenOptions={{
+          headerStyle: {
+            backgroundColor: colors.headerBackground,
+          },
+          headerTintColor: colors.headerText,
+          headerTitleStyle: {
+            fontFamily: 'Poppins-SemiBold',
+          },
+          contentStyle: {
+            backgroundColor: colors.background,
+          },
+        }}
+      >
+        <Stack.Screen 
+          name="(tabs)" 
+          options={{ 
+            headerShown: false 
+          }} 
+        />
+        <Stack.Screen 
+          name="modal" 
+          options={{ 
+            presentation: 'modal', 
+            title: 'Modal',
+          }} 
+        />
       </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    </ThemeContainer>
+  )
+}
+
+export default function RootLayout() {
+  return (
+    <Provider store={store}>
+      <AppContent />
+    </Provider>
   )
 }

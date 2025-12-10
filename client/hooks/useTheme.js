@@ -1,12 +1,28 @@
 import { useSelector, useDispatch } from 'react-redux'
-import { setTheme, setCurrentTheme } from '@/redux/themeSlice'
+import { setTheme, setCurrentTheme, loadTheme } from '@/redux/themeSlice'
 import { useColorScheme } from 'react-native'
 import { useEffect } from 'react'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 export const useTheme = () => {
   const dispatch = useDispatch()
   const deviceTheme = useColorScheme()
   const { theme, colors, currentTheme } = useSelector(state => state.theme)
+  
+  useEffect(() => {
+    const loadSavedTheme = async () => {
+      try {
+        const savedTheme = await AsyncStorage.getItem('app_theme')
+        if (savedTheme) {
+          dispatch(loadTheme(savedTheme))
+        }
+      } catch (error) {
+        console.error('Failed to load theme:', error)
+      }
+    }
+    
+    loadSavedTheme()
+  }, [dispatch])
   
   useEffect(() => {
     const determineTheme = () => {
@@ -27,8 +43,8 @@ export const useTheme = () => {
   }
   
   return {
-    theme,
-    currentTheme,
+    theme,           
+    currentTheme,    
     colors,
     changeTheme,
     isDark: currentTheme === 'dark'

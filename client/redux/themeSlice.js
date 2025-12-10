@@ -5,9 +5,9 @@ const lightTheme = {
   tint: '#1d9bf0',
   cardBackground: '#FFFFFF',
   text: '#11181C',
-  textSecondary: '#687076',
+  textSecondary: '#474d51',
   border: '#E6E8EB',
-  background: '#F8F9FA',
+  background: '#fbfbfc',
   primary: '#1d9bf0',
   secondary: '#10b981',
   danger: '#ef4444',
@@ -16,20 +16,18 @@ const lightTheme = {
   icon: '#1d9bf0',
   gradientStart: '#1d9bf0',
   gradientEnd: '#0066cc',
-  headerBackground: '#1d9bf0',
-  headerText: '#FFFFFF',
-  tabBarBackground: '#FFFFFF',
+  tabBarBackground: '#fbfbfc',
   tabBarActive: '#1d9bf0',
-  tabBarInactive: '#687076',
+  tabBarInactive: '#4b5963',
 }
 
 const darkTheme = {
   tint: '#1d9bf0',
-  cardBackground: '#1C1C1E',
+  cardBackground: '#141820',
   text: '#FFFFFF',
-  textSecondary: '#98989F',
+  textSecondary: '#dedede',
   border: '#2C2C2E',
-  background: '#000000',
+  background: '#0c0f14',
   primary: '#1d9bf0',
   secondary: '#10b981',
   danger: '#ef4444',
@@ -38,19 +36,17 @@ const darkTheme = {
   icon: '#1d9bf0',
   gradientStart: '#1d9bf0',
   gradientEnd: '#0066cc',
-  headerBackground: '#0A0A0A',
-  headerText: '#FFFFFF',
-  tabBarBackground: '#0A0A0A',
+  tabBarBackground: '#0c0f14',
   tabBarActive: '#1d9bf0',
-  tabBarInactive: '#98989F',
+  tabBarInactive: '#e9eff7',
 }
 
 const initialState = {
-  theme: 'system',
-  currentTheme: 'light',
+  theme: 'system',      
+  currentTheme: 'light', 
   light: lightTheme,
   dark: darkTheme,
-  colors: lightTheme,
+  colors: lightTheme,    
 }
 
 export const themeSlice = createSlice({
@@ -60,6 +56,12 @@ export const themeSlice = createSlice({
     setTheme: (state, action) => {
       state.theme = action.payload
       AsyncStorage.setItem('app_theme', action.payload)
+      
+      // Also update currentTheme if not 'system'
+      if (action.payload !== 'system') {
+        state.currentTheme = action.payload
+        state.colors = action.payload === 'dark' ? darkTheme : lightTheme
+      }
     },
     setCurrentTheme: (state, action) => {
       state.currentTheme = action.payload

@@ -14,31 +14,31 @@ import { useTheme } from '@/hooks/useTheme'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
+const themeOptions = [
+  { 
+    id: 'system', 
+    label: 'System Default', 
+    icon: 'settings',
+    gradient: ['#667eea', '#764ba2']
+  },
+  { 
+    id: 'light', 
+    label: 'Light Mode', 
+    icon: 'sun',
+    gradient: ['#fbbf24', '#f59e0b']
+  },
+  { 
+    id: 'dark', 
+    label: 'Dark Mode', 
+    icon: 'moon',
+    gradient: ['#4f46e5', '#7c3aed']
+  },
+]
+
 const ThemeModal = ({ visible, onClose }) => {
   const { theme, colors, changeTheme } = useTheme()
   const modalScale = useRef(new Animated.Value(0.8)).current
   const modalOpacity = useRef(new Animated.Value(0)).current
-
-  const themeOptions = [
-    { 
-      id: 'system', 
-      label: 'System Default', 
-      icon: 'settings',
-      gradient: ['#667eea', '#764ba2']
-    },
-    { 
-      id: 'light', 
-      label: 'Light Mode', 
-      icon: 'sun',
-      gradient: ['#fbbf24', '#f59e0b']
-    },
-    { 
-      id: 'dark', 
-      label: 'Dark Mode', 
-      icon: 'moon',
-      gradient: ['#4f46e5', '#7c3aed']
-    },
-  ]
 
   React.useEffect(() => {
     if (visible) {
@@ -125,45 +125,50 @@ const ThemeModal = ({ visible, onClose }) => {
           </LinearGradient>
 
           <View style={styles.optionsContainer}>
-            {themeOptions.map((option) => (
-              <TouchableOpacity
-                key={option.id}
-                style={[
-                  styles.option,
-                  { 
-                    backgroundColor: colors.cardBackground,
-                    borderWidth: theme === option.id ? 2 : 1,
-                    borderColor: theme === option.id ? colors.tint : colors.border,
-                  }
-                ]}
-                activeOpacity={0.7}
-                onPress={() => handleThemeSelect(option.id)}
-              >
-                <LinearGradient
-                  colors={option.gradient}
-                  style={styles.optionIcon}
+            {themeOptions.map((option) => {
+              // FIXED: Compare with the stored preference (theme), not the applied theme (currentTheme)
+              const isSelected = theme === option.id
+              
+              return (
+                <TouchableOpacity
+                  key={option.id}
+                  style={[
+                    styles.option,
+                    { 
+                      backgroundColor: colors.cardBackground,
+                      borderWidth: isSelected ? 2 : 1,
+                      borderColor: isSelected ? colors.tint : colors.border,
+                    }
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={() => handleThemeSelect(option.id)}
                 >
-                  <Feather name={option.icon} size={24} color="#FFFFFF" />
-                </LinearGradient>
-                
-                <View style={styles.optionText}>
-                  <ThemedText 
-                    style={[
-                      styles.optionLabel,
-                      { color: theme === option.id ? colors.tint : colors.text }
-                    ]}
+                  <LinearGradient
+                    colors={option.gradient}
+                    style={styles.optionIcon}
                   >
-                    {option.label}
-                  </ThemedText>
-                </View>
-                
-                {theme === option.id && (
-                  <View style={[styles.selected, { backgroundColor: colors.tint }]}>
-                    <Feather name="check" size={16} color="#FFFFFF" />
+                    <Feather name={option.icon} size={24} color="#FFFFFF" />
+                  </LinearGradient>
+                  
+                  <View style={styles.optionText}>
+                    <ThemedText 
+                      style={[
+                        styles.optionLabel,
+                        { color: isSelected ? colors.tint : colors.text }
+                      ]}
+                    >
+                      {option.label}
+                    </ThemedText>
                   </View>
-                )}
-              </TouchableOpacity>
-            ))}
+                  
+                  {isSelected && (
+                    <View style={[styles.selected, { backgroundColor: colors.tint }]}>
+                      <Feather name="check" size={16} color="#FFFFFF" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              )
+            })}
           </View>
 
           <TouchableOpacity

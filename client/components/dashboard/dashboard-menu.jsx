@@ -21,12 +21,14 @@ import {
 } from '@expo/vector-icons'
 import ThemeModal from '@/components/theme/ThemeModal'
 import { useTheme } from '@/hooks/useTheme'
+import SchoolProfile from '@/pages/schoolProfile/SchoolProfile'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
 export default function DashboardMenu({ visible, onClose }) {
   const { theme, colors } = useTheme()
   const [themeModalVisible, setThemeModalVisible] = useState(false)
+  const [schoolProfileVisible, setSchoolProfileVisible] = useState(false)
   const translateX = useRef(new Animated.Value(SCREEN_WIDTH)).current
   const backdropOpacity = useRef(new Animated.Value(0)).current
 
@@ -97,7 +99,15 @@ export default function DashboardMenu({ visible, onClose }) {
 
   const handleMenuItemPress = (item) => {
     console.log(`${item.title} pressed`)
-    onClose()
+    if (item.title === 'School Profile') {
+      // Close the dashboard menu and open school profile
+      onClose()
+      setTimeout(() => {
+        setSchoolProfileVisible(true)
+      }, 300) // Small delay to let menu close animation finish
+    } else {
+      onClose()
+    }
   }
 
   const handleLogout = () => {
@@ -105,153 +115,164 @@ export default function DashboardMenu({ visible, onClose }) {
     onClose()
   }
 
+  const handleSchoolProfileClose = () => {
+    setSchoolProfileVisible(false)
+  }
+
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      onRequestClose={onClose}
-    >
-      <View style={styles.modalContainer}>
-        <TouchableOpacity 
-          style={styles.backdropTouchable} 
-          activeOpacity={1} 
-          onPress={onClose}
-        >
+    <>
+      <Modal
+        visible={visible}
+        transparent
+        animationType="none"
+        onRequestClose={onClose}
+      >
+        <View style={styles.modalContainer}>
+          <TouchableOpacity 
+            style={styles.backdropTouchable} 
+            activeOpacity={1} 
+            onPress={onClose}
+          >
+            <Animated.View
+              style={[
+                styles.backdrop,
+                {
+                  opacity: backdropOpacity,
+                  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                },
+              ]}
+            />
+          </TouchableOpacity>
+
           <Animated.View
             style={[
-              styles.backdrop,
+              styles.menuContainer,
               {
-                opacity: backdropOpacity,
-                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                backgroundColor: colors.cardBackground,
+                transform: [{ translateX: translateX }],
               },
             ]}
-          />
-        </TouchableOpacity>
-
-        <Animated.View
-          style={[
-            styles.menuContainer,
-            {
-              backgroundColor: colors.cardBackground,
-              transform: [{ translateX: translateX }],
-            },
-          ]}
-        >
-          <LinearGradient
-            colors={[colors.gradientStart, colors.gradientEnd]}
-            style={styles.header}
           >
-            <View style={styles.headerRow}>
-              <View style={styles.headerLeft}>
-                <FontAwesome5 name="school" size={28} color="#FFFFFF" />
-                <View style={styles.headerText}>
-                  <ThemedText type='subtitle' style={styles.schoolName}>
-                    Bluri High School
-                  </ThemedText>
-                  <ThemedText style={styles.menuTitle}>
-                    Dashboard Menu
-                  </ThemedText>
+            <LinearGradient
+              colors={[colors.gradientStart, colors.gradientEnd]}
+              style={styles.header}
+            >
+              <View style={styles.headerRow}>
+                <View style={styles.headerLeft}>
+                  <FontAwesome5 name="school" size={28} color="#FFFFFF" />
+                  <View style={styles.headerText}>
+                    <ThemedText type='subtitle' style={styles.schoolName}>
+                      Bluri High School
+                    </ThemedText>
+                    <ThemedText style={styles.menuTitle}>
+                      Dashboard Menu
+                    </ThemedText>
+                  </View>
+                </View>
+                
+                <TouchableOpacity
+                  style={styles.closeBtn}
+                  onPress={onClose}
+                >
+                  <Ionicons name="close" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            </LinearGradient>
+
+            <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={styles.scrollContent}
+            >
+              <View style={styles.section}>
+                <ThemedText type='subtitle' style={[styles.sectionTitle, { color: colors.text }]}>
+                  School Information
+                </ThemedText>
+                <View style={styles.items}>
+                  {menuItems.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[styles.item, { backgroundColor: colors.cardBackground }]}
+                      onPress={() => handleMenuItemPress(item)}
+                    >
+                      <View style={styles.itemContent}>
+                        <LinearGradient colors={item.gradient} style={styles.icon}>
+                          {getIcon(item.iconType, item.icon, 18, '#FFFFFF')}
+                        </LinearGradient>
+                        <View style={styles.itemText}>
+                          <ThemedText type='subtitle' style={[styles.itemTitle, { color: colors.text }]}>
+                            {item.title}
+                          </ThemedText>
+                          <ThemedText style={[styles.itemValue, { color: colors.textSecondary }]}>
+                            {item.value}
+                          </ThemedText>
+                        </View>
+                        <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+                      </View>
+                    </TouchableOpacity>
+                  ))}
                 </View>
               </View>
-              
-              <TouchableOpacity
-                style={styles.closeBtn}
-                onPress={onClose}
-              >
-                <Ionicons name="close" size={24} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-          </LinearGradient>
 
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-          >
-            <View style={styles.section}>
-              <ThemedText type='subtitle' style={[styles.sectionTitle, { color: colors.text }]}>
-                School Information
-              </ThemedText>
-              <View style={styles.items}>
-                {menuItems.map((item) => (
+              <View style={styles.section}>
+                <ThemedText type='subtitle' style={[styles.sectionTitle, { color: colors.text }]}>
+                  App Settings
+                </ThemedText>
+                <View style={styles.items}>
                   <TouchableOpacity
-                    key={item.id}
                     style={[styles.item, { backgroundColor: colors.cardBackground }]}
-                    onPress={() => handleMenuItemPress(item)}
+                    onPress={() => setThemeModalVisible(true)}
                   >
                     <View style={styles.itemContent}>
-                      <LinearGradient colors={item.gradient} style={styles.icon}>
-                        {getIcon(item.iconType, item.icon, 18, '#FFFFFF')}
-                      </LinearGradient>
+                      <View style={[styles.icon, { backgroundColor: colors.tint + '20' }]}>
+                        <FontAwesome6 name="palette" size={18} color={colors.tint} />
+                      </View>
                       <View style={styles.itemText}>
-                        <ThemedText type='subtitle' style={[styles.itemTitle, { color: colors.text }]}>
-                          {item.title}
+                        <ThemedText style={[styles.itemTitle, { color: colors.text }]}>
+                          App Theme
                         </ThemedText>
                         <ThemedText style={[styles.itemValue, { color: colors.textSecondary }]}>
-                          {item.value}
+                          {getThemeLabel()}
                         </ThemedText>
                       </View>
                       <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
                     </View>
                   </TouchableOpacity>
-                ))}
+                </View>
               </View>
-            </View>
 
-            <View style={styles.section}>
-              <ThemedText type='subtitle' style={[styles.sectionTitle, { color: colors.text }]}>
-                App Settings
-              </ThemedText>
-              <View style={styles.items}>
-                <TouchableOpacity
-                  style={[styles.item, { backgroundColor: colors.cardBackground }]}
-                  onPress={() => setThemeModalVisible(true)}
-                >
-                  <View style={styles.itemContent}>
-                    <View style={[styles.icon, { backgroundColor: colors.tint + '20' }]}>
-                      <FontAwesome6 name="palette" size={18} color={colors.tint} />
-                    </View>
-                    <View style={styles.itemText}>
-                      <ThemedText style={[styles.itemTitle, { color: colors.text }]}>
-                        App Theme
-                      </ThemedText>
-                      <ThemedText style={[styles.itemValue, { color: colors.textSecondary }]}>
-                        {getThemeLabel()}
-                      </ThemedText>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-                  </View>
-                </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.logout}
+                onPress={handleLogout}
+              >
+                <LinearGradient colors={['#ef4444', '#dc2626']} style={styles.logoutGradient}>
+                  <Feather name="log-out" size={18} color="#FFFFFF" />
+                  <ThemedText type='subtitle' style={styles.logoutText}>Logout</ThemedText>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <View style={styles.footer}>
+                <ThemedText style={[styles.footerText, { color: colors.textSecondary }]}>
+                  Bluri High School App v2.4.1
+                </ThemedText>
+                <ThemedText style={[styles.footerCopyright, { color: colors.textSecondary }]}>
+                  © 2024 All rights reserved
+                </ThemedText>
               </View>
-            </View>
+            </ScrollView>
+          </Animated.View>
 
-            <TouchableOpacity
-              style={styles.logout}
-              onPress={handleLogout}
-            >
-              <LinearGradient colors={['#ef4444', '#dc2626']} style={styles.logoutGradient}>
-                <Feather name="log-out" size={18} color="#FFFFFF" />
-                <ThemedText type='subtitle' style={styles.logoutText}>Logout</ThemedText>
-              </LinearGradient>
-            </TouchableOpacity>
+          <ThemeModal
+            visible={themeModalVisible}
+            onClose={() => setThemeModalVisible(false)}
+          />
+        </View>
+      </Modal>
 
-            <View style={styles.footer}>
-              <ThemedText style={[styles.footerText, { color: colors.textSecondary }]}>
-                Bluri High School App v2.4.1
-              </ThemedText>
-              <ThemedText style={[styles.footerCopyright, { color: colors.textSecondary }]}>
-                © 2024 All rights reserved
-              </ThemedText>
-            </View>
-          </ScrollView>
-        </Animated.View>
-
-        <ThemeModal
-          visible={themeModalVisible}
-          onClose={() => setThemeModalVisible(false)}
-        />
-      </View>
-    </Modal>
+      <SchoolProfile
+        visible={schoolProfileVisible}
+        onClose={handleSchoolProfileClose}
+      />
+    </>
   )
 }
 

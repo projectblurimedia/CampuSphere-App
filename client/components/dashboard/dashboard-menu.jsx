@@ -100,11 +100,8 @@ export default function DashboardMenu({ visible, onClose }) {
   const handleMenuItemPress = (item) => {
     console.log(`${item.title} pressed`)
     if (item.title === 'School Profile') {
-      // Close the dashboard menu and open school profile
       onClose()
-      setTimeout(() => {
-        setSchoolProfileVisible(true)
-      }, 300) // Small delay to let menu close animation finish
+      setSchoolProfileVisible(true)
     } else {
       onClose()
     }
@@ -126,6 +123,7 @@ export default function DashboardMenu({ visible, onClose }) {
         transparent
         animationType="none"
         onRequestClose={onClose}
+        statusBarTranslucent
       >
         <View style={styles.modalContainer}>
           <TouchableOpacity 
@@ -190,6 +188,7 @@ export default function DashboardMenu({ visible, onClose }) {
                 <View style={styles.items}>
                   {menuItems.map((item) => (
                     <TouchableOpacity
+                      activeOpacity={.9} 
                       key={item.id}
                       style={[styles.item, { backgroundColor: colors.cardBackground }]}
                       onPress={() => handleMenuItemPress(item)}
@@ -219,6 +218,7 @@ export default function DashboardMenu({ visible, onClose }) {
                 </ThemedText>
                 <View style={styles.items}>
                   <TouchableOpacity
+                    activeOpacity={.9} 
                     style={[styles.item, { backgroundColor: colors.cardBackground }]}
                     onPress={() => setThemeModalVisible(true)}
                   >
@@ -289,7 +289,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 10,
     borderBottomLeftRadius: 10,
     overflow: 'hidden',
-    paddingBottom: 20,
     ...Platform.select({
       ios: { 
         shadowColor: '#000', 
@@ -302,7 +301,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: Platform.OS === 'ios' ? 70 : 50,
-    paddingBottom: 30,
+    paddingBottom: 20,
     paddingHorizontal: 20,
   },
   headerRow: {

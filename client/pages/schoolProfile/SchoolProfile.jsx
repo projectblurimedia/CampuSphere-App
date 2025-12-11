@@ -121,40 +121,53 @@ export default function SchoolProfile({ visible, onClose }) {
     },
   ]
 
+  const sectionColors = [
+    '#3b82f6', // Basic Information - blue
+    '#10b981', // Administration - green
+    '#3b82f6', // Contact Information - blue
+    '#f59e0b', // School Timings - orange
+    '#8b5cf6', // Facilities - purple
+    '#06b6d4', // Additional Information - cyan
+    '#10b981', // Mission - green
+    '#3b82f6', // Vision - blue
+  ]
+
   const sections = [
     {
       title: 'Basic Information',
-      icon: <MaterialCommunityIcons name="information" size={20} color={colors.tint} />,
+      color: sectionColors[0],
+      icon: <MaterialCommunityIcons name="information" size={20} color={sectionColors[0]} />,
       fields: [
         {
           label: 'School Name',
           value: schoolInfo.name,
           key: 'name',
-          icon: <FontAwesome5 name="school" size={16} color={colors.tint} />
+          icon: <FontAwesome5 name="school" size={16} color={sectionColors[0]} />
         },
         {
           label: 'Established',
           value: schoolInfo.establishedYear,
           key: 'establishedYear',
-          icon: <FontAwesome5 name="calendar-alt" size={16} color={colors.tint} />
+          icon: <FontAwesome5 name="calendar-alt" size={16} color={sectionColors[0]} />
         },
         {
           label: 'Affiliation',
           value: schoolInfo.affiliation,
           key: 'affiliation',
-          icon: <MaterialCommunityIcons name="certificate" size={16} color={colors.tint} />
+          icon: <MaterialCommunityIcons name="certificate" size={16} color={sectionColors[0]} />
         },
         {
           label: 'Board',
           value: schoolInfo.board,
           key: 'board',
-          icon: <Feather name="award" size={16} color={colors.tint} />
+          icon: <Feather name="award" size={16} color={sectionColors[0]} />
         }
       ]
     },
     {
       title: 'Administration',
-      icon: <MaterialCommunityIcons name="account-tie" size={20} color={colors.tint} />,
+      color: sectionColors[1],
+      icon: <MaterialCommunityIcons name="account-tie" size={20} color={sectionColors[1]} />,
       groups: [
         {
           groupTitle: 'Principal',
@@ -163,19 +176,19 @@ export default function SchoolProfile({ visible, onClose }) {
               label: 'Name',
               value: schoolInfo.principal,
               key: 'principal',
-              icon: <MaterialCommunityIcons name="account-tie" size={16} color={colors.tint} />
+              icon: <MaterialCommunityIcons name="account-tie" size={16} color={sectionColors[1]} />
             },
             {
               label: 'Email',
               value: schoolInfo.principalEmail,
               key: 'principalEmail',
-              icon: <Feather name="mail" size={16} color={colors.tint} />
+              icon: <Feather name="mail" size={16} color={sectionColors[1]} />
             },
             {
               label: 'Phone',
               value: schoolInfo.principalPhone,
               key: 'principalPhone',
-              icon: <Feather name="phone" size={16} color={colors.tint} />
+              icon: <Feather name="phone" size={16} color={sectionColors[1]} />
             }
           ]
         },
@@ -186,19 +199,19 @@ export default function SchoolProfile({ visible, onClose }) {
               label: 'Name',
               value: schoolInfo.vicePrincipal,
               key: 'vicePrincipal',
-              icon: <MaterialCommunityIcons name="account-tie-hat" size={16} color={colors.tint} />
+              icon: <MaterialCommunityIcons name="account-tie-hat" size={16} color={sectionColors[1]} />
             },
             {
               label: 'Email',
               value: schoolInfo.vicePrincipalEmail,
               key: 'vicePrincipalEmail',
-              icon: <Feather name="mail" size={16} color={colors.tint} />
+              icon: <Feather name="mail" size={16} color={sectionColors[1]} />
             },
             {
               label: 'Phone',
               value: schoolInfo.vicePrincipalPhone,
               key: 'vicePrincipalPhone',
-              icon: <Feather name="phone" size={16} color={colors.tint} />
+              icon: <Feather name="phone" size={16} color={sectionColors[1]} />
             }
           ]
         }
@@ -206,105 +219,135 @@ export default function SchoolProfile({ visible, onClose }) {
     },
     {
       title: 'Contact Information',
-      icon: <Feather name="phone" size={20} color={colors.tint} />,
+      color: sectionColors[2],
+      icon: <Feather name="phone" size={20} color={sectionColors[2]} />,
       fields: [
         {
           label: 'Address',
           value: schoolInfo.address,
           key: 'address',
-          icon: <Feather name="map-pin" size={16} color={colors.tint} />,
+          icon: <Feather name="map-pin" size={16} color={sectionColors[2]} />,
           type: 'multiline'
         },
         {
           label: 'Email',
           value: schoolInfo.email,
           key: 'email',
-          icon: <Feather name="mail" size={16} color={colors.tint} />
+          icon: <Feather name="mail" size={16} color={sectionColors[2]} />
         },
         {
           label: 'Phone',
           value: schoolInfo.phone,
           key: 'phone',
-          icon: <Feather name="phone" size={16} color={colors.tint} />
+          icon: <Feather name="phone" size={16} color={sectionColors[2]} />
         },
         {
           label: 'Website',
           value: schoolInfo.website,
           key: 'website',
-          icon: <Feather name="globe" size={16} color={colors.tint} />
+          icon: <Feather name="globe" size={16} color={sectionColors[2]} />
         }
       ]
     },
     {
       title: 'School Timings',
-      icon: <Feather name="clock" size={20} color={colors.tint} />,
+      color: sectionColors[3],
+      icon: <Feather name="clock" size={20} color={sectionColors[3]} />,
       fields: [
         {
           label: 'School Hours',
           value: schoolInfo.schoolHours,
           key: 'schoolHours',
-          icon: <Feather name="clock" size={16} color={colors.tint} />
+          icon: <Feather name="clock" size={16} color={sectionColors[3]} />
         },
         {
           label: 'Office Hours',
           value: schoolInfo.officeHours,
           key: 'officeHours',
-          icon: <Feather name="briefcase" size={16} color={colors.tint} />
+          icon: <Feather name="briefcase" size={16} color={sectionColors[3]} />
         },
         {
           label: 'Working Days',
           value: schoolInfo.workingDays,
           key: 'workingDays',
-          icon: <Feather name="calendar" size={16} color={colors.tint} />
+          icon: <Feather name="calendar" size={16} color={sectionColors[3]} />
         },
         {
           label: 'Assembly Time',
           value: schoolInfo.assemblyTime,
           key: 'assemblyTime',
-          icon: <Feather name="bell" size={16} color={colors.tint} />
+          icon: <Feather name="bell" size={16} color={sectionColors[3]} />
         }
       ]
     },
     {
       title: 'Facilities',
-      icon: <MaterialCommunityIcons name="home-group" size={20} color={colors.tint} />,
+      color: sectionColors[4],
+      icon: <MaterialCommunityIcons name="home-group" size={20} color={sectionColors[4]} />,
       fields: [
         {
           label: 'Available Facilities',
           value: schoolInfo.facilities,
           key: 'facilities',
-          icon: <MaterialCommunityIcons name="home-group" size={16} color={colors.tint} />,
+          icon: <MaterialCommunityIcons name="home-group" size={16} color={sectionColors[4]} />,
+          type: 'multiline'
+        }
+      ]
+    },
+    {
+      title: 'Mission',
+      color: sectionColors[6],
+      icon: <MaterialCommunityIcons name="bullseye-arrow" size={20} color={sectionColors[6]} />,
+      fields: [
+        {
+          label: '',
+          value: schoolInfo.mission,
+          key: 'mission',
+          type: 'multiline'
+        }
+      ]
+    },
+    {
+      title: 'Vision',
+      color: sectionColors[7],
+      icon: <MaterialCommunityIcons name="eye" size={20} color={sectionColors[7]} />,
+      fields: [
+        {
+          label: '',
+          value: schoolInfo.vision,
+          key: 'vision',
           type: 'multiline'
         }
       ]
     },
     {
       title: 'Additional Information',
-      icon: <Feather name="info" size={20} color={colors.tint} />,
+      color: sectionColors[5],
+      icon: <Feather name="info" size={20} color={sectionColors[5]} />,
       fields: [
         {
           label: 'Campus Motto',
           value: schoolInfo.motto,
           key: 'motto',
-          icon: <FontAwesome5 name="quote-right" size={16} color={colors.tint} />
+          icon: <FontAwesome5 name="quote-right" size={16} color={sectionColors[5]} />
         },
         {
           label: 'Campus Area',
           value: schoolInfo.campusArea,
           key: 'campusArea',
-          icon: <FontAwesome5 name="mountain" size={16} color={colors.tint} />
+          icon: <FontAwesome5 name="mountain" size={16} color={sectionColors[5]} />
         },
         {
           label: 'Library Books',
           value: schoolInfo.libraryBooks,
           key: 'libraryBooks',
-          icon: <FontAwesome5 name="book" size={16} color={colors.tint} />
+          icon: <FontAwesome5 name="book" size={16} color={sectionColors[5]} />
         },
         {
           label: 'Computer Systems',
           value: schoolInfo.computerSystems,
           key: 'computerSystems',
-          icon: <FontAwesome5 name="desktop" size={16} color={colors.tint} />
+          icon: <FontAwesome5 name="desktop" size={16} color={sectionColors[5]} />
         }
       ]
     }
@@ -333,16 +376,17 @@ export default function SchoolProfile({ visible, onClose }) {
     )
   }
 
-  const renderField = (fieldConfig) => {
-    const { label, value, key, icon, type = 'text' } = fieldConfig
+  const renderField = (fieldConfig, sectionColor) => {
+    const { label, value, key, icon: fieldIcon, type = 'text' } = fieldConfig
     if (!value && value !== 0) {
       return null
     }
+    const fieldIconElement = fieldIcon ? React.cloneElement(fieldIcon, { color: sectionColor }) : null
     const fieldLabelRow = label ? (
       <View style={styles.fieldLabelRow}>
-        {icon && (
-          <View style={[styles.fieldIcon, { backgroundColor: colors.tint + '15' }]}>
-            {icon}
+        {fieldIconElement && (
+          <View style={[styles.fieldIcon, { backgroundColor: sectionColor + '15' }]}>
+            {fieldIconElement}
           </View>
         )}
         <ThemedText type='subtitle' style={[styles.fieldLabel, { color: colors.textSecondary }]}>
@@ -391,30 +435,30 @@ export default function SchoolProfile({ visible, onClose }) {
   }
 
   const renderSectionFields = (section) => {
+    const sectionColor = section.color
     if (section.groups) {
       return section.groups.map((group, groupIndex) => (
         <View key={groupIndex} style={styles.adminGroup}>
-          <ThemedText type='subtitle' style={[styles.groupTitle, { color: colors.text }]}>{group.groupTitle}</ThemedText>
-          {group.fields.map(renderField)}
+          <ThemedText type='subtitle' style={[styles.groupTitle, { color: sectionColor }]}>{group.groupTitle}</ThemedText>
+          {group.fields.map(field => renderField(field, sectionColor))}
         </View>
       ))
     } else {
-      return section.fields.map(renderField)
+      return section.fields.map(field => renderField(field, sectionColor))
     }
   }
 
   const renderSection = (section) => (
-    <View key={section.title} style={[styles.section, { backgroundColor: colors.cardBackground }]}>
+    <View key={section.title} style={[styles.sectionContainer, { backgroundColor: colors.cardBackground }]}>
       <View style={styles.sectionHeader}>
-        <View style={styles.sectionTitleRow}>
-          {section.icon}
-          <ThemedText type="subtitle" style={[styles.sectionTitle, { color: colors.text }]}>
+        <View style={[styles.sectionTitleRow, { backgroundColor: section.color + '10' }]}>
+          {React.cloneElement(section.icon, { color: section.color })}
+          <ThemedText type="subtitle" style={[styles.sectionTitle, { color: section.color }]}>
             {section.title}
           </ThemedText>
         </View>
-        <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
+        <View style={[styles.sectionDivider, { backgroundColor: section.color + '30' }]} />
       </View>
-     
       <View style={styles.sectionContent}>
         {renderSectionFields(section)}
       </View>
@@ -433,52 +477,32 @@ export default function SchoolProfile({ visible, onClose }) {
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="fade"
       onRequestClose={handleClose}
       statusBarTranslucent
     >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-       
+      
         {/* Header with School Name */}
         <LinearGradient
-          colors={[colors?.gradientEnd, colors?.gradientStart]}
+          colors={[colors?.gradientStart, colors?.gradientEnd]}
           style={styles.header}
         >
           <SafeAreaView edges={['top']}>
-            <View style={styles.headerContent}>
-              <View style={styles.headerTop}>
-                <TouchableOpacity
-                  style={styles.backButton}
-                  onPress={handleClose}
-                >
-                  <FontAwesome5 
-                    name="chevron-left" 
-                    size={22} 
-                    color="#FFFFFF" 
-                    style={{ transform: [{ translateX: -1 }] }}
-                  />
-                </TouchableOpacity>
-               
-                <TouchableOpacity
-                  style={styles.editButton}
-                  onPress={() => setIsEditing(!isEditing)}
-                >
-                  <Feather
-                    name={isEditing ? "x" : "edit"}
-                    size={18}
-                    color="#FFFFFF"
-                  />
-                  <ThemedText style={styles.editButtonText}>
-                    {isEditing ? 'Cancel' : 'Edit'}
-                  </ThemedText>
-                </TouchableOpacity>
-              </View>
-             
-              <View style={styles.schoolInfo}>
-                <View style={styles.schoolIconContainer}>
-                  <FontAwesome5 name="school" size={28} color="#FFFFFF" />
-                </View>
+            <View style={styles.headerRow}>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={handleClose}
+              >
+                <FontAwesome5
+                  name="chevron-left"
+                  size={22}
+                  color="#FFFFFF"
+                  style={{ transform: [{ translateX: -1 }] }}
+                />
+              </TouchableOpacity>
+              <View style={styles.schoolHeaderInfo}>
                 <View style={styles.schoolText}>
                   <ThemedText type="title" style={styles.schoolName}>
                     {schoolInfo.name}
@@ -488,6 +512,19 @@ export default function SchoolProfile({ visible, onClose }) {
                   </ThemedText>
                 </View>
               </View>
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => setIsEditing(!isEditing)}
+              >
+                <Feather
+                  name={isEditing ? "x" : "edit"}
+                  size={18}
+                  color="#FFFFFF"
+                />
+                <ThemedText style={styles.editButtonText}>
+                  {isEditing ? 'Cancel' : 'Edit'}
+                </ThemedText>
+              </TouchableOpacity>
             </View>
           </SafeAreaView>
         </LinearGradient>
@@ -497,9 +534,10 @@ export default function SchoolProfile({ visible, onClose }) {
           contentContainerStyle={styles.scrollContent}
         >
           <View style={styles.content}>
-            {/* Quick Stats Row - Moved down from header */}
+            {/* Quick Stats Row */}
             <View style={[styles.quickStatsContainer, { backgroundColor: colors.cardBackground }]}>
               <ThemedText type='subtitle' style={[styles.quickStatsTitle, { color: colors.text }]}>Quick Stats</ThemedText>
+              <View style={[styles.quickStatsTitleDivider, { backgroundColor: colors.border }]} />
               <View style={styles.quickStats}>
                 {statItems.map(renderStatItem)}
               </View>
@@ -508,51 +546,14 @@ export default function SchoolProfile({ visible, onClose }) {
             {/* Render all sections */}
             {sections.map(renderSection)}
 
-            {/* Mission & Vision - Special section */}
-            <View style={styles.missionVisionContainer}>
-              <View style={[styles.missionCard, { backgroundColor: colors.cardBackground }]}>
-                <LinearGradient
-                  colors={['rgba(16, 185, 129, 0.1)', 'rgba(16, 185, 129, 0.05)']}
-                  style={styles.missionHeader}
-                >
-                  <MaterialCommunityIcons name="bullseye-arrow" size={20} color="#10b981" />
-                  <ThemedText type="subtitle" style={[styles.missionTitle, { color: colors.text }]}>
-                    Mission
-                  </ThemedText>
-                </LinearGradient>
-                {renderField({
-                  label: '',
-                  value: schoolInfo.mission,
-                  key: 'mission',
-                  type: 'multiline'
-                })}
-              </View>
-              <View style={[styles.visionCard, { backgroundColor: colors.cardBackground }]}>
-                <LinearGradient
-                  colors={['rgba(59, 130, 246, 0.1)', 'rgba(59, 130, 246, 0.05)']}
-                  style={styles.visionHeader}
-                >
-                  <MaterialCommunityIcons name="eye" size={20} color="#3b82f6" />
-                  <ThemedText type="subtitle" style={[styles.visionTitle, { color: colors.text }]}>
-                    Vision
-                  </ThemedText>
-                </LinearGradient>
-                {renderField({
-                  label: '',
-                  value: schoolInfo.vision,
-                  key: 'vision',
-                  type: 'multiline'
-                })}
-              </View>
-            </View>
-
+            {/* Spacer for fixed buttons */}
             <View style={styles.spacer} />
           </View>
         </ScrollView>
-        <View style={[styles.actionButtonsContainer, { backgroundColor: colors.background }]}>
-          <View style={styles.actionButtons}>
-            {isEditing && (
-              <>
+        {/* Fixed Action Buttons */}
+        {isEditing && (
+          <View style={[styles.actionButtonsContainer, { backgroundColor: colors.background }]}>
+            <View style={styles.actionButtons}>
                 <TouchableOpacity
                   style={[styles.button, styles.discardButton, { borderColor: colors.border, backgroundColor: colors?.danger }]}
                   onPress={cancelEdit}
@@ -562,7 +563,7 @@ export default function SchoolProfile({ visible, onClose }) {
                     Discard
                   </ThemedText>
                 </TouchableOpacity>
-               
+              
                 <TouchableOpacity
                   style={[styles.button, styles.saveButton, { backgroundColor: colors.tint }]}
                   onPress={saveSchoolInfo}
@@ -572,21 +573,9 @@ export default function SchoolProfile({ visible, onClose }) {
                     Save Changes
                   </ThemedText>
                 </TouchableOpacity>
-              </>
-            )}
-           
-            {!isEditing && (
-              <TouchableOpacity
-                style={[styles.closeButton, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
-                onPress={handleClose}
-              >
-                <ThemedText style={[styles.closeButtonText, { color: colors.text }]}>
-                  Close
-                </ThemedText>
-              </TouchableOpacity>
-            )}
+            </View>
           </View>
-        </View>
+        )}
       </View>
     </Modal>
   )
@@ -598,66 +587,55 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: Platform.OS === 'ios' ? 70 : 50,
-    paddingBottom: 10,
+    paddingBottom: 15,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
   },
-  headerContent: {
-    paddingBottom: 10,
-  },
-  headerTop: {
+  headerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    justifyContent: 'space-between',
   },
   backButton: {
     width: 45,
     height: 45,
-    borderRadius: 20,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
-  editButton: {
+  schoolHeaderInfo: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  editButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-  },
-  schoolInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  schoolIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+    marginHorizontal: 16,
   },
   schoolText: {
     flex: 1,
   },
   schoolName: {
-    fontSize: 24,
+    fontSize: 20,
+    marginBottom: -2,
     color: '#FFFFFF',
   },
   schoolMotto: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
     fontStyle: 'italic',
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 18,
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  editButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
   },
   quickStatsContainer: {
     borderRadius: 16,
@@ -677,17 +655,22 @@ const styles = StyleSheet.create({
   },
   quickStatsTitle: {
     fontSize: 18,
-    marginBottom: 18,
+    marginBottom: 12,
     textAlign: 'center',
+  },
+  quickStatsTitleDivider: {
+    height: 1,
+    marginBottom: 16,
   },
   quickStats: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 0,
+    justifyContent: 'space-around',
+    flexWrap: 'wrap',
   },
   statItem: {
     alignItems: 'center',
-    flex: 1,
+    width: SCREEN_WIDTH / 4 - 20,
+    marginBottom: 8,
   },
   statIconContainer: {
     width: 36,
@@ -709,15 +692,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 200, // Space for fixed buttons
+    paddingBottom: 120,
   },
   content: {
     padding: 16,
     paddingTop: 8,
   },
-  section: {
+  sectionContainer: {
     borderRadius: 16,
-    padding: 20,
+    padding: 15,
     marginBottom: 16,
     ...Platform.select({
       ios: {
@@ -739,6 +722,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
     gap: 10,
+    padding: 12,
+    borderRadius: 12,
   },
   sectionTitle: {
     fontSize: 18,
@@ -793,7 +778,7 @@ const styles = StyleSheet.create({
   multilineInput: {
     minHeight: 80,
     textAlignVertical: 'top',
-    paddingTop: 12,
+    paddingVertical: 12,
   },
   fieldDisplayContainer: {
     paddingVertical: 12,
@@ -809,60 +794,6 @@ const styles = StyleSheet.create({
   fieldDisplayText: {
     fontSize: 15,
     lineHeight: 22,
-  },
-  missionVisionContainer: {
-    gap: 16,
-    marginBottom: 16,
-  },
-  missionCard: {
-    flex: 1,
-    borderRadius: 16,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  visionCard: {
-    flex: 1,
-    borderRadius: 16,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  missionHeader: {
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  visionHeader: {
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  missionTitle: {
-    fontSize: 16,
-  },
-  visionTitle: {
-    fontSize: 16,
   },
   spacer: {
     height: 80,
@@ -900,7 +831,7 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
       },
       android: {
-        elevation: 1,
+        elevation: 3,
       },
     }),
   },
@@ -916,22 +847,11 @@ const styles = StyleSheet.create({
         shadowRadius: 8,
       },
       android: {
-        elevation: 1,
+        elevation: 6,
       },
     }),
   },
-  closeButton: {
-    flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
   buttonText: {
-    fontSize: 16,
-  },
-  closeButtonText: {
     fontSize: 16,
   },
 })

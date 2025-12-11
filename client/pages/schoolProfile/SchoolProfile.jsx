@@ -30,22 +30,22 @@ export default function SchoolProfile({ visible, onClose }) {
   const [schoolInfo, setSchoolInfo] = useState({
     // Basic Information
     name: 'Bluri High School',
-    establishedYear: '1985',
-    affiliation: 'CBSE',
-    board: 'Central Board of Secondary Education',
+    establishedYear: '2002',
+    affiliation: 'SSE',
+    board: 'Secondary School Examination',
    
     // Administration
-    principal: 'Dr. Ramesh Kumar',
+    principal: 'Dr. Manikanta Yerraguntla',
     principalEmail: 'principal@blurihighschool.edu.in',
-    principalPhone: '+91 98765 43211',
-    vicePrincipal: 'Ms. Priya Sharma',
+    principalPhone: '+91 7093054784',
+    vicePrincipal: 'Ms. Haritha Kotha',
     vicePrincipalEmail: 'vp@blurihighschool.edu.in',
-    vicePrincipalPhone: '+91 98765 43212',
+    vicePrincipalPhone: '+91 9391522508',
    
     // Contact Information
-    address: 'Kannapuram, Kerala, India - 670301',
+    address: 'Kannapuram, Andhra Pradesh, India - 534311',
     email: 'info@blurihighschool.edu.in',
-    phone: '+91 98765 43210',
+    phone: '+91 9491754784',
     website: 'www.blurihighschool.edu.in',
    
     // Statistics
@@ -54,10 +54,10 @@ export default function SchoolProfile({ visible, onClose }) {
     totalClassrooms: '32',
    
     // Timings
-    schoolHours: '8:00 AM - 3:30 PM',
-    officeHours: '9:00 AM - 5:00 PM',
+    schoolHours: '9:00 AM - 4:30 PM',
+    officeHours: '8:00 AM - 5:00 PM',
     workingDays: 'Monday to Saturday',
-    assemblyTime: '7:45 AM',
+    assemblyTime: '9:00 AM',
    
     // Facilities
     facilities: 'Smart Classrooms, Science Labs, Computer Lab, Library, Sports Ground, Auditorium, Cafeteria, Medical Room, Transportation, WiFi Campus',
@@ -65,8 +65,6 @@ export default function SchoolProfile({ visible, onClose }) {
     // Mission & Vision
     mission: 'To provide quality education that empowers students to become responsible citizens and lifelong learners.',
     vision: 'To be a premier educational institution nurturing global citizens with strong values and academic excellence.',
-   
-    // Additional Info
     motto: 'Learn, Lead, Excel',
     campusArea: '10 Acres',
     libraryBooks: '25,000+',
@@ -143,6 +141,12 @@ export default function SchoolProfile({ visible, onClose }) {
           value: schoolInfo.name,
           key: 'name',
           icon: <FontAwesome5 name="school" size={16} color={sectionColors[0]} />
+        },
+        {
+          label: 'Motto',
+          value: schoolInfo.motto,
+          key: 'motto',
+          icon: <FontAwesome5 name="quote-right" size={16} color={sectionColors[0]} />
         },
         {
           label: 'Established',
@@ -326,12 +330,6 @@ export default function SchoolProfile({ visible, onClose }) {
       icon: <Feather name="info" size={20} color={sectionColors[5]} />,
       fields: [
         {
-          label: 'Campus Motto',
-          value: schoolInfo.motto,
-          key: 'motto',
-          icon: <FontAwesome5 name="quote-right" size={16} color={sectionColors[5]} />
-        },
-        {
           label: 'Campus Area',
           value: schoolInfo.campusArea,
           key: 'campusArea',
@@ -503,14 +501,10 @@ export default function SchoolProfile({ visible, onClose }) {
                 />
               </TouchableOpacity>
               <View style={styles.schoolHeaderInfo}>
-                <View style={styles.schoolText}>
-                  <ThemedText type="title" style={styles.schoolName}>
-                    {schoolInfo.name}
-                  </ThemedText>
-                  <ThemedText style={styles.schoolMotto}>
-                    "{schoolInfo.motto}"
-                  </ThemedText>
-                </View>
+                <FontAwesome5 name="university" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <ThemedText type="title" style={styles.schoolName}>
+                  Campus Profile
+                </ThemedText>
               </View>
               <TouchableOpacity
                 style={styles.editButton}
@@ -611,18 +605,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginHorizontal: 16,
   },
-  schoolText: {
-    flex: 1,
-  },
   schoolName: {
-    fontSize: 20,
-    marginBottom: -2,
+    fontSize: 18,
     color: '#FFFFFF',
-  },
-  schoolMotto: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontStyle: 'italic',
   },
   editButton: {
     flexDirection: 'row',

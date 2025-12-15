@@ -4,9 +4,6 @@ const Staff = require('../models/Staff')
 const Class = require('../models/Class')
 const cloudinary = require('../config/cloudinary')
 
-/**
- * Get school profile
- */
 exports.getSchoolProfile = async (req, res) => {
   try {
     const schoolId = req.params.id || req.school._id
@@ -25,20 +22,15 @@ exports.getSchoolProfile = async (req, res) => {
   }
 }
 
-/**
- * Update school profile
- */
 exports.updateSchoolProfile = async (req, res) => {
   try {
     const schoolId = req.params.id || req.school._id
     const updateData = req.body
     
-    // Handle address object
     if (typeof updateData.address === 'string') {
       updateData.address = { fullAddress: updateData.address }
     }
     
-    // Handle timings object
     if (updateData.schoolHours && typeof updateData.schoolHours === 'string') {
       const [start, end] = updateData.schoolHours.split(' - ')
       updateData.schoolHours = { start, end, display: updateData.schoolHours }
@@ -75,9 +67,6 @@ exports.updateSchoolProfile = async (req, res) => {
   }
 }
 
-/**
- * Upload school images
- */
 exports.uploadSchoolImages = async (req, res) => {
   try {
     const schoolId = req.params.id || req.school._id
@@ -121,7 +110,6 @@ exports.uploadSchoolImages = async (req, res) => {
       }
     }
     
-    // If any image is marked as primary, remove primary flag from existing images
     if (uploadedImages.some(img => img.isPrimary)) {
       school.images.forEach(img => img.isPrimary = false)
     }
@@ -142,9 +130,6 @@ exports.uploadSchoolImages = async (req, res) => {
   }
 }
 
-/**
- * Delete school image
- */
 exports.deleteSchoolImage = async (req, res) => {
   try {
     const { id, imageId } = req.params
@@ -167,12 +152,10 @@ exports.deleteSchoolImage = async (req, res) => {
     
     const image = school.images[imageIndex]
     
-    // Delete from Cloudinary
     if (image.publicId) {
       await cloudinary.uploader.destroy(image.publicId)
     }
     
-    // Remove from array
     school.images.splice(imageIndex, 1)
     await school.save()
     
@@ -188,9 +171,6 @@ exports.deleteSchoolImage = async (req, res) => {
   }
 }
 
-/**
- * Get school statistics
- */
 exports.getSchoolStatistics = async (req, res) => {
   try {
     const schoolId = req.params.id || req.school._id
@@ -203,15 +183,12 @@ exports.getSchoolStatistics = async (req, res) => {
       })
     }
     
-    // Update statistics
     await school.updateStatistics()
     
-    // Get class-wise distribution
     const classes = await Class.find({ school: schoolId, status: 'active' })
       .select('className section totalStudents maleStudents femaleStudents classTeacher')
       .populate('classTeacher', 'firstName lastName')
     
-    // Get gender distribution
     const students = await Student.find({ school: schoolId, status: 'active' })
     const genderDistribution = {
       male: students.filter(s => s.gender === 'Male').length,
@@ -219,7 +196,6 @@ exports.getSchoolStatistics = async (req, res) => {
       other: students.filter(s => s.gender === 'Other').length
     }
     
-    // Get staff distribution by role
     const staff = await Staff.find({ school: schoolId, status: 'active' })
     const staffDistribution = {
       teaching: staff.filter(s => s.role === 'teaching').length,
@@ -248,9 +224,6 @@ exports.getSchoolStatistics = async (req, res) => {
   }
 }
 
-/**
- * Get school images
- */
 exports.getSchoolImages = async (req, res) => {
   try {
     const schoolId = req.params.id || req.school._id

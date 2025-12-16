@@ -123,55 +123,7 @@ export default function Events({ visible, onClose }) {
     },
     groupPicsContainer: {
       padding: 12,
-    },
-    picsContainer: {
-      flexDirection: 'row',
-      gap: 8,
-    },
-    firstThreePics: {
-      flex: 3,
-      flexDirection: 'row',
-      gap: 8,
-    },
-    picWrapper: {
-      flex: 1,
-      aspectRatio: 1,
-      borderRadius: 8,
-      overflow: 'hidden',
-    },
-    previewImage: {
-      width: '100%',
-      height: '100%',
-    },
-    extraPicWrapper: {
-      flex: 1,
-      aspectRatio: 1,
-    },
-    extraPicContainer: {
-      width: '100%',
-      height: '100%',
-      borderRadius: 8,
-      overflow: 'hidden',
-      position: 'relative',
-    },
-    extraOverlay: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
       alignItems: 'center',
-    },
-    extraText: {
-      color: 'white',
-      fontSize: 22,
-      fontWeight: 'bold',
-    },
-    extraImage: {
-      width: '100%',
-      height: '100%',
     },
     noGallery: {
       padding: 20,
@@ -181,58 +133,111 @@ export default function Events({ visible, onClose }) {
       fontSize: 14,
       textAlign: 'center',
     },
+    extraOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    extraText: {
+      color: 'white',
+      fontSize: 24,
+      fontWeight: 'bold',
+    },
   })
+
+  function getCenteredTopOffsets(sizes) {
+    const tops = [0]
+    for (let i = 1; i < sizes.length; i++) {
+      const prevTop = tops[i - 1]
+      const prevHeight = sizes[i - 1]
+      const currHeight = sizes[i]
+      const top = prevTop + (prevHeight / 2) - (currHeight / 2)
+      tops.push(top)
+    }
+    return tops
+  }
 
   const GalleryPreview = ({ pics, groupIndex, groupTitle }) => {
     const numPics = pics.length
     if (numPics === 0) return null
 
-    const firstThreePics = pics.slice(0, 3)
-    const extra = numPics - 3
+    const BASE_SIZE = 200
+    const IMAGE_SIZES = [200, 160, 120, 80]
+    const displayItems = pics.slice(0, 4)
+    const extraCount = Math.max(0, numPics - 4)
+    const usedSizes = IMAGE_SIZES.slice(0, displayItems.length)
+    const topOffsets = getCenteredTopOffsets(usedSizes)
+    const containerHeight = Math.max(
+      ...usedSizes.map((size, i) => topOffsets[i] + size)
+    )
 
-    const openModal = (mode, index) => {
-      setInitialViewMode(mode)
+    const openModal = () => {
+      setInitialViewMode('grid')
       setCurrentGroupData({
         pics,
         title: groupTitle,
       })
-      setSelectedImageIndex(index)
+      setSelectedImageIndex(0)
       setGalleryModalVisible(true)
     }
 
     return (
-      <View style={styles.picsContainer}>
-        <View style={styles.firstThreePics}>
-          {firstThreePics.map((pic, i) => (
-            <TouchableOpacity
-              key={i}
-              style={styles.picWrapper}
-              onPress={() => openModal('single', i)}
-              activeOpacity={0.7}
-            >
-              <Image source={{ uri: pic.uri }} style={styles.previewImage} />
-            </TouchableOpacity>
-          ))}
-        </View>
-        
-        {extra > 0 && (
-          <TouchableOpacity
-            style={styles.extraPicWrapper}
-            onPress={() => openModal('grid', 0)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.extraPicContainer}>
-              <Image 
-                source={{ uri: pics[3]?.uri || pics[0].uri }} 
-                style={styles.extraImage} 
-              />
-              <View style={styles.extraOverlay}>
-                <ThemedText style={styles.extraText}>+{extra}</ThemedText>
+      <TouchableOpacity
+        style={[
+          {
+            width: BASE_SIZE,
+            height: containerHeight,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            overflow: 'visible',
+          }
+        ]}
+        onPress={openModal}
+        activeOpacity={0.7}
+      >
+        <View style={{ position: 'relative' }}>
+          {displayItems.map((pic, idx) => {
+            const size = usedSizes[idx]
+            const visualSize = size - 10
+            const offset = topOffsets[idx]
+            const left = (BASE_SIZE - visualSize) / 2
+            const zIndex = idx + 1
+            const rotationDegrees = idx === 0 ? '0deg' : (idx % 2 === 0 ? '4deg' : '-4deg')
+
+            return (
+              <View
+                key={idx}
+                style={{
+                  position: 'absolute',
+                  width: visualSize,
+                  height: visualSize,
+                  top: offset,
+                  left: left,
+                  borderRadius: 8,
+                  zIndex,
+                  overflow: 'hidden',
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.cardBackground,
+                  transform: [{ rotate: rotationDegrees }],
+                }}
+              >
+                <Image
+                  source={{ uri: pic.uri }}
+                  style={{ width: visualSize, height: visualSize }}
+                />
+                {idx === displayItems.length - 1 && extraCount > 0 && (
+                  <View style={styles.extraOverlay}>
+                    <ThemedText style={styles.extraText}>+{extraCount}</ThemedText>
+                  </View>
+                )}
               </View>
-            </View>
-          </TouchableOpacity>
-        )}
-      </View>
+            )
+          })}
+        </View>
+      </TouchableOpacity>
     )
   }
 

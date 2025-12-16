@@ -6,9 +6,7 @@ import {
   FlatList,
 } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme } from '@/hooks/useTheme'
-import StudentsHeader from '@/components/students/students-header'
 import SearchBar from '@/components/students/search-bar'
 import StatsCards from '@/components/students/stats-cards'
 import ClassGroup from '@/components/students/class-group'
@@ -108,7 +106,7 @@ const groupedStudents = studentsData.reduce((acc, student) => {
 
 export default function Students() {
   const { colors, isDark } = useTheme()
-  const [expandedClasses, setExpandedClasses] = useState(['Class 12 - Science'])
+  const [expandedClasses, setExpandedClasses] = useState([''])
   const [searchQuery, setSearchQuery] = useState('')
 
   const dashboardColors = {
@@ -138,9 +136,7 @@ export default function Students() {
     : studentsData
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <StudentsHeader dashboardColors={dashboardColors} />
-      
+    <View style={[styles.container, { backgroundColor: colors.background }]}>      
       <SearchBar 
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -196,7 +192,7 @@ export default function Students() {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   )
 }
 
@@ -221,7 +217,6 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
     marginBottom: 16,
   },
 })

@@ -1,17 +1,12 @@
-import { ScrollView } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { ScrollView, View } from 'react-native'
 import { useTheme } from '@/hooks/useTheme'
-import DashboardHeader from '@/components/dashboard/dashboard-header'
-import DashboardMenu from '@/components/dashboard/dashboard-menu'
 import StatsGrid from '@/components/dashboard/stats-grid'
 import QuickActions from '@/components/dashboard/quick-actions'
 import RecentActivity from '@/components/dashboard/recent-activity'
 import UpcomingEvents from '@/components/dashboard/upcoming-events'
-import { useState } from 'react'
 
 export default function HomeScreen() {
   const { colors, isDark } = useTheme()
-  const [menuVisible, setMenuVisible] = useState(false)
 
   const dashboardColors = {
     cardBg: isDark ? '#1e293b' : '#ffffff',
@@ -29,29 +24,17 @@ export default function HomeScreen() {
   }
 
   return (
-    <>
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-        <ScrollView 
-          style={{ flex: 1 }}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 100 }}
-        >
-          <DashboardHeader 
-            colors={colors} 
-            dashboardColors={dashboardColors} 
-            onMenuPress={() => setMenuVisible(true)}
-          />
-          <StatsGrid colors={colors} dashboardColors={dashboardColors} />
-          <QuickActions colors={colors} dashboardColors={dashboardColors} />
-          <RecentActivity colors={colors} dashboardColors={dashboardColors} />
-          <UpcomingEvents colors={colors} dashboardColors={dashboardColors} />
-        </ScrollView>
-      </SafeAreaView>
-
-      <DashboardMenu 
-        visible={menuVisible}
-        onClose={() => setMenuVisible(false)}
-      />
-    </>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView 
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
+        <StatsGrid colors={colors} dashboardColors={dashboardColors} />
+        <QuickActions colors={colors} dashboardColors={dashboardColors} />
+        <RecentActivity colors={colors} dashboardColors={dashboardColors} />
+        <UpcomingEvents colors={colors} dashboardColors={dashboardColors} />
+      </ScrollView>
+    </View>
   )
 }

@@ -15,13 +15,15 @@ import {
   Ionicons,
   FontAwesome5,
   MaterialCommunityIcons,
-  Feather,
   MaterialIcons,
+  Feather,
   FontAwesome6,
 } from '@expo/vector-icons'
 import ThemeModal from '@/components/theme/ThemeModal'
 import { useTheme } from '@/hooks/useTheme'
-import SchoolProfile from '@/pages/schoolProfile/SchoolProfile'
+import SchoolProfile from '@/pages/menu/schoolProfile/SchoolProfile'
+import SchoolStats from '@/pages/menu/schoolStats/SchoolStats'
+import Events from '@/pages/menu/events/Events'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
@@ -29,6 +31,8 @@ export default function DashboardMenu({ visible, onClose }) {
   const { theme, colors } = useTheme()
   const [themeModalVisible, setThemeModalVisible] = useState(false)
   const [schoolProfileVisible, setSchoolProfileVisible] = useState(false)
+  const [schoolStatsVisible, setSchoolStatsVisible] = useState(false)
+  const [eventsVisible, setEventsVisible] = useState(false)
   const translateX = useRef(new Animated.Value(SCREEN_WIDTH)).current
   const backdropOpacity = useRef(new Animated.Value(0)).current
 
@@ -66,14 +70,9 @@ export default function DashboardMenu({ visible, onClose }) {
   }, [visible])
 
   const menuItems = [
-    { id: 1, title: 'School Profile', icon: 'school', iconType: 'Ionicons', gradient: ['#3b82f6', '#2563eb'], value: 'Complete school info' },
-    { id: 2, title: 'Academic Year', icon: 'calendar', iconType: 'Ionicons', gradient: ['#10b981', '#059669'], value: '2024-2025' },
-    { id: 3, title: 'Principal', icon: 'account-tie', iconType: 'MaterialCommunityIcons', gradient: ['#8b5cf6', '#7c3aed'], value: 'Dr. Ramesh Kumar' },
-    { id: 4, title: 'Total Students', icon: 'users', iconType: 'FontAwesome5', gradient: ['#06b6d4', '#0891b2'], value: '1,245 Students' },
-    { id: 5, title: 'Total Staff', icon: 'chalkboard-teacher', iconType: 'FontAwesome5', gradient: ['#f97316', '#ea580c'], value: '68 Teachers' },
-    { id: 6, title: 'School Hours', icon: 'clock', iconType: 'Feather', gradient: ['#ec4899', '#db2777'], value: '8:00 AM - 3:30 PM' },
-    { id: 7, title: 'Contact', icon: 'phone', iconType: 'Feather', gradient: ['#10b981', '#059669'], value: '+91 98765 43210' },
-    { id: 8, title: 'Address', icon: 'map-pin', iconType: 'Feather', gradient: ['#f59e0b', '#d97706'], value: 'Kannapuram, Kerala' },
+    { id: 1, title: 'School Profile', icon: 'school', iconType: 'Ionicons', gradient: ['#3b82f6', '#2563eb'], action: () => setSchoolProfileVisible(true) },
+    { id: 2, title: 'Events', icon: 'image-multiple', iconType: 'MaterialCommunityIcons', gradient: ['#10b981', '#059669'], action: () => setEventsVisible(true) },
+    { id: 3, title: 'Stats', icon: 'chart-bar', iconType: 'FontAwesome5', gradient: ['#8b5cf6', '#7c3aed'], action: () => setSchoolStatsVisible(true) },
   ]
 
   const getIcon = (type, name, size, color) => {
@@ -99,12 +98,8 @@ export default function DashboardMenu({ visible, onClose }) {
 
   const handleMenuItemPress = (item) => {
     console.log(`${item.title} pressed`)
-    if (item.title === 'School Profile') {
-      onClose()
-      setSchoolProfileVisible(true)
-    } else {
-      onClose()
-    }
+    onClose()
+    item.action()
   }
 
   const handleLogout = () => {
@@ -114,6 +109,14 @@ export default function DashboardMenu({ visible, onClose }) {
 
   const handleSchoolProfileClose = () => {
     setSchoolProfileVisible(false)
+  }
+
+  const handleSchoolStatsClose = () => {
+    setSchoolStatsVisible(false)
+  }
+
+  const handleEventsClose = () => {
+    setEventsVisible(false)
   }
 
   return (
@@ -183,7 +186,7 @@ export default function DashboardMenu({ visible, onClose }) {
             >
               <View style={styles.section}>
                 <ThemedText type='subtitle' style={[styles.sectionTitle, { color: colors.text }]}>
-                  School Information
+                  Menu Details
                 </ThemedText>
                 <View style={styles.items}>
                   {menuItems.map((item) => (
@@ -202,7 +205,7 @@ export default function DashboardMenu({ visible, onClose }) {
                             {item.title}
                           </ThemedText>
                           <ThemedText style={[styles.itemValue, { color: colors.textSecondary }]}>
-                            {item.value}
+                            View details
                           </ThemedText>
                         </View>
                         <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
@@ -271,6 +274,14 @@ export default function DashboardMenu({ visible, onClose }) {
       <SchoolProfile
         visible={schoolProfileVisible}
         onClose={handleSchoolProfileClose}
+      />
+      <SchoolStats
+        visible={schoolStatsVisible}
+        onClose={handleSchoolStatsClose}
+      />
+      <Events
+        visible={eventsVisible}
+        onClose={handleEventsClose}
       />
     </>
   )

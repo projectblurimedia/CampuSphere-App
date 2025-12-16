@@ -2,7 +2,7 @@ import { Stack } from 'expo-router'
 import 'react-native-reanimated'
 import React, { useState, useEffect } from 'react'
 import * as Font from 'expo-font'
-import { View, ActivityIndicator } from 'react-native'
+import { View, ActivityIndicator, Platform } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { Provider } from 'react-redux'
 import { store } from '@/redux/store'
@@ -20,17 +20,7 @@ export const unstable_settings = {
   anchor: '(tabs)',
 }
 
-function ThemeContainer({ children }) {
-  const { colors, isDark } = useTheme()
-  
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* StatusBar component */}
-      <StatusBar style={isDark ? "light" : "dark"} />
-      {children}
-    </View>
-  )
-}
+const APP_THEME_COLOR = '#1d9bf0'
 
 function AppContent() {
   const [fontsLoaded, setFontsLoaded] = useState(false)
@@ -54,27 +44,16 @@ function AppContent() {
   if (!fontsLoaded) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color={APP_THEME_COLOR} />
       </View>
     )
   }
 
   return (
-    <ThemeContainer>
-      <Stack
-        screenOptions={{
-          headerStyle: {
-            backgroundColor: colors.headerBackground,
-          },
-          headerTintColor: colors.headerText,
-          headerTitleStyle: {
-            fontFamily: 'Poppins-SemiBold',
-          },
-          contentStyle: {
-            backgroundColor: colors.background,
-          },
-        }}
-      >
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar style="light" />
+      
+      <Stack>
         <Stack.Screen 
           name="(tabs)" 
           options={{ 
@@ -89,7 +68,7 @@ function AppContent() {
           }} 
         />
       </Stack>
-    </ThemeContainer>
+    </View>
   )
 }
 

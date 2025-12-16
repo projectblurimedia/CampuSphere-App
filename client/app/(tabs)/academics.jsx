@@ -6,9 +6,7 @@ import {
   FlatList,
 } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme } from '@/hooks/useTheme'
-import AcademicsHeader from '@/components/academics/academics-header'
 import SearchBar from '@/components/academics/search-bar'
 import StatsCards from '@/components/academics/stats-cards'
 import ClassCard from '@/components/academics/class-card'
@@ -152,9 +150,7 @@ export default function Academics() {
   })
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <AcademicsHeader dashboardColors={dashboardColors} />
-      
+    <View style={[styles.container, { backgroundColor: colors.background }]}>      
       <SearchBar 
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -212,7 +208,7 @@ export default function Academics() {
           }
         />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   )
 }
 

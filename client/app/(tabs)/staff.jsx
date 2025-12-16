@@ -6,9 +6,7 @@ import {
   FlatList,
 } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme } from '@/hooks/useTheme'
-import StaffHeader from '@/components/staff/staff-header'
 import StaffSearchBar from '@/components/staff/search-bar'
 import StaffStatsCards from '@/components/staff/stats-cards'
 import StaffCard from '@/components/staff/staff-card'
@@ -178,9 +176,7 @@ export default function Staff() {
   })
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <StaffHeader dashboardColors={dashboardColors} />
-      
+    <View style={[styles.container, { backgroundColor: colors.background }]}>      
       <StaffSearchBar 
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -239,7 +235,7 @@ export default function Staff() {
           }
         />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   )
 }
 

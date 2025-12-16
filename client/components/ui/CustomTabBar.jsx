@@ -126,7 +126,8 @@ const styles = StyleSheet.create({
   },
   text: {
     marginLeft: 6,
-    fontWeight: "700",
+    marginBottom: -3,
+    fontFamily: 'Poppins-SemiBold',
     fontSize: 11,
     maxWidth: 80,
   },

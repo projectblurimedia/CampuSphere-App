@@ -9,8 +9,6 @@ import {
   StatusBar,
   Modal,
   Dimensions,
-  LayoutAnimation,
-  Image,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -24,22 +22,12 @@ import {
   MaterialIcons,
 } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
-import GalleryModal from './GalleryModal'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
 export default function SchoolProfile({ visible, onClose }) {
   const { colors } = useTheme()
   const [isEditing, setIsEditing] = useState(false)
-  const [galleryExpanded, setGalleryExpanded] = useState(false)
-  const [groupExpanded, setGroupExpanded] = useState({})
-  const [galleryModalVisible, setGalleryModalVisible] = useState(false)
-  const [currentGroupData, setCurrentGroupData] = useState({
-    pics: [],
-    title: '',
-  })
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0)
-  const [initialViewMode, setInitialViewMode] = useState('grid')
   
   const [schoolInfo, setSchoolInfo] = useState({
     // Basic Information
@@ -62,11 +50,6 @@ export default function SchoolProfile({ visible, onClose }) {
     phone: '+91 9491754784',
     website: 'www.blurihighschool.edu.in',
   
-    // Statistics
-    totalStudents: '1245',
-    totalTeachers: '45',
-    totalClassrooms: '32',
-  
     // Timings
     schoolHours: '9:00 AM - 4:30 PM',
     officeHours: '8:00 AM - 5:00 PM',
@@ -83,35 +66,6 @@ export default function SchoolProfile({ visible, onClose }) {
     campusArea: '10 Acres',
     libraryBooks: '25,000+',
     computerSystems: '150+',
-
-    // Gallery
-    pictures: [
-      {
-        title: 'Annual Day 2024',
-        pics: [
-          { uri: 'https://picsum.photos/400/300?random=1', description: 'Students performing on stage' },
-          { uri: 'https://picsum.photos/400/300?random=2', description: 'Prize distribution ceremony' },
-          { uri: 'https://picsum.photos/400/300?random=3', description: 'Audience cheering' },
-          { uri: 'https://picsum.photos/400/300?random=4', description: 'Cultural dance performance' },
-          { uri: 'https://picsum.photos/400/300?random=5', description: 'Chief guest address' },
-          { uri: 'https://picsum.photos/400/300?random=15', description: 'Group photo' },
-        ]
-      },
-      {
-        title: "Children's Day",
-        pics: [
-          { uri: 'https://picsum.photos/400/300?random=6', description: 'Kids in fancy dress competition' },
-          { uri: 'https://picsum.photos/400/300?random=7', description: 'Outdoor games and fun activities' },
-          { uri: 'https://picsum.photos/400/300?random=8', description: 'Special assembly program' },
-          { uri: 'https://picsum.photos/400/300?random=9', description: 'Cake cutting celebration' },
-          { uri: 'https://picsum.photos/400/300?random=10', description: 'Group photo with teachers' },
-          { uri: 'https://picsum.photos/400/300?random=11', description: 'Drawing competition winners' },
-          { uri: 'https://picsum.photos/400/300?random=12', description: 'Students performing skit' },
-          { uri: 'https://picsum.photos/400/300?random=13', description: 'Fun games' },
-          { uri: 'https://picsum.photos/400/300?random=14', description: 'Prize distribution' },
-        ]
-      },
-    ],
   })
 
   const styles = useMemo(() => StyleSheet.create({
@@ -160,57 +114,6 @@ export default function SchoolProfile({ visible, onClose }) {
     editButtonText: {
       color: '#FFFFFF',
       fontSize: 12,
-    },
-    quickStatsContainer: {
-      borderRadius: 16,
-      padding: 20,
-      marginBottom: 16,
-      ...Platform.select({
-        ios: {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.05,
-          shadowRadius: 8,
-        },
-        android: {
-          elevation: 3,
-        },
-      }),
-    },
-    quickStatsTitle: {
-      fontSize: 18,
-      marginBottom: 12,
-      textAlign: 'center',
-    },
-    quickStatsTitleDivider: {
-      height: 1,
-      marginBottom: 16,
-    },
-    quickStats: {
-      flexDirection: 'row',
-      justifyContent: 'space-around',
-      flexWrap: 'wrap',
-    },
-    statItem: {
-      alignItems: 'center',
-      width: SCREEN_WIDTH / 4 - 20,
-      marginBottom: 8,
-    },
-    statIconContainer: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 6,
-    },
-    statValue: {
-      fontSize: 16,
-      marginBottom: 2,
-    },
-    statLabel: {
-      fontSize: 11,
-      textAlign: 'center',
     },
     scrollView: {
       flex: 1,
@@ -374,103 +277,6 @@ export default function SchoolProfile({ visible, onClose }) {
     buttonText: {
       fontSize: 16,
     },
-    // Gallery Styles
-    galleryContainer: {
-      gap: 12,
-    },
-    galleryHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: 12,
-      paddingHorizontal: 16,
-      backgroundColor: 'rgba(0,0,0,0.03)',
-      borderRadius: 12,
-      marginBottom: 8,
-    },
-    headerTextRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      flex: 1,
-    },
-    groupsContainer: {
-      gap: 12,
-    },
-    groupContainer: {
-      backgroundColor: 'rgba(0,0,0,0.02)',
-      borderRadius: 12,
-      overflow: 'hidden',
-      borderWidth: 1,
-      borderColor: 'rgba(0,0,0,0.05)',
-    },
-    groupHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: 16,
-      backgroundColor: 'rgba(0,0,0,0.03)',
-    },
-    groupPicsContainer: {
-      padding: 12,
-    },
-    picsContainer: {
-      flexDirection: 'row',
-      gap: 8,
-    },
-    firstThreePics: {
-      flex: 3,
-      flexDirection: 'row',
-      gap: 8,
-    },
-    picWrapper: {
-      flex: 1,
-      aspectRatio: 1,
-      borderRadius: 8,
-      overflow: 'hidden',
-    },
-    previewImage: {
-      width: '100%',
-      height: '100%',
-    },
-    extraPicWrapper: {
-      flex: 1,
-      aspectRatio: 1,
-    },
-    extraPicContainer: {
-      width: '100%',
-      height: '100%',
-      borderRadius: 8,
-      overflow: 'hidden',
-      position: 'relative',
-    },
-    extraOverlay: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    extraText: {
-      color: 'white',
-      fontSize: 22,
-      fontWeight: 'bold',
-    },
-    extraImage: {
-      width: '100%',
-      height: '100%',
-    },
-    noGallery: {
-      padding: 20,
-      alignItems: 'center',
-    },
-    noGalleryText: {
-      fontSize: 14,
-      textAlign: 'center',
-    },
   }), [colors])
 
   const saveSchoolInfo = () => {
@@ -485,41 +291,6 @@ export default function SchoolProfile({ visible, onClose }) {
       [field]: value
     }))
   }
-
-  const statItems = [
-    {
-      id: 'students',
-      title: 'Students',
-      value: schoolInfo.totalStudents,
-      icon: 'users',
-      color: '#3b82f6',
-      iconType: 'FontAwesome5'
-    },
-    {
-      id: 'teachers',
-      title: 'Teachers',
-      value: schoolInfo.totalTeachers,
-      icon: 'chalkboard-teacher',
-      color: '#10b981',
-      iconType: 'FontAwesome5'
-    },
-    {
-      id: 'classrooms',
-      title: 'Classrooms',
-      value: schoolInfo.totalClassrooms,
-      icon: 'door-open',
-      color: '#8b5cf6',
-      iconType: 'FontAwesome5'
-    },
-    {
-      id: 'established',
-      title: 'Established',
-      value: schoolInfo.establishedYear,
-      icon: 'calendar-alt',
-      color: '#f59e0b',
-      iconType: 'FontAwesome5'
-    },
-  ]
 
   const sectionColors = [
     '#3b82f6',
@@ -751,37 +522,7 @@ export default function SchoolProfile({ visible, onClose }) {
         }
       ]
     },
-    {
-      title: 'Gallery',
-      color: sectionColors[0],
-      icon: <Ionicons name="images-outline" size={20} color={sectionColors[0]} />,
-      isGallery: true
-    }
   ]
-
-  const renderStatItem = (item) => {
-    const IconComponent = {
-      FontAwesome5: FontAwesome5,
-      MaterialCommunityIcons: MaterialCommunityIcons,
-      MaterialIcons: MaterialIcons,
-      Ionicons: Ionicons,
-      Feather: Feather,
-    }[item.iconType] || FontAwesome5
-
-    return (
-      <View key={item.id} style={styles.statItem}>
-        <View style={[styles.statIconContainer, { backgroundColor: item.color + '15' }]}>
-          <IconComponent name={item.icon} size={16} color={item.color} />
-        </View>
-        <ThemedText type="subtitle" style={[styles.statValue, { color: colors.text }]}>
-          {item.value}
-        </ThemedText>
-        <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
-          {item.title}
-        </ThemedText>
-      </View>
-    )
-  }
 
   const renderField = (fieldConfig, sectionColor) => {
     const { label, value, key, icon: fieldIcon, type = 'text' } = fieldConfig
@@ -866,138 +607,8 @@ export default function SchoolProfile({ visible, onClose }) {
     }
   }
 
-  const GalleryPreview = ({ pics, groupIndex, groupTitle }) => {
-    const numPics = pics.length
-    if (numPics === 0) return null
-
-    const firstThreePics = pics.slice(0, 3)
-    const extra = numPics - 3
-
-    const openModal = (mode, index) => {
-      setInitialViewMode(mode)
-      setCurrentGroupData({
-        pics,
-        title: groupTitle,
-      })
-      setSelectedImageIndex(index)
-      setGalleryModalVisible(true)
-    }
-
-    return (
-      <View style={styles.picsContainer}>
-        <View style={styles.firstThreePics}>
-          {firstThreePics.map((pic, i) => (
-            <TouchableOpacity
-              key={i}
-              style={styles.picWrapper}
-              onPress={() => openModal('single', i)}
-              activeOpacity={0.7}
-            >
-              <Image source={{ uri: pic.uri }} style={styles.previewImage} />
-            </TouchableOpacity>
-          ))}
-        </View>
-        
-        {extra > 0 && (
-          <TouchableOpacity
-            style={styles.extraPicWrapper}
-            onPress={() => openModal('grid', 0)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.extraPicContainer}>
-              <Image 
-                source={{ uri: pics[3]?.uri || pics[0].uri }} 
-                style={styles.extraImage} 
-              />
-              <View style={styles.extraOverlay}>
-                <ThemedText style={styles.extraText}>+{extra}</ThemedText>
-              </View>
-            </View>
-          </TouchableOpacity>
-        )}
-      </View>
-    )
-  }
-
-  const renderGallery = () => {
-    const pictures = schoolInfo.pictures || []
-    
-    if (pictures.length === 0) {
-      return (
-        <View style={styles.noGallery}>
-          <ThemedText style={[styles.noGalleryText, { color: colors.textSecondary }]}>
-            No gallery events available
-          </ThemedText>
-        </View>
-      )
-    }
-
-    return (
-      <View style={styles.galleryContainer}>
-        <TouchableOpacity
-          style={[styles.galleryHeader, { backgroundColor: colors.cardBackground }]}
-          onPress={() => {
-            LayoutAnimation.easeInEaseOut()
-            setGalleryExpanded(!galleryExpanded)
-          }}
-          activeOpacity={0.7}
-        >
-          <View style={styles.headerTextRow}>
-            <MaterialCommunityIcons name="image-multiple" size={20} color={sectionColors[0]} />
-            <ThemedText type="subtitle" style={{ color: colors.text, fontSize: 16 }}>
-              Gallery Events ({pictures.length})
-            </ThemedText>
-          </View>
-          <Feather
-            name={galleryExpanded ? 'chevron-up' : 'chevron-down'}
-            size={24}
-            color={colors.textSecondary}
-          />
-        </TouchableOpacity>
-        
-        {galleryExpanded && (
-          <View style={styles.groupsContainer}>
-            {pictures.map((group, gIndex) => (
-              <View key={gIndex} style={[styles.groupContainer, { borderColor: colors.border }]}>
-                <TouchableOpacity
-                  style={[styles.groupHeader, { backgroundColor: colors.cardBackground }]}
-                  onPress={() => {
-                    LayoutAnimation.easeInEaseOut()
-                    const newExpanded = { ...groupExpanded }
-                    newExpanded[gIndex] = !newExpanded[gIndex]
-                    setGroupExpanded(newExpanded)
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <ThemedText type="subtitle" style={{ color: colors.text, fontSize: 16 }}>
-                    {group.title} ({group.pics.length})
-                  </ThemedText>
-                  <Feather
-                    name={groupExpanded[gIndex] ? 'chevron-up' : 'chevron-down'}
-                    size={24}
-                    color={colors.textSecondary}
-                  />
-                </TouchableOpacity>
-                
-                {groupExpanded[gIndex] && (
-                  <View style={styles.groupPicsContainer}>
-                    <GalleryPreview pics={group.pics} groupIndex={gIndex} groupTitle={group.title} />
-                  </View>
-                )}
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
-    )
-  }
-
   const renderSectionContent = (section) => {
-    if (section.isGallery) {
-      return renderGallery()
-    } else {
-      return renderSectionFields(section)
-    }
+    return renderSectionFields(section)
   }
 
   const renderSection = (section) => (
@@ -1019,9 +630,6 @@ export default function SchoolProfile({ visible, onClose }) {
 
   const handleClose = () => {
     setIsEditing(false)
-    setGalleryModalVisible(false)
-    setInitialViewMode('grid')
-    setSelectedImageIndex(0)
     onClose()
   }
 
@@ -1086,15 +694,6 @@ export default function SchoolProfile({ visible, onClose }) {
           contentContainerStyle={styles.scrollContent}
         >
           <View style={styles.content}>
-            {/* Quick Stats Row */}
-            <View style={[styles.quickStatsContainer, { backgroundColor: colors.cardBackground }]}>
-              <ThemedText type='subtitle' style={[styles.quickStatsTitle, { color: colors.text }]}>Quick Stats</ThemedText>
-              <View style={[styles.quickStatsTitleDivider, { backgroundColor: colors.border }]} />
-              <View style={styles.quickStats}>
-                {statItems.map(renderStatItem)}
-              </View>
-            </View>
-
             {/* Render all sections */}
             {sections.map(renderSection)}
             
@@ -1129,16 +728,6 @@ export default function SchoolProfile({ visible, onClose }) {
             </View>
           </View>
         )}
-
-        {/* Gallery Modal */}
-        <GalleryModal
-          visible={galleryModalVisible}
-          onClose={() => setGalleryModalVisible(false)}
-          currentGroupData={currentGroupData}
-          selectedImageIndex={selectedImageIndex}
-          onImageIndexChange={setSelectedImageIndex}
-          initialViewMode={initialViewMode}
-        />
       </View>
     </Modal>
   )

@@ -6,9 +6,7 @@ import {
   FlatList,
 } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme } from '@/hooks/useTheme'
-import CashflowHeader from '@/components/cashflow/cashflow-header'
 import FinancialStats from '@/components/cashflow/financial-stats'
 import TransactionCard from '@/components/cashflow/transaction-card'
 import TimeFilter from '@/components/cashflow/time-filter'
@@ -187,9 +185,7 @@ export default function Cashflow() {
   })
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <CashflowHeader dashboardColors={dashboardColors} />
-
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -255,7 +251,7 @@ export default function Cashflow() {
           }
         />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   )
 }
 

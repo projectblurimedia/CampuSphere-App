@@ -198,11 +198,49 @@ const GalleryModal = ({
           width: '100%',
           height: '100%',
         },
-        addButtonContainer: {
-          backgroundColor: colors.primary || '#3b82f6',
+        
+        addButtonOuter: {
+          flex: 1,
+          borderRadius: 16,
+          overflow: 'hidden',
           justifyContent: 'center',
           alignItems: 'center',
         },
+
+        addButtonGradientRing: {
+          flex: 1,
+          width: '100%',
+          height: '100%',
+          borderRadius: 16,
+          padding: 5, 
+        },
+
+        addButtonInner: {
+          flex: 1,
+          borderRadius: 14,
+          justifyContent: 'center',
+          alignItems: 'center',          
+        },
+
+        addButtonIconWrapper: {
+          width: 40,
+          height: 40,
+          borderRadius: 20,
+          backgroundColor: 'rgba(248, 250, 252, 0.12)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginBottom: 6,
+          borderWidth: 1,
+          borderColor: 'rgba(248, 250, 252, 0.25)',
+        },
+
+        addButtonLabel: {
+          fontSize: 12,
+          letterSpacing: 0.4,
+          textTransform: 'uppercase',
+          color: '#e5e7eb',
+        },
+
 
         singleImageScroll: {
           flex: 1,
@@ -510,7 +548,7 @@ const GalleryModal = ({
             <TouchableOpacity
               style={styles.menuOption}
               onPress={() => handleMenuPress('edit')}
-              activeOpacity={0.7}
+              activeOpacity={0.9}
             >
               <Feather name="edit" size={18} color={colors.text || '#000'} />
               <ThemedText style={styles.menuOptionText}>Edit</ThemedText>
@@ -518,7 +556,7 @@ const GalleryModal = ({
             <TouchableOpacity
               style={styles.menuOption}
               onPress={() => handleMenuPress('delete')}
-              activeOpacity={0.7}
+              activeOpacity={0.9}
             >
               <Feather name="trash-2" size={18} color={colors.text || '#000'} />
               <ThemedText style={styles.menuOptionText}>Delete</ThemedText>
@@ -563,7 +601,7 @@ const GalleryModal = ({
                     colIndex === row.length - 1 && styles.gridItemLastInRow,
                   ]}
                   onPress={() => handleGridImagePress(absoluteIndex)}
-                  activeOpacity={0.7}
+                  activeOpacity={0.9}
                 >
                   <Image source={{ uri: item.uri }} style={styles.gridImage} resizeMode="cover" />
                 </TouchableOpacity>
@@ -576,10 +614,22 @@ const GalleryModal = ({
             <TouchableOpacity
               style={styles.gridItem}
               onPress={handleAddPicPress}
-              activeOpacity={0.7}
+              activeOpacity={0.9}
             >
-              <View style={[styles.gridImage, styles.addButtonContainer]}>
-                <FontAwesome5 name="plus" size={30} color="white" />
+              <View style={styles.addButtonOuter}>
+                <LinearGradient
+                  colors={[colors.gradientStart, colors.gradientEnd]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.addButtonGradientRing}
+                >
+                  <View style={styles.addButtonInner}>
+                    <View style={styles.addButtonIconWrapper}>
+                      <FontAwesome5 name="plus" size={22} color="#ffffff" />
+                    </View>
+                    <ThemedText style={styles.addButtonLabel}>Add photo</ThemedText>
+                  </View>
+                </LinearGradient>
               </View>
             </TouchableOpacity>
           </View>
@@ -661,7 +711,7 @@ const GalleryModal = ({
               <TouchableOpacity
                 onPress={handlePrevPress}
                 disabled={currentIndex === 0}
-                activeOpacity={0.7}
+                activeOpacity={0.9}
                 style={[
                   styles.navArrowButtonSmall,
                   currentIndex === 0 && styles.navArrowButtonDisabled,
@@ -693,7 +743,7 @@ const GalleryModal = ({
               <TouchableOpacity
                 onPress={handleNextPress}
                 disabled={currentIndex === pics.length - 1}
-                activeOpacity={0.7}
+                activeOpacity={0.9}
                 style={[
                   styles.navArrowButtonSmall,
                   currentIndex === pics.length - 1 && styles.navArrowButtonDisabled,

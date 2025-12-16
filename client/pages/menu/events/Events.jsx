@@ -9,6 +9,7 @@ import {
   StatusBar,
   Modal,
   Image,
+  Dimensions,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -30,6 +31,9 @@ export default function Events({ visible, onClose }) {
   })
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const [initialViewMode, setInitialViewMode] = useState('grid')
+  
+  const windowWidth = Dimensions.get('window').width
+  const BASE_SIZE = windowWidth - 56 // Account for scrollContent padding (16*2) + groupPicsContainer padding (12*2)
   
   const [schoolInfo] = useState({
     // Gallery
@@ -119,11 +123,10 @@ export default function Events({ visible, onClose }) {
       justifyContent: 'space-between',
       alignItems: 'center',
       padding: 16,
-      backgroundColor: 'rgba(0,0,0,0.03)',
+      backgroundColor: 'rgba(0,0,0,0.05)', 
     },
     groupPicsContainer: {
-      padding: 12,
-      alignItems: 'center',
+      padding: 12, 
     },
     noGallery: {
       padding: 20,
@@ -162,8 +165,8 @@ export default function Events({ visible, onClose }) {
     const numPics = pics.length
     if (numPics === 0) return null
 
-    const BASE_SIZE = 200
-    const IMAGE_SIZES = [200, 160, 120, 80]
+    const ratios = [1, 0.8, 0.6, 0.4]
+    const IMAGE_SIZES = ratios.map(r => BASE_SIZE * r)
     const displayItems = pics.slice(0, 4)
     const extraCount = Math.max(0, numPics - 4)
     const usedSizes = IMAGE_SIZES.slice(0, displayItems.length)
@@ -195,7 +198,7 @@ export default function Events({ visible, onClose }) {
           }
         ]}
         onPress={openModal}
-        activeOpacity={0.7}
+        activeOpacity={0.9}
       >
         <View style={{ position: 'relative' }}>
           {displayItems.map((pic, idx) => {
@@ -213,9 +216,9 @@ export default function Events({ visible, onClose }) {
                   position: 'absolute',
                   width: visualSize,
                   height: visualSize,
-                  top: offset,
-                  left: left,
-                  borderRadius: 8,
+                  top: offset + 3,
+                  left: left - 1,
+                  borderRadius: 10,
                   zIndex,
                   overflow: 'hidden',
                   borderWidth: 1,
@@ -266,7 +269,7 @@ export default function Events({ visible, onClose }) {
                 newExpanded[gIndex] = !newExpanded[gIndex]
                 setGroupExpanded(newExpanded)
               }}
-              activeOpacity={0.7}
+              activeOpacity={0.9}
             >
               <ThemedText type="subtitle" style={{ color: colors.text, fontSize: 16 }}>
                 {group.title} ({group.pics.length})

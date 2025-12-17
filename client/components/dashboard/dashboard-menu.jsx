@@ -24,6 +24,10 @@ import { useTheme } from '@/hooks/useTheme'
 import SchoolProfile from '@/pages/menu/schoolProfile/SchoolProfile'
 import SchoolStats from '@/pages/menu/schoolStats/SchoolStats'
 import Events from '@/pages/menu/events/Events'
+import Calendar from '@/pages/menu/calendar/Calendar'
+import CreateStudent from '@/pages/menu/createStudent/CreateStudent'
+import Attendance from '@/pages/menu/attendance/Attendance'
+import CollectFees from '@/pages/menu/collectFees/CollectFees'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
@@ -33,6 +37,10 @@ export default function DashboardMenu({ visible, onClose }) {
   const [schoolProfileVisible, setSchoolProfileVisible] = useState(false)
   const [schoolStatsVisible, setSchoolStatsVisible] = useState(false)
   const [eventsVisible, setEventsVisible] = useState(false)
+  const [schoolCalendarVisible, setSchoolCalendarVisible] = useState(false)
+  const [createStudentVisible, setCreateStudentVisible] = useState(false)
+  const [markAttendanceVisible, setMarkAttendanceVisible] = useState(false)
+  const [collectFeesVisible, setCollectFeesVisible] = useState(false)
   const translateX = useRef(new Animated.Value(SCREEN_WIDTH)).current
   const backdropOpacity = useRef(new Animated.Value(0)).current
 
@@ -73,6 +81,10 @@ export default function DashboardMenu({ visible, onClose }) {
     { id: 1, title: 'School Profile', icon: 'school', iconType: 'Ionicons', gradient: ['#3b82f6', '#2563eb'], action: () => setSchoolProfileVisible(true) },
     { id: 2, title: 'Events', icon: 'image-multiple', iconType: 'MaterialCommunityIcons', gradient: ['#10b981', '#059669'], action: () => setEventsVisible(true) },
     { id: 3, title: 'Stats', icon: 'chart-bar', iconType: 'FontAwesome5', gradient: ['#8b5cf6', '#7c3aed'], action: () => setSchoolStatsVisible(true) },
+    { id: 4, title: 'School Calendar', icon: 'calendar-outline', iconType: 'Ionicons', gradient: ['#f59e0b', '#d97706'], action: () => setSchoolCalendarVisible(true) },
+    { id: 5, title: 'New Student', icon: 'user-plus', iconType: 'Feather', gradient: ['#06b6d4', '#0891b2'], action: () => setCreateStudentVisible(true) },
+    { id: 6, title: 'Mark Attendance', icon: 'clipboard-check', iconType: 'MaterialCommunityIcons', gradient: ['#84cc16', '#65a30d'], action: () => setMarkAttendanceVisible(true) },
+    { id: 7, title: 'Collect Fees', icon: 'dollar-sign', iconType: 'FontAwesome5', gradient: ['#f97316', '#ea580c'], action: () => setCollectFeesVisible(true) },
   ]
 
   const getIcon = (type, name, size, color) => {
@@ -117,6 +129,22 @@ export default function DashboardMenu({ visible, onClose }) {
 
   const handleEventsClose = () => {
     setEventsVisible(false)
+  }
+
+  const handleSchoolCalendarClose = () => {
+    setSchoolCalendarVisible(false)
+  }
+
+  const handleCreateStudentClose = () => {
+    setCreateStudentVisible(false)
+  }
+
+  const handleMarkAttendanceClose = () => {
+    setMarkAttendanceVisible(false)
+  }
+
+  const handleCollectFeesClose = () => {
+    setCollectFeesVisible(false)
   }
 
   return (
@@ -282,6 +310,22 @@ export default function DashboardMenu({ visible, onClose }) {
       <Events
         visible={eventsVisible}
         onClose={handleEventsClose}
+      />
+      <Calendar
+        visible={schoolCalendarVisible}
+        onClose={handleSchoolCalendarClose}
+      />
+      <CreateStudent
+        visible={createStudentVisible}
+        onClose={handleCreateStudentClose}
+      />
+      <Attendance
+        visible={markAttendanceVisible}
+        onClose={handleMarkAttendanceClose}
+      />
+      <CollectFees
+        visible={collectFeesVisible}
+        onClose={handleCollectFeesClose}
       />
     </>
   )

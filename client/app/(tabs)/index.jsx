@@ -1,7 +1,6 @@
 import { ScrollView, View } from 'react-native'
 import { useTheme } from '@/hooks/useTheme'
 import StatsGrid from '@/components/dashboard/stats-grid'
-import QuickActions from '@/components/dashboard/quick-actions'
 import RecentActivity from '@/components/dashboard/recent-activity'
 import UpcomingEvents from '@/components/dashboard/upcoming-events'
 
@@ -31,7 +30,6 @@ export default function HomeScreen() {
         contentContainerStyle={{ paddingBottom: 100 }}
       >
         <StatsGrid colors={colors} dashboardColors={dashboardColors} />
-        <QuickActions colors={colors} dashboardColors={dashboardColors} />
         <RecentActivity colors={colors} dashboardColors={dashboardColors} />
         <UpcomingEvents colors={colors} dashboardColors={dashboardColors} />
       </ScrollView>

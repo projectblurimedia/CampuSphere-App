@@ -9,6 +9,8 @@ import {
   StatusBar,
   Modal,
   Dimensions,
+  Image,
+  TextInput,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -66,15 +68,70 @@ export default function SchoolProfile({ visible, onClose }) {
     campusArea: '10 Acres',
     libraryBooks: '25,000+',
     computerSystems: '150+',
+
+    // School Images
+    images: [
+      'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8c2Nob29sJTIwYnVpbGRpbmd8ZW58MHx8MHx8fDA%3D&auto=format&fit=crop&w=500&q=80',
+      'https://images.unsplash.com/photo-1562774053-701939374585?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8NXx8c2Nob29sJTIwY2FtcHVzfGVufDB8fDB8fHww&auto=format&fit=crop&w=500&q=80',
+      'https://images.unsplash.com/photo-1591123120675-6f7f1aae0e5b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTR8fHNjaG9vbCUyMGNsYXNzcm9vbXxlbnwwfHwwfHx8MA%3D%3D&auto=format&fit=crop&w=500&q=80',
+      'https://images.unsplash.com/photo-1523580494863-6f3031224c94?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8c2Nob29sJTIwbGlicmFyeXxlbnwwfHwwfHx8MA%3D%3D&auto=format&fit=crop&w=500&q=80',
+    ],
+
+    // Bus Information
+    buses: [
+      {
+        id: '1',
+        busNumber: 'AP07 AB 1234',
+        driverName: 'Ramesh Kumar',
+        driverPhone: '+91 9876543210',
+        route: 'Route 1: Main Town - School',
+        capacity: '45 Students',
+        morningPickup: '7:30 AM',
+        eveningDrop: '4:45 PM'
+      },
+      {
+        id: '2',
+        busNumber: 'AP07 CD 5678',
+        driverName: 'Suresh Reddy',
+        driverPhone: '+91 8765432109',
+        route: 'Route 2: Suburbs - School',
+        capacity: '40 Students',
+        morningPickup: '7:15 AM',
+        eveningDrop: '4:30 PM'
+      },
+      {
+        id: '3',
+        busNumber: 'AP07 EF 9012',
+        driverName: 'Rajesh Naidu',
+        driverPhone: '+91 7654321098',
+        route: 'Route 3: Villages - School',
+        capacity: '35 Students',
+        morningPickup: '7:00 AM',
+        eveningDrop: '4:15 PM'
+      }
+    ]
   })
+
+  const [newBus, setNewBus] = useState({
+    busNumber: '',
+    driverName: '',
+    driverPhone: '',
+    route: '',
+    capacity: '',
+    morningPickup: '',
+    eveningDrop: ''
+  })
+
+  const [showAddBusModal, setShowAddBusModal] = useState(false)
 
   const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
+      backgroundColor: colors.background,
     },
     header: {
       paddingTop: Platform.OS === 'ios' ? 70 : 50,
-      paddingBottom: 15,
+      paddingBottom: 16,
       paddingHorizontal: 20,
       borderBottomLeftRadius: 24,
       borderBottomRightRadius: 24,
@@ -85,35 +142,37 @@ export default function SchoolProfile({ visible, onClose }) {
       justifyContent: 'space-between',
     },
     backButton: {
-      width: 45,
-      height: 45,
+      width: 44,
+      height: 44,
       borderRadius: 22,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      backgroundColor: 'rgba(255, 255, 255, 0.18)',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.4)',
     },
-    schoolHeaderInfo: {
+    titleContainer: {
       flex: 1,
-      flexDirection: 'row',
       alignItems: 'center',
-      marginHorizontal: 16,
     },
-    schoolName: {
-      fontSize: 18,
+    title: {
+      fontSize: 20,
       color: '#FFFFFF',
+    },
+    subtitle: {
+      marginTop: 4,
+      fontSize: 12,
+      color: 'rgba(255,255,255,0.9)',
     },
     editButton: {
-      flexDirection: 'row',
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 18,
-      gap: 4,
-      backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    },
-    editButtonText: {
-      color: '#FFFFFF',
-      fontSize: 12,
+      backgroundColor: 'rgba(255, 255, 255, 0.18)',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.4)',
     },
     scrollView: {
       flex: 1,
@@ -126,9 +185,12 @@ export default function SchoolProfile({ visible, onClose }) {
       paddingTop: 8,
     },
     sectionContainer: {
-      borderRadius: 16,
-      padding: 15,
+      borderRadius: 18,
+      padding: 16,
       marginBottom: 16,
+      backgroundColor: colors.cardBackground,
+      borderWidth: 1,
+      borderColor: colors.border,
       ...Platform.select({
         ios: {
           shadowColor: '#000',
@@ -154,6 +216,7 @@ export default function SchoolProfile({ visible, onClose }) {
     },
     sectionTitle: {
       fontSize: 18,
+      fontWeight: '600',
     },
     sectionDivider: {
       height: 1,
@@ -172,6 +235,7 @@ export default function SchoolProfile({ visible, onClose }) {
       borderBottomWidth: 1,
       borderBottomColor: 'rgba(0, 0, 0, 0.1)',
       letterSpacing: 0.5,
+      fontWeight: '600',
     },
     fieldContainer: {
       gap: 8,
@@ -276,6 +340,268 @@ export default function SchoolProfile({ visible, onClose }) {
     },
     buttonText: {
       fontSize: 16,
+      fontWeight: '500',
+    },
+
+    // School Images Section
+    imagesContainer: {
+      marginTop: 8,
+    },
+    imagesGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+    },
+    imageItem: {
+      width: '48%',
+      height: 120,
+      marginBottom: 8,
+      borderRadius: 12,
+      overflow: 'hidden',
+    },
+    schoolImage: {
+      width: '100%',
+      height: '100%',
+      resizeMode: 'cover',
+    },
+    imagePlaceholder: {
+      width: '100%',
+      height: '100%',
+      backgroundColor: colors.inputBackground,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+    },
+
+    // Bus Information Section - Enhanced Design
+    busSection: {
+      marginTop: 8,
+    },
+    busList: {
+      gap: 12,
+    },
+    busCard: {
+      borderRadius: 16,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.inputBackground,
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 4,
+        },
+        android: {
+          elevation: 2,
+        },
+      }),
+    },
+    busHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    busNumberBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    busNumberCircle: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: colors.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    busNumberCircleText: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: 'bold',
+    },
+    busNumber: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    busPlate: {
+      backgroundColor: '#fbbf24',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 4,
+    },
+    busPlateText: {
+      color: '#78350f',
+      fontSize: 12,
+      fontWeight: 'bold',
+      letterSpacing: 1,
+    },
+    busRoute: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginBottom: 12,
+      fontStyle: 'italic',
+    },
+    busInfoGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 12,
+      marginBottom: 12,
+    },
+    busInfoItem: {
+      flex: 1,
+      minWidth: '45%',
+      backgroundColor: colors.cardBackground,
+      padding: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border + '30',
+    },
+    busInfoLabel: {
+      fontSize: 10,
+      color: colors.textSecondary,
+      marginBottom: 4,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    busInfoValue: {
+      fontSize: 13,
+      color: colors.text,
+      fontWeight: '500',
+    },
+    busDriverCard: {
+      backgroundColor: colors.cardBackground,
+      padding: 12,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border + '30',
+    },
+    busDriverHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 8,
+      gap: 8,
+    },
+    busDriverName: {
+      fontSize: 14,
+      color: colors.text,
+      fontWeight: '600',
+    },
+    busDriverContact: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    busDriverPhone: {
+      fontSize: 12,
+      color: colors.text,
+    },
+    addBusButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 14,
+      borderRadius: 14,
+      borderWidth: 2,
+      borderStyle: 'dashed',
+      gap: 10,
+      marginTop: 16,
+      backgroundColor: colors.primary + '08',
+    },
+    addBusText: {
+      fontSize: 15,
+      fontWeight: '600',
+    },
+
+    // Bus Modal Styles
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'flex-end',
+    },
+    modalContainer: {
+      backgroundColor: colors.background,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      paddingTop: 20,
+      paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+      maxHeight: SCREEN_WIDTH * 1.2,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      marginBottom: 20,
+      paddingBottom: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+    },
+    modalContent: {
+      paddingHorizontal: 20,
+    },
+    modalInputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      marginBottom: 12,
+      paddingHorizontal: 14,
+      height: 50,
+      backgroundColor: colors.inputBackground,
+    },
+    modalInput: {
+      flex: 1,
+      height: '100%',
+      fontSize: 15,
+      color: colors.text,
+      paddingVertical: 0,
+      paddingHorizontal: 0,
+      fontFamily: 'Poppins-Medium',
+    },
+    modalActions: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 24,
+      marginBottom: 20,
+    },
+    modalCancelButton: {
+      flex: 1,
+      paddingVertical: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      alignItems: 'center',
+      borderColor: colors.border,
+    },
+    modalCancelText: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '500',
+    },
+    modalAddButton: {
+      flex: 2,
+      paddingVertical: 14,
+      borderRadius: 12,
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+    },
+    modalAddText: {
+      color: '#FFFFFF',
+      fontSize: 15,
+      fontWeight: '600',
+    },
+    requiredStar: {
+      color: '#ef4444',
     },
   }), [colors])
 
@@ -292,15 +618,75 @@ export default function SchoolProfile({ visible, onClose }) {
     }))
   }
 
+  const handleNewBusChange = (field, value) => {
+    setNewBus(prev => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const addNewBus = () => {
+    if (!newBus.busNumber || !newBus.driverName || !newBus.driverPhone) {
+      Alert.alert('Error', 'Please fill all required bus details')
+      return
+    }
+
+    const newBusWithId = {
+      id: Date.now().toString(),
+      ...newBus
+    }
+
+    setSchoolInfo(prev => ({
+      ...prev,
+      buses: [...prev.buses, newBusWithId]
+    }))
+
+    setNewBus({
+      busNumber: '',
+      driverName: '',
+      driverPhone: '',
+      route: '',
+      capacity: '',
+      morningPickup: '',
+      eveningDrop: ''
+    })
+
+    setShowAddBusModal(false)
+    Alert.alert('Success', 'New bus added successfully!')
+  }
+
+  const removeBus = (busId) => {
+    Alert.alert(
+      'Remove Bus',
+      'Are you sure you want to remove this bus?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            setSchoolInfo(prev => ({
+              ...prev,
+              buses: prev.buses.filter(bus => bus.id !== busId)
+            }))
+            Alert.alert('Success', 'Bus removed successfully!')
+          }
+        }
+      ]
+    )
+  }
+
   const sectionColors = [
-    '#3b82f6',
-    '#10b981',
-    '#9115ba',
-    '#e00303',
-    '#8b5cf6',
-    '#06b6d4',
-    '#e38800',
-    '#f63bd7',
+    '#3b82f6', // Basic Info - Blue
+    '#10b981', // Administration - Green
+    '#9115ba', // Contact Info - Purple
+    '#e00303', // Timings - Red
+    '#8b5cf6', // Facilities - Violet
+    '#06b6d4', // Additional Info - Cyan
+    '#e38800', // Mission - Orange
+    '#f63bd7', // Vision - Pink
+    '#22c55e', // School Images - Green
+    '#f97316', // Transportation - Orange
   ]
 
   const sections = [
@@ -628,6 +1014,66 @@ export default function SchoolProfile({ visible, onClose }) {
     </View>
   )
 
+  const renderBusCard = (bus, index) => (
+    <View key={bus.id} style={styles.busCard}>
+      <View style={styles.busHeader}>
+        <View style={styles.busNumberBadge}>
+          <View style={styles.busNumberCircle}>
+            <ThemedText style={styles.busNumberCircleText}>
+              {index + 1}
+            </ThemedText>
+          </View>
+          <ThemedText style={styles.busNumber}>
+            Bus {index + 1}
+          </ThemedText>
+        </View>
+        <View style={styles.busPlate}>
+          <ThemedText style={styles.busPlateText}>
+            {bus.busNumber}
+          </ThemedText>
+        </View>
+      </View>
+      
+      <ThemedText style={styles.busRoute}>
+        {bus.route}
+      </ThemedText>
+      
+      <View style={styles.busDriverCard}>
+        <View style={styles.busDriverHeader}>
+          <FontAwesome5 name="user-tie" size={14} color={colors.primary} />
+          <ThemedText style={styles.busDriverName}>
+            {bus.driverName}
+          </ThemedText>
+        </View>
+        <View style={styles.busDriverContact}>
+          <Feather name="phone" size={12} color={colors.textSecondary} />
+          <ThemedText style={styles.busDriverPhone}>
+            {bus.driverPhone}
+          </ThemedText>
+        </View>
+      </View>
+      
+      {isEditing && (
+        <TouchableOpacity 
+          style={{
+            position: 'absolute',
+            top: 12,
+            right: 12,
+            backgroundColor: '#ef4444',
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+          onPress={() => removeBus(bus.id)}
+        >
+          <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
+    </View>
+  )
+
   const handleClose = () => {
     setIsEditing(false)
     onClose()
@@ -638,97 +1084,293 @@ export default function SchoolProfile({ visible, onClose }) {
   }
 
   return (
-    <Modal
-      visible={visible}
-      animationType="fade"
-      onRequestClose={handleClose}
-      statusBarTranslucent
-    >
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-     
-        {/* Header with School Name */}
-        <LinearGradient
-          colors={[colors?.gradientStart || '#3b82f6', colors?.gradientEnd || '#1d4ed8']}
-          style={styles.header}
-        >
-          <SafeAreaView edges={['top']}>
-            <View style={styles.headerRow}>
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={handleClose}
-              >
-                <FontAwesome5
-                  name="chevron-left"
-                  size={22}
-                  color="#FFFFFF"
-                  style={{ transform: [{ translateX: -1 }] }}
-                />
-              </TouchableOpacity>
-              <View style={styles.schoolHeaderInfo}>
-                <FontAwesome5 name="university" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-                <ThemedText type="title" style={styles.schoolName}>
-                  Campus Profile
-                </ThemedText>
+    <>
+      <Modal
+        visible={visible}
+        animationType="fade"
+        onRequestClose={handleClose}
+        statusBarTranslucent
+      >
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+          <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+       
+          {/* Header - Updated like CreateStudent */}
+          <LinearGradient
+            colors={[colors.gradientStart, colors.gradientEnd]}
+            style={styles.header}
+          >
+            <SafeAreaView edges={['top']}>
+              <View style={styles.headerRow}>
+                <TouchableOpacity style={styles.backButton} onPress={handleClose}>
+                  <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
+                </TouchableOpacity>
+                <View style={styles.titleContainer}>
+                  <ThemedText type='subtitle' style={styles.title}>Campus Profile</ThemedText>
+                  <ThemedText style={styles.subtitle}>Manage school information</ThemedText>
+                </View>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => setIsEditing(!isEditing)}
+                >
+                  <Feather
+                    name={isEditing ? "x" : "edit-2"}
+                    size={20}
+                    color="#FFFFFF"
+                  />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={() => setIsEditing(!isEditing)}
-              >
-                <Feather
-                  name={isEditing ? "x" : "edit"}
-                  size={18}
-                  color="#FFFFFF"
-                />
-                <ThemedText style={styles.editButtonText}>
-                  {isEditing ? 'Cancel' : 'Edit'}
-                </ThemedText>
-              </TouchableOpacity>
-            </View>
-          </SafeAreaView>
-        </LinearGradient>
+            </SafeAreaView>
+          </LinearGradient>
 
-        <ScrollView
-          style={styles.scrollView}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+          <ScrollView
+            style={styles.scrollView}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+          >
+            <View style={styles.content}>
+              {/* Render existing sections */}
+              {sections.map(renderSection)}
+              
+              {/* School Images Section */}
+              <View style={[styles.sectionContainer, { backgroundColor: colors.cardBackground }]}>
+                <View style={styles.sectionHeader}>
+                  <View style={[styles.sectionTitleRow, { backgroundColor: sectionColors[8] + '10' }]}>
+                    <MaterialCommunityIcons name="image-multiple" size={20} color={sectionColors[8]} />
+                    <ThemedText type="subtitle" style={[styles.sectionTitle, { color: sectionColors[8] }]}>
+                      School Images
+                    </ThemedText>
+                  </View>
+                  <View style={[styles.sectionDivider, { backgroundColor: sectionColors[8] + '30' }]} />
+                </View>
+                <View style={styles.imagesContainer}>
+                  <View style={styles.imagesGrid}>
+                    {schoolInfo.images.map((image, index) => (
+                      <View key={index} style={styles.imageItem}>
+                        <Image source={{ uri: image }} style={styles.schoolImage} />
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              </View>
+              
+              {/* Transportation Section */}
+              <View style={[styles.sectionContainer, { backgroundColor: colors.cardBackground }]}>
+                <View style={styles.sectionHeader}>
+                  <View style={[styles.sectionTitleRow, { backgroundColor: sectionColors[9] + '10' }]}>
+                    <FontAwesome5 name="bus-alt" size={20} color={sectionColors[9]} />
+                    <ThemedText type="subtitle" style={[styles.sectionTitle, { color: sectionColors[9] }]}>
+                      Transportation
+                    </ThemedText>
+                  </View>
+                  <View style={[styles.sectionDivider, { backgroundColor: sectionColors[9] + '30' }]} />
+                </View>
+                <View style={styles.busSection}>
+                  <View style={styles.busList}>
+                    {schoolInfo.buses.map((bus, index) => renderBusCard(bus, index))}
+                  </View>
+                  
+                  {isEditing && (
+                    <TouchableOpacity
+                      style={[
+                        styles.addBusButton,
+                        { 
+                          borderColor: colors.primary,
+                          backgroundColor: colors.primary + '08'
+                        }
+                      ]}
+                      onPress={() => setShowAddBusModal(true)}
+                    >
+                      <Ionicons name="add-circle" size={22} color={colors.primary} />
+                      <ThemedText style={[styles.addBusText, { color: colors.primary }]}>
+                        Add New Bus
+                      </ThemedText>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+              
+              {/* Spacer for fixed buttons */}
+              <View style={styles.spacer} />
+            </View>
+          </ScrollView>
+
+          {/* Fixed Action Buttons */}
+          {isEditing && (
+            <View style={[styles.actionButtonsContainer, { backgroundColor: colors.background }]}>
+              <View style={styles.actionButtons}>
+                  <TouchableOpacity
+                    style={[styles.button, styles.discardButton, { borderColor: colors.border, backgroundColor: colors?.danger || '#ef4444' }]}
+                    onPress={cancelEdit}
+                  >
+                    <Ionicons name="trash-outline" size={20} color={'#FFFFFF'} />
+                    <ThemedText style={[styles.buttonText, { color: '#FFFFFF' }]}>
+                      Discard
+                    </ThemedText>
+                  </TouchableOpacity>
+               
+                  <TouchableOpacity
+                    style={[styles.button, styles.saveButton, { backgroundColor: colors.tint || '#3b82f6' }]}
+                    onPress={saveSchoolInfo}
+                  >
+                    <Feather name="save" size={20} color="#FFFFFF" />
+                    <ThemedText style={[styles.buttonText, { color: '#FFFFFF' }]}>
+                      Save Changes
+                    </ThemedText>
+                  </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+      </Modal>
+
+      {/* Add Bus Modal */}
+      <Modal
+        visible={showAddBusModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowAddBusModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowAddBusModal(false)}
         >
-          <View style={styles.content}>
-            {/* Render all sections */}
-            {sections.map(renderSection)}
-            
-            {/* Spacer for fixed buttons */}
-            <View style={styles.spacer} />
-          </View>
-        </ScrollView>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <View style={styles.modalHeader}>
+                <ThemedText style={[styles.modalTitle, { color: colors.text }]}>
+                  Add New Bus
+                </ThemedText>
+                <TouchableOpacity onPress={() => setShowAddBusModal(false)}>
+                  <Ionicons name="close" size={24} color={colors.text} />
+                </TouchableOpacity>
+              </View>
 
-        {/* Fixed Action Buttons */}
-        {isEditing && (
-          <View style={[styles.actionButtonsContainer, { backgroundColor: colors.background }]}>
-            <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={[styles.button, styles.discardButton, { borderColor: colors.border, backgroundColor: colors?.danger || '#ef4444' }]}
-                  onPress={cancelEdit}
-                >
-                  <Ionicons name="trash-outline" size={20} color={'#FFFFFF'} />
-                  <ThemedText style={[styles.buttonText, { color: '#FFFFFF' }]}>
-                    Discard
+              <ScrollView style={{ maxHeight: SCREEN_WIDTH * 1 }}>
+                <View style={styles.modalContent}>
+                  <ThemedText style={[styles.fieldLabel, { marginBottom: 8, color: colors.textSecondary }]}>
+                    Bus Number <ThemedText style={styles.requiredStar}>*</ThemedText>
                   </ThemedText>
-                </TouchableOpacity>
-             
-                <TouchableOpacity
-                  style={[styles.button, styles.saveButton, { backgroundColor: colors.tint || '#3b82f6' }]}
-                  onPress={saveSchoolInfo}
-                >
-                  <Feather name="save" size={20} color="#FFFFFF" />
-                  <ThemedText style={[styles.buttonText, { color: '#FFFFFF' }]}>
-                    Save Changes
+                  <View style={styles.modalInputContainer}>
+                    <FontAwesome5 name="bus-alt" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="e.g., AP07 AB 1234"
+                      placeholderTextColor={colors.textSecondary}
+                      value={newBus.busNumber}
+                      onChangeText={(text) => handleNewBusChange('busNumber', text)}
+                    />
+                  </View>
+
+                  <ThemedText style={[styles.fieldLabel, { marginBottom: 8, color: colors.textSecondary }]}>
+                    Driver Name <ThemedText style={styles.requiredStar}>*</ThemedText>
                   </ThemedText>
-                </TouchableOpacity>
+                  <View style={styles.modalInputContainer}>
+                    <FontAwesome5 name="user-tie" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="Enter driver name"
+                      placeholderTextColor={colors.textSecondary}
+                      value={newBus.driverName}
+                      onChangeText={(text) => handleNewBusChange('driverName', text)}
+                    />
+                  </View>
+
+                  <ThemedText style={[styles.fieldLabel, { marginBottom: 8, color: colors.textSecondary }]}>
+                    Driver Phone <ThemedText style={styles.requiredStar}>*</ThemedText>
+                  </ThemedText>
+                  <View style={styles.modalInputContainer}>
+                    <Feather name="phone" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="Enter driver phone number"
+                      placeholderTextColor={colors.textSecondary}
+                      value={newBus.driverPhone}
+                      onChangeText={(text) => handleNewBusChange('driverPhone', text)}
+                      keyboardType="phone-pad"
+                    />
+                  </View>
+
+                  <ThemedText style={[styles.fieldLabel, { marginBottom: 8, color: colors.textSecondary }]}>
+                    Route
+                  </ThemedText>
+                  <View style={styles.modalInputContainer}>
+                    <MaterialIcons name="route" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="e.g., Route 1: Main Town - School"
+                      placeholderTextColor={colors.textSecondary}
+                      value={newBus.route}
+                      onChangeText={(text) => handleNewBusChange('route', text)}
+                    />
+                  </View>
+
+                  <ThemedText style={[styles.fieldLabel, { marginBottom: 8, color: colors.textSecondary }]}>
+                    Capacity
+                  </ThemedText>
+                  <View style={styles.modalInputContainer}>
+                    <Feather name="users" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="e.g., 45 Students"
+                      placeholderTextColor={colors.textSecondary}
+                      value={newBus.capacity}
+                      onChangeText={(text) => handleNewBusChange('capacity', text)}
+                    />
+                  </View>
+
+                  <ThemedText style={[styles.fieldLabel, { marginBottom: 8, color: colors.textSecondary }]}>
+                    Morning Pickup Time
+                  </ThemedText>
+                  <View style={styles.modalInputContainer}>
+                    <Feather name="sunrise" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="e.g., 7:30 AM"
+                      placeholderTextColor={colors.textSecondary}
+                      value={newBus.morningPickup}
+                      onChangeText={(text) => handleNewBusChange('morningPickup', text)}
+                    />
+                  </View>
+
+                  <ThemedText style={[styles.fieldLabel, { marginBottom: 8, color: colors.textSecondary }]}>
+                    Evening Drop Time
+                  </ThemedText>
+                  <View style={styles.modalInputContainer}>
+                    <Feather name="sunset" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="e.g., 4:45 PM"
+                      placeholderTextColor={colors.textSecondary}
+                      value={newBus.eveningDrop}
+                      onChangeText={(text) => handleNewBusChange('eveningDrop', text)}
+                    />
+                  </View>
+
+                  <View style={styles.modalActions}>
+                    <TouchableOpacity
+                      style={styles.modalCancelButton}
+                      onPress={() => setShowAddBusModal(false)}
+                    >
+                      <ThemedText style={styles.modalCancelText}>
+                        Cancel
+                      </ThemedText>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.modalAddButton}
+                      onPress={addNewBus}
+                    >
+                      <ThemedText style={styles.modalAddText}>
+                        Add Bus
+                      </ThemedText>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </ScrollView>
             </View>
           </View>
-        )}
-      </View>
-    </Modal>
+        </TouchableOpacity>
+      </Modal>
+    </>
   )
 }

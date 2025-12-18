@@ -51,6 +51,6 @@ app.use((error, req, res, next) => {
 })
 
 app.listen(process.env.PORT || 8000, () => {
-  console.log(`Server is running on http://localhost:${process.env.PORT}`)
+  console.log(`Server is running on http://192.168.31.232:${process.env.PORT}`)
   databaseConnection()
 })

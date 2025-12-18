@@ -1,229 +1,71 @@
 const mongoose = require('mongoose')
 
+const busSchema = new mongoose.Schema({
+  sno: { type: String, required: true, unique: true },
+  busNumber: { type: String, required: true },
+  driverName: { type: String, required: true },
+  driverPhone: { type: String, required: true },
+  routes: [{ type: String }]
+}, { _id: false })
+
 const schoolSchema = new mongoose.Schema({
-  // Basic Information
-  name: {
-    type: String,
-    required: [true, 'School name is required'],
-    trim: true
-  },
-  motto: {
-    type: String,
-    trim: true
-  },
-  establishedYear: {
-    type: Number,
-    required: [true, 'Establishment year is required']
-  },
-  affiliation: {
-    type: String,
-    trim: true
-  },
-  board: {
-    type: String,
-    trim: true
-  },
+  name: { type: String, required: true, default: 'Bluri High School' },
+  establishedYear: { type: String, default: '2002' },
+  affiliation: { type: String, default: 'SSE' },
+  board: { type: String, default: 'Secondary School Examination' },
 
-  // Administration
-  principal: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Staff'
-  },
-  vicePrincipal: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Staff'
-  },
+  principal: { type: String, default: 'Dr. Manikanta Yerraguntla' },
+  principalEmail: { type: String, default: 'principal@blurihighschool.edu.in' },
+  principalPhone: { type: String, default: '+91 7093054784' },
+  vicePrincipal: { type: String, default: 'Ms. Haritha Kotha' },
+  vicePrincipalEmail: { type: String, default: 'vp@blurihighschool.edu.in' },
+  vicePrincipalPhone: { type: String, default: '+91 9391522508' },
 
-  // Contact Information
-  address: {
-    street: String,
-    city: String,
-    state: String,
-    country: {
-      type: String,
-      default: 'India'
-    },
-    pincode: String,
-    fullAddress: String
-  },
-  email: {
-    type: String,
-    trim: true,
-    lowercase: true
-  },
-  phone: {
-    type: String,
-    trim: true
-  },
-  website: {
-    type: String,
-    trim: true
-  },
+  address: { type: String, default: 'Kannapuram, Andhra Pradesh, India - 534311' },
+  email: { type: String, default: 'info@blurihighschool.edu.in' },
+  phone: { type: String, default: '+91 9491754784' },
+  website: { type: String, default: 'www.blurihighschool.edu.in' },
 
-  // Statistics (will be calculated dynamically)
-  totalStudents: {
-    type: Number,
-    default: 0
-  },
-  totalTeachers: {
-    type: Number,
-    default: 0
-  },
-  totalStaff: {
-    type: Number,
-    default: 0
-  },
-  totalClassrooms: {
-    type: Number,
-    default: 0
-  },
+  schoolHours: { type: String, default: '9:00 AM - 4:30 PM' },
+  officeHours: { type: String, default: '8:00 AM - 5:00 PM' },
+  workingDays: { type: String, default: 'Monday to Saturday' },
+  assemblyTime: { type: String, default: '9:00 AM' },
 
-  // Timings
-  schoolHours: {
-    start: String,
-    end: String,
-    display: String
-  },
-  officeHours: {
-    start: String,
-    end: String,
-    display: String
-  },
-  workingDays: [{
-    type: String,
-    enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-  }],
-  assemblyTime: String,
+  facilities: { type: String, default: 'Smart Classrooms, Science Labs, Computer Lab, Library, Sports Ground, Auditorium, Cafeteria, Medical Room, Transportation, WiFi Campus' },
 
-  // Facilities
-  facilities: [{
-    name: String,
-    description: String,
-    isAvailable: {
-      type: Boolean,
-      default: true
-    }
-  }],
+  mission: { type: String, default: 'To provide quality education that empowers students to become responsible citizens and lifelong learners.' },
+  vision: { type: String, default: 'To be a premier educational institution nurturing global citizens with strong values and academic excellence.' },
+  motto: { type: String, default: 'Learn, Lead, Excel' },
+  campusArea: { type: String, default: '10 Acres' },
+  libraryBooks: { type: String, default: '25,000+' },
+  computerSystems: { type: String, default: '150+' },
 
-  // Mission & Vision
-  mission: String,
-  vision: String,
-
-  // Additional Information
-  campusArea: String,
-  libraryBooks: Number,
-  computerSystems: Number,
-
-  // Images
   images: [{
-    url: String,
-    publicId: String,
-    caption: String,
-    isPrimary: {
-      type: Boolean,
-      default: false
-    },
-    uploadedAt: {
-      type: Date,
-      default: Date.now
-    }
+    type: String,
+    default: [
+      'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8c2Nob29sJTIwYnVpbGRpbmd8ZW58MHx8MHx8fDA%3D&auto=format&fit=crop&w=500&q=80',
+      'https://images.unsplash.com/photo-1562774053-701939374585?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8NXx8c2Nob29sJTIwY2FtcHVzfGVufDB8fDB8fHww&auto=format&fit=crop&w=500&q=80',
+      'https://images.unsplash.com/photo-1591123120675-6f7f1aae0e5b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTR8fHNjaG9vbCUyMGNsYXNzcm9vbXxlbnwwfHwwfHx8MA%3D%3D&auto=format&fit=crop&w=500&q=80',
+      'https://images.unsplash.com/photo-1523580494863-6f3031224c94?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8c2Nob29sJTIwbGlicmFyeXxlbnwwfHwwfHx8MA%3D%3D&auto=format&fit=crop&w=500&q=80',
+    ]
   }],
 
-  // Social Media
-  socialMedia: {
-    facebook: String,
-    twitter: String,
-    instagram: String,
-    linkedin: String,
-    youtube: String
-  },
+  buses: [busSchema],
 
-  // Settings
-  academicYear: {
-    type: String,
-    required: true
-  },
-  isActive: {
-    type: Boolean,
-    default: true
-  },
-
-  // Timestamps
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
-  }
+  updatedAt: { type: Date, default: Date.now }
 }, {
   timestamps: true
 })
 
-// Virtual for formatted address
-schoolSchema.virtual('formattedAddress').get(function() {
-  if (this.address.fullAddress) {
-    return this.address.fullAddress
-  }
-  
-  const parts = []
-  if (this.address.street) parts.push(this.address.street)
-  if (this.address.city) parts.push(this.address.city)
-  if (this.address.state) parts.push(this.address.state)
-  if (this.address.pincode) parts.push(this.address.pincode)
-  if (this.address.country) parts.push(this.address.country)
-  
-  return parts.join(', ')
-})
-
-// Method to update statistics
-schoolSchema.methods.updateStatistics = async function() {
-  const Student = require('./Student')
-  const Staff = require('./Staff')
-  const Class = require('./Class')
-  
-  try {
-    const totalStudents = await Student.countDocuments({ school: this._id, status: 'active' })
-    const totalTeachers = await Staff.countDocuments({ 
-      school: this._id, 
-      status: 'active',
-      role: 'teacher'
-    })
-    const totalStaff = await Staff.countDocuments({ 
-      school: this._id, 
-      status: 'active'
-    })
-    const totalClassrooms = await Class.countDocuments({ school: this._id, status: 'active' })
-    
-    this.totalStudents = totalStudents
-    this.totalTeachers = totalTeachers
-    this.totalStaff = totalStaff
-    this.totalClassrooms = totalClassrooms
-    
-    await this.save()
-    return this
-  } catch (error) {
-    throw error
-  }
-}
-
-// Static method to get school profile with statistics
-schoolSchema.statics.getSchoolProfile = async function(schoolId) {
-  const school = await this.findById(schoolId)
-    .populate('principal', 'firstName lastName email phone designation')
-    .populate('vicePrincipal', 'firstName lastName email phone designation')
-    .lean()
-  
+schoolSchema.statics.findOrCreateDefault = async function() {
+  let school = await this.findOne()
   if (!school) {
-    throw new Error('School not found')
+    school = new this({
+      // Defaults are already set in schema
+    })
+    await school.save()
   }
-  
-  school.formattedAddress = school.address.fullAddress || 
-    `${school.address.street}, ${school.address.city}, ${school.address.state} - ${school.address.pincode}, ${school.address.country}`
-  
   return school
 }
 
-const School = mongoose.model('School', schoolSchema)
-module.exports = School
+module.exports = mongoose.model('School', schoolSchema)

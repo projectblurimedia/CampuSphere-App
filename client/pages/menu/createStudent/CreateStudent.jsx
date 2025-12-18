@@ -523,7 +523,8 @@ export default function CreateStudent({ visible, onClose }) {
     <Modal visible={visible} animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <View style={styles.container}>
         <LinearGradient
-          colors={[colors.gradientStart, colors.gradientEnd]}
+          colors={[
+            'red', colors.gradientEnd]}
           style={styles.header}
         >
           <SafeAreaView edges={['top']}>

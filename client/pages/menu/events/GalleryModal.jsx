@@ -3,15 +3,13 @@ import {
   View,
   StyleSheet,
   Modal,
-  StatusBar,
   Dimensions,
   Image,
   TouchableOpacity,
   FlatList,
   ScrollView,
   Platform,
-  TouchableWithoutFeedback,
-  Animated,
+  StatusBar,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { FontAwesome5, Feather, Ionicons } from '@expo/vector-icons'
@@ -19,10 +17,10 @@ import { ThemedText } from '@/components/ui/themed-text'
 import { useTheme } from '@/hooks/useTheme'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window')
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 const GRID_SPACING = 4
 const GRID_COLUMNS = 3
-const MAX_DOTS = 5 // max dots visible in bar
+const MAX_DOTS = 5
 
 const GalleryModal = ({
   visible = false,
@@ -31,17 +29,18 @@ const GalleryModal = ({
   selectedImageIndex = 0,
   onImageIndexChange,
   initialViewMode = 'grid',
+  headerTitle = '',
 }) => {
   const { colors } = useTheme()
   const [viewMode, setViewMode] = useState(initialViewMode)
   const [currentIndex, setCurrentIndex] = useState(selectedImageIndex)
   const [isChangingMode, setIsChangingMode] = useState(false)
-  const [menuVisible, setMenuVisible] = useState(false)
   const scrollViewRef = useRef(null)
   const flatListRef = useRef(null)
-  const scrollX = useRef(new Animated.Value(0)).current
 
-  const { pics = [], title = 'Gallery' } = currentGroupData || {}
+  // Get title from props with fallback
+  const title = headerTitle || currentGroupData?.title || 'Event Gallery'
+  const { pics = [] } = currentGroupData || {}
 
   const gridItemSize = useMemo(() => {
     const totalSpacing = GRID_SPACING * (GRID_COLUMNS + 1)
@@ -65,7 +64,6 @@ const GalleryModal = ({
   useEffect(() => {
     if (visible) {
       setViewMode(initialViewMode)
-      setMenuVisible(false)
     }
   }, [visible, initialViewMode])
 
@@ -103,14 +101,15 @@ const GalleryModal = ({
           flex: 1,
           backgroundColor: colors.background,
         },
+        // Updated Header - absolutely positioned
         header: {
           position: 'absolute',
           top: 0,
           left: 0,
           right: 0,
           zIndex: 100,
-          paddingTop: Platform.OS === 'ios' ? 70 : 50,
-          paddingBottom: 15,
+          paddingTop: Platform.OS === 'ios' ? 75 : 55,
+          paddingBottom: 16,
           paddingHorizontal: 20,
           borderBottomLeftRadius: 24,
           borderBottomRightRadius: 24,
@@ -118,62 +117,42 @@ const GalleryModal = ({
         headerRow: {
           flexDirection: 'row',
           alignItems: 'center',
+          justifyContent: 'space-between',
+          position: 'relative',
         },
         backButton: {
-          width: 45,
-          height: 45,
+          width: 44,
+          height: 44,
           borderRadius: 22,
           justifyContent: 'center',
           alignItems: 'center',
-          backgroundColor: 'rgba(255, 255, 255, 0.2)',
-          opacity: isChangingMode ? 0.5 : 1,
+          backgroundColor: 'rgba(255, 255, 255, 0.18)',
+          borderWidth: 1,
+          borderColor: 'rgba(255, 255, 255, 0.4)',
         },
-        headerTitle: {
-          flex: 1,
-          marginHorizontal: 16,
-        },
-        titleText: {
-          fontSize: 18,
-          color: '#FFFFFF',
-        },
-        menuButton: {
-          width: 45,
-          height: 45,
-          borderRadius: 22,
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        },
-        menuContainer: {
+        titleContainer: {
           position: 'absolute',
-          top: Platform.OS === 'ios' ? 140 : 120,
-          right: 20,
-          backgroundColor: colors.cardBackground,
-          padding: 8,
-          borderRadius: 12,
-          gap: 8,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.25,
-          shadowRadius: 8,
-          elevation: 8,
-          zIndex: 1000,
-          minWidth: 140,
-        },
-        menuOption: {
-          flexDirection: 'row',
+          left: 0,
+          right: 0,
           alignItems: 'center',
-          paddingHorizontal: 12,
-          paddingVertical: 10,
-          borderRadius: 8,
-          gap: 10,
+          justifyContent: 'center',
         },
-        menuOptionText: {
-          color: colors.text,
-          fontSize: 16,
-          flex: 1,
+        title: {
+          fontSize: 20,
+          color: '#FFFFFF',
+          marginBottom: -3,
+        },
+        subtitle: {
+          marginTop: 4,
+          fontSize: 12,
+          color: 'rgba(255,255,255,0.9)',
+        },
+        // Hidden placeholder for layout balance
+        emptySpace: {
+          width: 44,
         },
 
+        // Grid View - starts below header
         gridContainer: {
           flexGrow: 1,
           paddingTop: Platform.OS === 'ios' ? 140 : 120,
@@ -198,110 +177,38 @@ const GalleryModal = ({
           width: '100%',
           height: '100%',
         },
-        
-        addButtonOuter: {
-          flex: 1,
-          borderRadius: 16,
-          overflow: 'hidden',
-          justifyContent: 'center',
-          alignItems: 'center',
-        },
 
-        addButtonGradientRing: {
-          flex: 1,
-          width: '100%',
-          height: '100%',
-          borderRadius: 16,
-          padding: 5, 
-        },
-
-        addButtonInner: {
-          flex: 1,
-          borderRadius: 14,
-          justifyContent: 'center',
-          alignItems: 'center',          
-        },
-
-        addButtonIconWrapper: {
-          width: 40,
-          height: 40,
-          borderRadius: 20,
-          backgroundColor: 'rgba(248, 250, 252, 0.12)',
-          justifyContent: 'center',
-          alignItems: 'center',
-          marginBottom: 6,
-          borderWidth: 1,
-          borderColor: 'rgba(248, 250, 252, 0.25)',
-        },
-
-        addButtonLabel: {
-          fontSize: 12,
-          letterSpacing: 0.4,
-          textTransform: 'uppercase',
-          color: '#e5e7eb',
-        },
-
-
-        singleImageScroll: {
+        // Single Image View - FIXED: Full screen black background with proper centering
+        singleImageFullContainer: {
           flex: 1,
           backgroundColor: '#000000',
         },
-        singleImagePage: {
-          width: SCREEN_WIDTH,
-          justifyContent: 'center',
-          alignItems: 'center',
+        singleImageScroll: {
           flex: 1,
         },
-        singleImageContainer: {
-          width: '100%',
-          flex: 1,
+        singleImagePage: {
+          width: SCREEN_WIDTH,
+          height: SCREEN_HEIGHT,
           justifyContent: 'center',
           alignItems: 'center',
-          position: 'relative',
+        },
+        singleImageWrapper: {
+          width: '100%',
+          height: '100%',
+          justifyContent: 'center',
+          alignItems: 'center',
         },
         singleImage: {
           width: '100%',
           height: '100%',
           resizeMode: 'contain',
         },
-        imageDescriptionContainer: {
-          position: 'absolute',
-          bottom: 110,
-          left: 20,
-          right: 20,
-        },
-        imageDescription: {
-          color: 'white',
-          fontSize: 16,
-          textAlign: 'center',
-          lineHeight: 22,
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          padding: 12,
-          borderRadius: 10,
-          overflow: 'hidden',
-        },
-
-        currentIndexIndicator: {
-          position: 'absolute',
-          top: 10,
-          alignSelf: 'center',
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          paddingHorizontal: 15,
-          paddingVertical: 5,
-          borderRadius: 15,
-          zIndex: 20,
-        },
-        currentIndexText: {
-          color: 'white',
-          fontSize: 14,
-          fontWeight: '600',
-        },
 
         bottomControlsWrapper: {
           position: 'absolute',
           left: 0,
           right: 0,
-          bottom: 40,
+          bottom: 60,
           justifyContent: 'center',
           alignItems: 'center',
           zIndex: 30,
@@ -354,7 +261,7 @@ const GalleryModal = ({
           backgroundColor: '#ffffff',
         },
       }),
-    [isChangingMode, colors, gridItemSize],
+    [colors, gridItemSize]
   )
 
   const handleGridImagePress = useCallback(
@@ -367,12 +274,8 @@ const GalleryModal = ({
       if (onImageIndexChange) onImageIndexChange(clampedIndex)
       setTimeout(() => setIsChangingMode(false), 300)
     },
-    [isChangingMode, pics.length, onImageIndexChange],
+    [isChangingMode, pics.length, onImageIndexChange]
   )
-
-  const handleAddPicPress = useCallback(() => {
-    console.log('Add new picture')
-  }, [])
 
   const handleSingleImageScroll = useCallback(
     (event) => {
@@ -383,7 +286,7 @@ const GalleryModal = ({
         if (onImageIndexChange) onImageIndexChange(newIndex)
       }
     },
-    [currentIndex, pics.length, onImageIndexChange],
+    [currentIndex, pics.length, onImageIndexChange]
   )
 
   const handlePrevPress = useCallback(() => {
@@ -425,15 +328,6 @@ const GalleryModal = ({
     }
   }, [isChangingMode, viewMode, onClose])
 
-  const handleMenuPress = useCallback((action) => {
-    setMenuVisible(false)
-    if (action === 'edit') {
-      console.log('Edit gallery')
-    } else if (action === 'delete') {
-      console.log('Delete gallery')
-    }
-  }, [])
-
   const handleDotPress = useCallback(
     (targetIndex) => {
       if (!scrollViewRef.current) return
@@ -445,16 +339,15 @@ const GalleryModal = ({
       setCurrentIndex(clampedIndex)
       if (onImageIndexChange) onImageIndexChange(clampedIndex)
     },
-    [pics.length, onImageIndexChange],
+    [pics.length, onImageIndexChange]
   )
 
-  // Compute windowed dots: up to 5 positions centered around currentIndex.
+  // Compute windowed dots
   const getWindowedDots = () => {
     const total = pics.length
     if (total === 0) return []
 
     if (total <= MAX_DOTS) {
-      // Just show one dot per page, with scaled size for neighbors.
       const center = currentIndex
       const dots = []
       for (let i = 0; i < total; i++) {
@@ -467,7 +360,6 @@ const GalleryModal = ({
       return dots
     }
 
-    // total > MAX_DOTS
     const center = currentIndex
     const half = Math.floor(MAX_DOTS / 2)
 
@@ -485,7 +377,6 @@ const GalleryModal = ({
 
     const dots = []
 
-    // if there are items before start, show tiny leading indicator
     if (start > 0) {
       dots.push({ index: start - 1, size: 'tiny', key: 'dot-leading' })
     }
@@ -498,7 +389,6 @@ const GalleryModal = ({
       dots.push({ index: i, size, key: `dot-${i}` })
     }
 
-    // if there are items after end, show tiny trailing indicator
     if (end < total - 1) {
       dots.push({ index: end + 1, size: 'tiny', key: 'dot-trailing' })
     }
@@ -520,50 +410,24 @@ const GalleryModal = ({
           >
             <FontAwesome5
               name="chevron-left"
-              size={22}
+              size={20}
               color="#FFFFFF"
-              style={{ transform: [{ translateX: -1 }] }}
+              style={{ marginLeft: -2 }}
             />
           </TouchableOpacity>
 
-          <View style={styles.headerTitle}>
-            <ThemedText type="title" style={styles.titleText}>
+          <View style={styles.titleContainer}>
+            <ThemedText type="subtitle" style={styles.title} numberOfLines={1}>
               {title}
+            </ThemedText>
+            <ThemedText style={styles.subtitle}>
+              {viewMode === 'grid' ? 'Event Photos' : `Photo ${currentIndex + 1} of ${pics.length}`}
             </ThemedText>
           </View>
 
-          <TouchableOpacity
-            style={styles.menuButton}
-            onPress={() => setMenuVisible(true)}
-            disabled={isChangingMode}
-          >
-            <Feather name="more-vertical" size={22} color="#FFFFFF" />
-          </TouchableOpacity>
+          <View style={styles.emptySpace} />
         </View>
       </SafeAreaView>
-
-      {menuVisible && (
-        <TouchableWithoutFeedback onPress={() => setMenuVisible(false)}>
-          <View style={styles.menuContainer}>
-            <TouchableOpacity
-              style={styles.menuOption}
-              onPress={() => handleMenuPress('edit')}
-              activeOpacity={0.9}
-            >
-              <Feather name="edit" size={18} color={colors.text || '#000'} />
-              <ThemedText style={styles.menuOptionText}>Edit</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.menuOption}
-              onPress={() => handleMenuPress('delete')}
-              activeOpacity={0.9}
-            >
-              <Feather name="trash-2" size={18} color={colors.text || '#000'} />
-              <ThemedText style={styles.menuOptionText}>Delete</ThemedText>
-            </TouchableOpacity>
-          </View>
-        </TouchableWithoutFeedback>
-      )}
     </LinearGradient>
   )
 
@@ -571,7 +435,10 @@ const GalleryModal = ({
     if (pics.length === 0) {
       return (
         <View style={[styles.gridContainer, { justifyContent: 'center', alignItems: 'center' }]}>
-          <ThemedText>No images available</ThemedText>
+          <Feather name="image" size={48} color={colors.textSecondary} />
+          <ThemedText style={{ marginTop: 16, color: colors.textSecondary }}>
+            No photos available
+          </ThemedText>
         </View>
       )
     }
@@ -580,6 +447,11 @@ const GalleryModal = ({
     for (let i = 0; i < pics.length; i += GRID_COLUMNS) {
       gridData.push(pics.slice(i, i + GRID_COLUMNS))
     }
+
+    // Calculate the number of items in the last row
+    const lastRowIndex = gridData.length - 1
+    const lastRowItems = gridData[lastRowIndex] || []
+    const remainingSpots = GRID_COLUMNS - lastRowItems.length
 
     return (
       <FlatList
@@ -607,33 +479,22 @@ const GalleryModal = ({
                 </TouchableOpacity>
               )
             })}
+            
+            {/* Add empty spots to complete the last row */}
+            {rowIndex === lastRowIndex && remainingSpots > 0 && (
+              Array.from({ length: remainingSpots }).map((_, emptyIndex) => (
+                <View
+                  key={`empty-${emptyIndex}`}
+                  style={[
+                    styles.gridItem,
+                    { backgroundColor: 'transparent' },
+                    emptyIndex === remainingSpots - 1 && styles.gridItemLastInRow,
+                  ]}
+                />
+              ))
+            )}
           </View>
         )}
-        ListFooterComponent={
-          <View style={styles.gridRow}>
-            <TouchableOpacity
-              style={styles.gridItem}
-              onPress={handleAddPicPress}
-              activeOpacity={0.9}
-            >
-              <View style={styles.addButtonOuter}>
-                <LinearGradient
-                  colors={[colors.gradientStart, colors.gradientEnd]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.addButtonGradientRing}
-                >
-                  <View style={styles.addButtonInner}>
-                    <View style={styles.addButtonIconWrapper}>
-                      <FontAwesome5 name="plus" size={22} color="#ffffff" />
-                    </View>
-                    <ThemedText style={styles.addButtonLabel}>Add photo</ThemedText>
-                  </View>
-                </LinearGradient>
-              </View>
-            </TouchableOpacity>
-          </View>
-        }
         onScrollToIndexFailed={({ index }) => {
           if (flatListRef.current && index >= 0) {
             setTimeout(() => {
@@ -657,10 +518,10 @@ const GalleryModal = ({
   const SingleImageView = () => {
     if (pics.length === 0) {
       return (
-        <View
-          style={[styles.singleImageScroll, { justifyContent: 'center', alignItems: 'center' }]}
-        >
-          <ThemedText style={{ color: 'white' }}>No images to display</ThemedText>
+        <View style={styles.singleImageFullContainer}>
+          <View style={[styles.singleImagePage, { justifyContent: 'center', alignItems: 'center' }]}>
+            <ThemedText style={{ color: 'white' }}>No images to display</ThemedText>
+          </View>
         </View>
       )
     }
@@ -668,15 +529,7 @@ const GalleryModal = ({
     const dots = getWindowedDots()
 
     return (
-      <View style={{ flex: 1, backgroundColor: '#000' }}>
-        {viewMode === 'single' && pics.length > 1 && (
-          <View style={styles.currentIndexIndicator}>
-            <ThemedText style={styles.currentIndexText}>
-              {currentIndex + 1} / {pics.length}
-            </ThemedText>
-          </View>
-        )}
-
+      <View style={styles.singleImageFullContainer}>
         <ScrollView
           ref={scrollViewRef}
           horizontal
@@ -690,16 +543,9 @@ const GalleryModal = ({
         >
           {pics.map((pic, index) => (
             <View key={index} style={styles.singleImagePage}>
-              <View style={styles.singleImageContainer}>
+              <View style={styles.singleImageWrapper}>
                 <Image source={{ uri: pic.uri }} style={styles.singleImage} resizeMode="contain" />
               </View>
-              {pic.description && (
-                <View style={styles.imageDescriptionContainer}>
-                  <ThemedText style={styles.imageDescription} numberOfLines={3}>
-                    {pic.description}
-                  </ThemedText>
-                </View>
-              )}
             </View>
           ))}
         </ScrollView>
@@ -707,7 +553,6 @@ const GalleryModal = ({
         {pics.length > 1 && (
           <View style={styles.bottomControlsWrapper}>
             <View style={styles.bottomControlsInner}>
-              {/* Left arrow */}
               <TouchableOpacity
                 onPress={handlePrevPress}
                 disabled={currentIndex === 0}
@@ -720,7 +565,6 @@ const GalleryModal = ({
                 <Ionicons name="chevron-back" size={18} color="#ffffff" />
               </TouchableOpacity>
 
-              {/* Windowed dots */}
               <View style={styles.paginationDotsRow}>
                 {dots.map((dot) => {
                   let dotStyle = styles.dotTiny
@@ -739,7 +583,6 @@ const GalleryModal = ({
                 })}
               </View>
 
-              {/* Right arrow */}
               <TouchableOpacity
                 onPress={handleNextPress}
                 disabled={currentIndex === pics.length - 1}
@@ -762,8 +605,8 @@ const GalleryModal = ({
 
   return (
     <Modal visible={visible} animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <View style={styles.modalContainer}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
         <Header />
         {viewMode === 'grid' ? <GridView /> : <SingleImageView />}
       </View>

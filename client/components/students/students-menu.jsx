@@ -28,7 +28,7 @@ export default function StudentsMenu({ visible, onClose }) {
         <View style={[styles.menuContainer, { backgroundColor: colors.cardBackground }]}>
           <View style={styles.menuHeader}>
             <ThemedText type="title" style={styles.menuTitle}>Students Menu</ThemedText>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <TouchableOpacity activeOpacity={.9} onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color={colors.text} />
             </TouchableOpacity>
           </View>
@@ -38,8 +38,8 @@ export default function StudentsMenu({ visible, onClose }) {
               <TouchableOpacity 
                 key={index} 
                 style={[styles.menuItem, { borderBottomColor: colors.border }]}
+                activeOpacity={.9}
                 onPress={() => {
-                  // Handle menu item press
                   console.log(`Selected: ${item.title}`)
                   onClose()
                 }}

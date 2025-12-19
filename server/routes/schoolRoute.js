@@ -7,7 +7,9 @@ const {
   getBuses,
   addBus,
   updateBus,
-  deleteBus
+  deleteBus,
+  addSchoolImage,
+  deleteSchoolImage
 } = require('../controllers/schoolController')
 
 // School Profile Routes
@@ -15,10 +17,14 @@ router.post('/', createSchool)
 router.get('/', getSchoolProfile)
 router.put('/', updateSchoolProfile)
 
-// Bus Routes (sub-resource)
+// School Images Routes
+router.post('/images', addSchoolImage)
+router.delete('/images/:index', deleteSchoolImage)
+
+// Bus Routes
 router.get('/buses', getBuses)
 router.post('/buses', addBus)
-router.put('/buses/:busId', updateBus)
-router.delete('/buses/:busId', deleteBus)
+router.put('/buses/:busId', updateBus)  
+router.delete('/buses/:busId', deleteBus)  
 
 module.exports = router

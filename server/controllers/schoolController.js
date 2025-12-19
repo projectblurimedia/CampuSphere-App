@@ -1,13 +1,11 @@
 const School = require('../models/School')
 
-// Create a new school (overrides singleton if one exists use with caution)
 const createSchool = async (req, res) => {
   try {
-    // Optional: Delete existing if singleton enforcement needed
     await School.deleteMany({})
 
     const schoolData = {
-      ...req.body, // Allow overriding defaults
+      ...req.body,
       updatedAt: new Date()
     }
 
@@ -20,6 +18,7 @@ const createSchool = async (req, res) => {
       message: 'School created successfully'
     })
   } catch (error) {
+    console.error('Create school error:', error)
     res.status(500).json({
       success: false,
       message: 'Failed to create school',
@@ -28,7 +27,7 @@ const createSchool = async (req, res) => {
   }
 }
 
-// Get full school profile (all details)
+// Get full school profile
 const getSchoolProfile = async (req, res) => {
   try {
     const school = await School.findOrCreateDefault()
@@ -37,6 +36,7 @@ const getSchoolProfile = async (req, res) => {
       data: school
     })
   } catch (error) {
+    console.error('Get school profile error:', error)
     res.status(500).json({
       success: false,
       message: 'Failed to fetch school profile',
@@ -45,15 +45,14 @@ const getSchoolProfile = async (req, res) => {
   }
 }
 
-// Update full school profile (all fields except buses, which have separate ops)
+// Update school profile
 const updateSchoolProfile = async (req, res) => {
   try {
     const updates = req.body
-    // Exclude buses from top-level update to avoid overwriting array
-    const { buses, ...schoolUpdates } = updates
+    const { buses, images, ...schoolUpdates } = updates
 
     const school = await School.findOneAndUpdate(
-      {}, // Empty filter for singleton
+      {},
       { $set: { ...schoolUpdates, updatedAt: new Date() } },
       { new: true, runValidators: true }
     ).exec()
@@ -71,9 +70,89 @@ const updateSchoolProfile = async (req, res) => {
       message: 'School profile updated successfully'
     })
   } catch (error) {
+    console.error('Update school profile error:', error)
     res.status(500).json({
       success: false,
       message: 'Failed to update school profile',
+      error: error.message
+    })
+  }
+}
+
+// Add school image
+const addSchoolImage = async (req, res) => {
+  try {
+    const { imageUrl } = req.body
+
+    if (!imageUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'Image URL is required'
+      })
+    }
+
+    const school = await School.findOne()
+    if (!school) {
+      return res.status(404).json({
+        success: false,
+        message: 'School not found'
+      })
+    }
+
+    school.images.push(imageUrl)
+    school.updatedAt = new Date()
+    await school.save()
+
+    res.status(201).json({
+      success: true,
+      data: school.images,
+      message: 'Image added successfully'
+    })
+  } catch (error) {
+    console.error('Add school image error:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add school image',
+      error: error.message
+    })
+  }
+}
+
+// Delete school image
+const deleteSchoolImage = async (req, res) => {
+  try {
+    const { index } = req.params
+    const imageIndex = parseInt(index)
+
+    const school = await School.findOne()
+    if (!school) {
+      return res.status(404).json({
+        success: false,
+        message: 'School not found'
+      })
+    }
+
+    if (imageIndex < 0 || imageIndex >= school.images.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'Image not found'
+      })
+    }
+
+    school.images.splice(imageIndex, 1)
+    school.updatedAt = new Date()
+    await school.save()
+
+    res.status(200).json({
+      success: true,
+      data: school.images,
+      message: 'Image deleted successfully'
+    })
+  } catch (error) {
+    console.error('Delete school image error:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete school image',
       error: error.message
     })
   }
@@ -88,6 +167,7 @@ const getBuses = async (req, res) => {
       data: school.buses
     })
   } catch (error) {
+    console.error('Get buses error:', error)
     res.status(500).json({
       success: false,
       message: 'Failed to fetch buses',
@@ -100,27 +180,31 @@ const getBuses = async (req, res) => {
 const addBus = async (req, res) => {
   try {
     const busData = req.body
-    if (!busData.busNumber || !busData.driverName || !busData.driverPhone) {
+    
+    // Validate required fields
+    if (!busData.name || !busData.busNumber || !busData.driverName || !busData.driverPhone) {
       return res.status(400).json({
         success: false,
-        message: 'Bus number, driver name, and phone are required'
+        message: 'Bus name, bus number, driver name, and phone are required'
       })
     }
 
-    // Ensure routes is array
-    const routes = Array.isArray(busData.routes) ? busData.routes : (busData.routes || '').split('\n').map(r => r.trim()).filter(r => r)
+    const routes = Array.isArray(busData.routes) ? busData.routes : 
+                  (busData.route ? [busData.route] : [])
 
     const newBus = {
-      id: Date.now().toString(), // Client-like id
-      ...busData,
-      routes: routes.length > 0 ? routes : ['Not specified']
+      name: busData.name,
+      busNumber: busData.busNumber,
+      driverName: busData.driverName,
+      driverPhone: busData.driverPhone,
+      routes: routes.length > 0 ? routes : ['Not specified'],
+      createdAt: new Date()
     }
 
-    const school = await School.findOneAndUpdate(
-      {}, // Singleton
-      { $push: { buses: newBus }, $set: { updatedAt: new Date() } },
-      { new: true }
-    ).exec()
+    const school = await School.findOrCreateDefault()
+    school.buses.push(newBus)
+    school.updatedAt = new Date()
+    await school.save()
 
     res.status(201).json({
       success: true,
@@ -128,6 +212,7 @@ const addBus = async (req, res) => {
       message: 'Bus added successfully'
     })
   } catch (error) {
+    console.error('Add bus error:', error)
     res.status(500).json({
       success: false,
       message: 'Failed to add bus',
@@ -136,65 +221,56 @@ const addBus = async (req, res) => {
   }
 }
 
-// Update specific bus by id
+// Update specific bus by _id
 const updateBus = async (req, res) => {
   try {
     const { busId } = req.params
     const busData = req.body
 
-    if (!busData.busNumber || !busData.driverName || !busData.driverPhone) {
+    if (!busData.name || !busData.busNumber || !busData.driverName || !busData.driverPhone) {
       return res.status(400).json({
         success: false,
-        message: 'Bus number, driver name, and phone are required'
+        message: 'Bus name, bus number, driver name, and phone are required'
       })
     }
 
-    // Ensure routes is array
-    const routes = Array.isArray(busData.routes) ? busData.routes : (busData.routes || '').split('\n').map(r => r.trim()).filter(r => r)
+    const routes = Array.isArray(busData.routes) ? busData.routes : 
+                  (busData.route ? [busData.route] : [])
 
-    const updateData = {
-      ...busData,
-      routes: routes.length > 0 ? routes : ['Not specified'],
-      updatedAt: new Date() // Not directly on bus, but on school
+    const school = await School.findOne()
+    if (!school) {
+      return res.status(404).json({
+        success: false,
+        message: 'School not found'
+      })
     }
 
-    // Remove id from update to avoid conflicts
-    const { id, ...cleanUpdate } = updateData
-
-    const school = await School.findOneAndUpdate(
-      { 'buses.id': busId },
-      { 
-        $set: { 
-          'buses.$[bus].busNumber': cleanUpdate.busNumber,
-          'buses.$[bus].driverName': cleanUpdate.driverName,
-          'buses.$[bus].driverPhone': cleanUpdate.driverPhone,
-          'buses.$[bus].routes': cleanUpdate.routes,
-          'buses.$[bus].capacity': cleanUpdate.capacity,
-          'buses.$[bus].morningPickup': cleanUpdate.morningPickup,
-          'buses.$[bus].eveningDrop': cleanUpdate.eveningDrop,
-          updatedAt: new Date()
-        } 
-      },
-      { 
-        arrayFilters: [{ 'bus.id': busId }], 
-        new: true 
-      }
-    ).exec()
-
-    if (!school) {
+    // Find and update the bus by _id
+    const busIndex = school.buses.findIndex(bus => bus._id.toString() === busId)
+    if (busIndex === -1) {
       return res.status(404).json({
         success: false,
         message: 'Bus not found'
       })
     }
 
-    const updatedBus = school.buses.find(b => b.id === busId)
+    // Update bus fields
+    school.buses[busIndex].name = busData.name
+    school.buses[busIndex].busNumber = busData.busNumber
+    school.buses[busIndex].driverName = busData.driverName
+    school.buses[busIndex].driverPhone = busData.driverPhone
+    school.buses[busIndex].routes = routes.length > 0 ? routes : ['Not specified']
+    
+    school.updatedAt = new Date()
+    await school.save()
+
     res.status(200).json({
       success: true,
-      data: updatedBus,
+      data: school.buses[busIndex],
       message: 'Bus updated successfully'
     })
   } catch (error) {
+    console.error('Update bus error:', error)
     res.status(500).json({
       success: false,
       message: 'Failed to update bus',
@@ -203,32 +279,39 @@ const updateBus = async (req, res) => {
   }
 }
 
-// Delete specific bus by id
+// Delete specific bus by _id
 const deleteBus = async (req, res) => {
   try {
     const { busId } = req.params
 
-    const school = await School.findOneAndUpdate(
-      {},
-      { 
-        $pull: { buses: { id: busId } }, 
-        $set: { updatedAt: new Date() } 
-      },
-      { new: true }
-    ).exec()
+    const school = await School.findOne()
+    if (!school) {
+      return res.status(404).json({
+        success: false,
+        message: 'School not found'
+      })
+    }
 
-    if (school.buses.length === 0 && !school.buses.some(b => b.id === busId)) {
+    // Check if bus exists
+    const busExists = school.buses.some(bus => bus._id.toString() === busId)
+    if (!busExists) {
       return res.status(404).json({
         success: false,
         message: 'Bus not found'
       })
     }
 
+    // Remove the bus
+    school.buses = school.buses.filter(bus => bus._id.toString() !== busId)
+    school.updatedAt = new Date()
+    await school.save()
+
     res.status(200).json({
       success: true,
       message: 'Bus deleted successfully'
     })
   } catch (error) {
+    console.error('Delete bus error:', error)
     res.status(500).json({
       success: false,
       message: 'Failed to delete bus',
@@ -241,6 +324,8 @@ module.exports = {
   createSchool,
   getSchoolProfile,
   updateSchoolProfile,
+  addSchoolImage,
+  deleteSchoolImage,
   getBuses,
   addBus,
   updateBus,

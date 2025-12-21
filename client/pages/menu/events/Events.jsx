@@ -630,7 +630,6 @@ export default function Events({ visible, onClose }) {
     try {
       setActionLoading(true)
       const response = await eventApi.createEvent(newEvent, newEvent.images)
-      console.log(response.data)
       if (response.success) {
         showToast('success', 'Event created successfully!')
         setCalendarEvents(prev => [response.data, ...prev])
@@ -660,8 +659,7 @@ export default function Events({ visible, onClose }) {
     try {
       setActionLoading(true)
       
-      // Determine which images to remove
-      // We need to compare the original images with the current ones
+      // Get original event images
       const existingImages = selectedEvent?.images || []
       const currentImages = editEvent.images || []
       
@@ -671,34 +669,26 @@ export default function Events({ visible, onClose }) {
       existingImages.forEach(existingImage => {
         // Check if this image still exists in currentImages
         const stillExists = currentImages.some(currentImage => {
-          // Compare by _id if both have it
-          if (existingImage._id && currentImage._id) {
+          // If currentImage has _id (from existing images), compare by _id
+          if (currentImage._id) {
             return existingImage._id === currentImage._id
           }
-          // Compare by publicId if both have it
-          if (existingImage.publicId && currentImage.publicId) {
-            return existingImage.publicId === currentImage.publicId
+          // If currentImage has url but no _id (might be from same source), compare by url
+          if (currentImage.url) {
+            return existingImage.url === currentImage.url
           }
-          // Fallback: compare by URL
-          return existingImage.url === currentImage.url
+          // If currentImage has uri (new image), it's not in existing images
+          return false
         })
         
         // If image doesn't exist in currentImages, mark it for removal
-        if (!stillExists) {
-          // Add the image ID to remove
-          if (existingImage._id) {
-            imagesToRemove.push(existingImage._id)
-          } else if (existingImage.publicId) {
-            imagesToRemove.push(existingImage.publicId)
-          }
+        if (!stillExists && existingImage._id) {
+          imagesToRemove.push(existingImage._id)
         }
       })
       
-      // Separate new images (without _id) from existing images
-      const newImages = editEvent.images.filter(img => !img._id && img.uri)
-      
-      console.log('Images to remove:', imagesToRemove)
-      console.log('New images to add:', newImages.length)
+      // Separate new images (have uri but no _id) from existing images
+      const newImages = editEvent.images.filter(img => img.uri && !img._id)
       
       const response = await eventApi.updateEvent(
         selectedEvent._id,

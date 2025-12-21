@@ -8,6 +8,7 @@ export const getAllEvents = async () => {
         const response = await axios.get(API_URL)
         return response.data
     } catch (error) {
+        console.error('Get all events error:', error.message)
         throw error.response?.data || { message: 'Network error' }
     }
 }
@@ -18,6 +19,7 @@ export const getUpcomingEvents = async () => {
         const response = await axios.get(`${API_URL}/upcoming`)
         return response.data
     } catch (error) {
+        console.error('Get upcoming events error:', error.message)
         throw error.response?.data || { message: 'Network error' }
     }
 }
@@ -28,6 +30,7 @@ export const getPastEvents = async () => {
         const response = await axios.get(`${API_URL}/past`)
         return response.data
     } catch (error) {
+        console.error('Get past events error:', error.message)
         throw error.response?.data || { message: 'Network error' }
     }
 }
@@ -38,6 +41,7 @@ export const getEventById = async (id) => {
         const response = await axios.get(`${API_URL}/${id}`)
         return response.data
     } catch (error) {
+        console.error('Get event by ID error:', error.message)
         throw error.response?.data || { message: 'Network error' }
     }
 }
@@ -54,35 +58,63 @@ export const createEvent = async (eventData, images = []) => {
         
         // Add images
         images.forEach((image, index) => {
-            // Check if image is a file object or URI
             if (image.uri) {
+                // Extract filename from URI
                 const filename = image.uri.split('/').pop()
-                const match = /\.(\w+)$/.exec(filename)
-                const type = match ? `image/${match[1]}` : 'image/jpeg'
+                // Get file extension
+                const fileExtension = filename.split('.').pop()
+                const type = `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}`
                 
                 formData.append('images', {
                     uri: image.uri,
                     type: type,
-                    name: `event-${Date.now()}-${index}.jpg`
+                    name: filename || `event-image-${Date.now()}-${index}.jpg`
                 })
             }
+        })
+        
+        console.log('Creating event with:', {
+            title: eventData.title,
+            date: eventData.date,
+            imageCount: images.length
         })
         
         const response = await axios.post(API_URL, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
+            timeout: 30000, // 30 second timeout
         })
         
+        console.log('Create event response:', response.data)
         return response.data
     } catch (error) {
-        throw error.response?.data || { message: 'Network error' }
+        console.error('Create event error details:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status,
+            url: API_URL
+        })
+        throw error.response?.data || { 
+            message: error.message || 'Network error',
+            details: 'Check server connection and CORS configuration'
+        }
     }
 }
 
 // Update event
 export const updateEvent = async (id, eventData, newImages = [], imagesToRemove = []) => {
     try {
+        console.log('=== Starting update event ===')
+        console.log('Event ID:', id)
+        console.log('Event data:', {
+            title: eventData.title,
+            date: eventData.date,
+            descriptionLength: eventData.description.length
+        })
+        console.log('New images count:', newImages.length)
+        console.log('Images to remove:', imagesToRemove)
+        
         const formData = new FormData()
         
         // Add event data
@@ -90,36 +122,88 @@ export const updateEvent = async (id, eventData, newImages = [], imagesToRemove 
         formData.append('date', eventData.date.toISOString())
         formData.append('description', eventData.description)
         
-        // Add images to remove as JSON string
+        // Add images to remove if any
         if (imagesToRemove.length > 0) {
+            console.log('Adding images to remove:', imagesToRemove)
             formData.append('imagesToRemove', JSON.stringify(imagesToRemove))
         }
         
         // Add new images
-        newImages.forEach((image, index) => {
-            // Check if image is a file object or URI
-            if (image.uri) {
-                const filename = image.uri.split('/').pop()
-                const match = /\.(\w+)$/.exec(filename)
-                const type = match ? `image/${match[1]}` : 'image/jpeg'
-                
-                formData.append('images', {
-                    uri: image.uri,
-                    type: type,
-                    name: `event-${Date.now()}-${index}.jpg`
-                })
-            }
-        })
+        if (newImages.length > 0) {
+            newImages.forEach((image, index) => {
+                if (image.uri) {
+                    // Extract filename from URI
+                    let filename = image.uri.split('/').pop()
+                    if (!filename) {
+                        filename = `event-image-${Date.now()}-${index}.jpg`
+                    }
+                    
+                    // Get file extension
+                    const fileExtension = filename.split('.').pop().toLowerCase()
+                    const mimeType = fileExtension === 'jpg' || fileExtension === 'jpeg' 
+                        ? 'image/jpeg' 
+                        : fileExtension === 'png' 
+                            ? 'image/png' 
+                            : fileExtension === 'gif'
+                                ? 'image/gif'
+                                : 'image/jpeg'
+                    
+                    console.log(`Adding image ${index + 1}:`, {
+                        filename,
+                        mimeType,
+                        size: image.fileSize || 'unknown'
+                    })
+                    
+                    // Create file object
+                    const fileObject = {
+                        uri: image.uri,
+                        type: mimeType,
+                        name: filename
+                    }
+                    
+                    formData.append('images', fileObject)
+                }
+            })
+        } else {
+            console.log('No new images to add')
+        }
+        
+        // Log FormData contents for debugging
+        console.log('FormData contents:')
+        for (let pair of formData.entries()) {
+            console.log(pair[0] + ': ' + 
+                (typeof pair[1] === 'object' && pair[1].uri 
+                    ? `[File: ${pair[1].name}]` 
+                    : pair[1])
+            )
+        }
         
         const response = await axios.put(`${API_URL}/${id}`, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
+            timeout: 60000, // 60 second timeout for large images
         })
         
+        console.log('Update event successful:', response.data)
         return response.data
     } catch (error) {
-        throw error.response?.data || { message: 'Network error' }
+        console.error('=== Update event failed ===')
+        console.error('Error:', error.message)
+        console.error('Error code:', error.code)
+        console.error('Error response:', error.response?.data)
+        console.error('Error status:', error.response?.status)
+        console.error('Request URL:', `${API_URL}/${id}`)
+        
+        if (error.code === 'ECONNABORTED') {
+            throw { message: 'Request timeout. Please try again.' }
+        }
+        
+        throw error.response?.data || { 
+            message: error.message || 'Network error',
+            code: error.code,
+            details: 'Please check server connection and ensure server is running'
+        }
     }
 }
 
@@ -129,6 +213,7 @@ export const deleteEvent = async (id) => {
         const response = await axios.delete(`${API_URL}/${id}`)
         return response.data
     } catch (error) {
+        console.error('Delete event error:', error.message)
         throw error.response?.data || { message: 'Network error' }
     }
 }

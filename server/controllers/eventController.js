@@ -83,90 +83,216 @@ exports.createEvent = async (req, res) => {
 
 exports.updateEvent = async (req, res) => {
     try {
-        const { title, date, description, imagesToRemove } = req.body
+        console.log('=== UPDATE EVENT REQUEST ===');
+        console.log('Request params:', req.params);
+        console.log('Request body keys:', Object.keys(req.body));
+        console.log('Title from body:', req.body.title);
+        console.log('Date from body:', req.body.date);
+        console.log('Description from body:', req.body.description);
+        console.log('ImagesToRemove from body (raw):', req.body.imagesToRemove);
         
-        let event = await Event.findById(req.params.id)
+        // Check if files were uploaded
+        if (req.files) {
+            console.log(`Number of uploaded files: ${req.files.length}`);
+            req.files.forEach((file, index) => {
+                console.log(`File ${index + 1}:`, {
+                    originalname: file.originalname,
+                    mimetype: file.mimetype,
+                    size: file.size,
+                    filename: file.filename
+                });
+            });
+        } else {
+            console.log('No files uploaded');
+        }
+        
+        const { title, date, description, imagesToRemove } = req.body;
+        
+        // Find the event
+        let event = await Event.findById(req.params.id);
         
         if (!event) {
+            console.log('Event not found for ID:', req.params.id);
             return res.status(404).json({ 
                 success: false, 
                 message: 'Event not found' 
-            })
+            });
         }
         
-        let newImages = [...event.images]
+        console.log('Found event:', {
+            id: event._id,
+            title: event.title,
+            currentImagesCount: event.images.length
+        });
         
-        // Parse imagesToRemove if it's a string
-        let imagesToRemoveArray = []
+        // Start with existing images
+        let newImages = [...event.images];
+        console.log('Initial images array length:', newImages.length);
+        
+        // Parse imagesToRemove if it exists
+        let imagesToRemoveArray = [];
         try {
             if (imagesToRemove) {
                 if (typeof imagesToRemove === 'string') {
-                    imagesToRemoveArray = JSON.parse(imagesToRemove)
+                    console.log('Parsing imagesToRemove as JSON string');
+                    imagesToRemoveArray = JSON.parse(imagesToRemove);
                 } else if (Array.isArray(imagesToRemove)) {
-                    imagesToRemoveArray = imagesToRemove
+                    console.log('imagesToRemove is already an array');
+                    imagesToRemoveArray = imagesToRemove;
                 }
+                console.log('Parsed imagesToRemoveArray:', imagesToRemoveArray);
+                console.log('Length of imagesToRemoveArray:', imagesToRemoveArray.length);
+            } else {
+                console.log('No imagesToRemove provided');
             }
         } catch (parseError) {
-            console.error('Error parsing imagesToRemove:', parseError)
+            console.error('Error parsing imagesToRemove:', parseError);
+            console.error('imagesToRemove value that caused error:', imagesToRemove);
         }
         
         // Remove images that need to be deleted
         if (imagesToRemoveArray.length > 0) {
-            const imagesToKeep = []
-            const publicIdsToDelete = []
+            console.log('Processing images to remove...');
+            const imagesToKeep = [];
+            const publicIdsToDelete = [];
             
             for (const image of newImages) {
-                const shouldRemove = imagesToRemoveArray.some(removeId => 
-                    removeId === image._id?.toString() || removeId === image.publicId
-                )
+                console.log('Checking image:', {
+                    _id: image._id,
+                    publicId: image.publicId,
+                    url: image.url ? image.url.substring(0, 50) + '...' : 'no url'
+                });
+                
+                const shouldRemove = imagesToRemoveArray.some(removeId => {
+                    const matchById = image._id && removeId === image._id.toString();
+                    const matchByPublicId = image.publicId && removeId === image.publicId;
+                    return matchById || matchByPublicId;
+                });
+                
+                console.log(`Should remove image ${image._id}: ${shouldRemove}`);
                 
                 if (shouldRemove) {
                     if (image.publicId) {
-                        publicIdsToDelete.push(image.publicId)
+                        console.log(`Adding to deletion queue: ${image.publicId}`);
+                        publicIdsToDelete.push(image.publicId);
+                    } else {
+                        console.log('Image has no publicId, skipping Cloudinary deletion');
                     }
                 } else {
-                    imagesToKeep.push(image)
+                    console.log(`Keeping image: ${image._id}`);
+                    imagesToKeep.push(image);
                 }
             }
             
             // Delete images from Cloudinary in parallel
             if (publicIdsToDelete.length > 0) {
-                await cloudinaryUtils.deleteMultipleFromCloudinary(publicIdsToDelete)
+                console.log(`Deleting ${publicIdsToDelete.length} images from Cloudinary...`);
+                try {
+                    await cloudinaryUtils.deleteMultipleFromCloudinary(publicIdsToDelete);
+                    console.log('Successfully deleted images from Cloudinary');
+                } catch (cloudinaryError) {
+                    console.error('Error deleting from Cloudinary:', cloudinaryError);
+                }
+            } else {
+                console.log('No publicIds to delete from Cloudinary');
             }
             
-            newImages = imagesToKeep
+            newImages = imagesToKeep;
+            console.log(`After removal: ${newImages.length} images remain`);
+        } else {
+            console.log('No images to remove, keeping all existing images');
         }
         
         // Add new images
         if (req.files && req.files.length > 0) {
+            console.log(`Adding ${req.files.length} new images...`);
             for (const file of req.files) {
-                const uploadResult = await cloudinaryUtils.uploadToCloudinary(file.path)
-                newImages.push({
-                    url: uploadResult.url,
-                    publicId: uploadResult.publicId
-                })
+                try {
+                    console.log(`Uploading file to Cloudinary: ${file.originalname}`);
+                    const uploadResult = await cloudinaryUtils.uploadToCloudinary(file.path);
+                    console.log('Upload successful:', {
+                        url: uploadResult.url ? uploadResult.url.substring(0, 50) + '...' : 'no url',
+                        publicId: uploadResult.publicId
+                    });
+                    newImages.push({
+                        url: uploadResult.url,
+                        publicId: uploadResult.publicId
+                    });
+                } catch (uploadError) {
+                    console.error(`Error uploading file ${file.originalname}:`, uploadError);
+                }
             }
+            console.log(`After adding new images: ${newImages.length} total images`);
+        } else {
+            console.log('No new images to add');
         }
         
-        // Update event
-        event = await Event.findByIdAndUpdate(
+        // Prepare update data
+        const updateData = {
+            title: title || event.title,
+            description: description || event.description,
+            images: newImages
+        };
+        
+        // Handle date - ensure it's a valid Date object
+        if (date) {
+            try {
+                updateData.date = new Date(date);
+                console.log('Updated date:', updateData.date);
+            } catch (dateError) {
+                console.error('Invalid date format:', date);
+                updateData.date = event.date;
+            }
+        } else {
+            updateData.date = event.date;
+        }
+        
+        console.log('Final update data:', {
+            title: updateData.title,
+            date: updateData.date,
+            descriptionLength: updateData.description.length,
+            imagesCount: updateData.images.length
+        });
+        
+        // Update event in database
+        const updatedEvent = await Event.findByIdAndUpdate(
             req.params.id,
-            {
-                title: title || event.title,
-                date: date ? new Date(date) : event.date,
-                description: description || event.description,
-                images: newImages
-            },
+            updateData,
             { new: true, runValidators: true }
-        )
+        );
+        
+        console.log('Event updated successfully:', {
+            id: updatedEvent._id,
+            title: updatedEvent.title,
+            finalImagesCount: updatedEvent.images.length
+        });
         
         res.status(200).json({
             success: true,
             message: 'Event updated successfully',
-            data: event
-        })
+            data: updatedEvent
+        });
+        
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message })
+        console.error('=== UPDATE EVENT ERROR ===');
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+        
+        // Check for specific error types
+        if (error.name === 'ValidationError') {
+            console.error('Validation errors:', error.errors);
+        }
+        if (error.name === 'CastError') {
+            console.error('Cast error for ID:', req.params.id);
+        }
+        
+        res.status(500).json({ 
+            success: false, 
+            message: error.message || 'Internal server error',
+            errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    } finally {
+        console.log('=== UPDATE REQUEST COMPLETED ===');
     }
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   View,
   StyleSheet,
@@ -26,6 +26,9 @@ import GalleryModal from './GalleryModal'
 import { ThemedInput } from '@/components/ui/themed-input'
 import DateTimePicker from '@react-native-community/datetimepicker'
 import * as ImagePicker from 'expo-image-picker'
+import { ToastNotification } from '@/components/ui/ToastNotification'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import eventApi from '@/api/eventApi'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -36,7 +39,7 @@ export default function Events({ visible, onClose }) {
   const [selectedEventImages, setSelectedEventImages] = useState([])
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const [initialViewMode, setInitialViewMode] = useState('grid')
-  const [galleryTitle, setGalleryTitle] = useState('') // Store gallery title separately
+  const [galleryTitle, setGalleryTitle] = useState('')
   
   // Event Modals State
   const [addModalVisible, setAddModalVisible] = useState(false)
@@ -58,78 +61,18 @@ export default function Events({ visible, onClose }) {
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [datePickerType, setDatePickerType] = useState('add')
 
-  // Calendar Events State
-  const [calendarEvents, setCalendarEvents] = useState([
-    { 
-      id: 1, 
-      title: 'Winter Holiday Starts', 
-      date: '2025-12-20', 
-      description: 'School closed for winter holidays from Dec 20 to Jan 5', 
-      images: [
-        { uri: 'https://picsum.photos/300/200?random=21' },
-        { uri: 'https://picsum.photos/300/200?random=22' },
-        { uri: 'https://picsum.photos/300/200?random=23' },
-        { uri: 'https://picsum.photos/300/200?random=24' }
-      ] 
-    },
-    { 
-      id: 2, 
-      title: 'Staff Meeting', 
-      date: '2025-12-17', 
-      description: 'Important staff meeting to discuss annual plans and curriculum updates', 
-      images: [] 
-    },
-    { 
-      id: 3, 
-      title: 'Sports Day', 
-      date: '2025-12-15', 
-      description: 'Annual sports event with various competitions and prize distribution', 
-      images: [
-        { uri: 'https://picsum.photos/300/200?random=25' },
-        { uri: 'https://picsum.photos/300/200?random=26' },
-        { uri: 'https://picsum.photos/300/200?random=27' },
-        { uri: 'https://picsum.photos/300/200?random=28' },
-        { uri: 'https://picsum.photos/300/200?random=29' }
-      ] 
-    },
-    { 
-      id: 4, 
-      title: 'Parent-Teacher Meeting', 
-      date: '2025-12-10', 
-      description: 'PTM for all classes from 9 AM to 12 PM', 
-      images: [
-        { uri: 'https://picsum.photos/300/200?random=30' },
-        { uri: 'https://picsum.photos/300/200?random=31' }
-      ] 
-    },
-    { 
-      id: 5, 
-      title: 'Christmas Celebration', 
-      date: '2025-12-25', 
-      description: 'Christmas celebration with cultural programs and Santa Claus visit', 
-      images: [
-        { uri: 'https://picsum.photos/300/200?random=32' },
-        { uri: 'https://picsum.photos/300/200?random=33' },
-        { uri: 'https://picsum.photos/300/200?random=34' },
-        { uri: 'https://picsum.photos/300/200?random=35' }
-      ] 
-    },
-    { 
-      id: 6, 
-      title: 'Science Exhibition', 
-      date: '2025-11-20', 
-      description: 'Annual science exhibition showcasing student projects', 
-      images: [
-        { uri: 'https://picsum.photos/300/200?random=36' },
-        { uri: 'https://picsum.photos/300/200?random=37' },
-        { uri: 'https://picsum.photos/300/200?random=38' },
-        { uri: 'https://picsum.photos/300/200?random=39' },
-        { uri: 'https://picsum.photos/300/200?random=40' }
-      ] 
-    },
-  ])
+  // API States
+  const [calendarEvents, setCalendarEvents] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [actionLoading, setActionLoading] = useState(false)
+  const [toast, setToast] = useState({
+    visible: false,
+    type: 'info',
+    message: '',
+    position: 'bottom-center'
+  })
 
-  const currentDate = new Date('2025-12-17')
+  const currentDate = new Date()
 
   // Weekday colors
   const weekdayColors = [
@@ -477,6 +420,10 @@ export default function Events({ visible, onClose }) {
       alignItems: 'center',
       marginTop: 20,
       marginBottom: 30,
+      opacity: 1,
+    },
+    saveBtnDisabled: {
+      opacity: 0.6,
     },
     saveBtnText: {
       color: '#FFFFFF',
@@ -560,7 +507,44 @@ export default function Events({ visible, onClose }) {
       color: colors.textSecondary,
       textAlign: 'center',
     },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
   }), [colors])
+
+  // Show toast notification
+  const showToast = (type, message, position = 'bottom-right') => {
+    setToast({
+      visible: true,
+      type,
+      message,
+      position
+    })
+  }
+
+  // Hide toast notification
+  const hideToast = () => {
+    setToast(prev => ({ ...prev, visible: false }))
+  }
+
+  // Fetch events from API
+  const fetchEvents = async () => {
+    try {
+      setLoading(true)
+      const response = await eventApi.getAllEvents()
+      if (response.success) {
+        setCalendarEvents(response.data)
+      } else {
+        showToast('error', response.message || 'Failed to load events')
+      }
+    } catch (error) {
+      showToast('error', error.message || 'Network error')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Filter events
   const upcomingEvents = calendarEvents.filter(event => {
@@ -573,36 +557,50 @@ export default function Events({ visible, onClose }) {
     return eventDate <= currentDate
   }).sort((a, b) => new Date(b.date) - new Date(a.date))
 
+  // Load events when component mounts or tab changes
+  useEffect(() => {
+    if (visible) {
+      fetchEvents()
+    }
+  }, [visible])
+
   // Event handlers
   const pickImages = async (isAdd) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
-    if (status !== 'granted') {
-      Alert.alert('Permission required', 'Please grant permission to access photos')
-      return
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,
-      quality: 1,
-    })
-
-    if (!result.canceled) {
-      const newImages = result.assets.map(asset => ({
-        uri: asset.uri
-      }))
-      
-      if (isAdd) {
-        setNewEvent(prev => ({
-          ...prev,
-          images: [...prev.images, ...newImages]
-        }))
-      } else {
-        setEditEvent(prev => ({
-          ...prev,
-          images: [...prev.images, ...newImages]
-        }))
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      if (status !== 'granted') {
+        Alert.alert('Permission required', 'Please grant permission to access photos')
+        return
       }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        quality: 0.8,
+        selectionLimit: 10,
+      })
+
+      if (!result.canceled) {
+        const newImages = result.assets.map(asset => ({
+          uri: asset.uri,
+          name: asset.fileName || `image_${Date.now()}.jpg`,
+          type: 'image/jpeg'
+        }))
+        
+        if (isAdd) {
+          setNewEvent(prev => ({
+            ...prev,
+            images: [...prev.images, ...newImages]
+          }))
+        } else {
+          setEditEvent(prev => ({
+            ...prev,
+            images: [...prev.images, ...newImages]
+          }))
+        }
+      }
+    } catch (error) {
+      showToast('error', 'Failed to pick images')
     }
   }
 
@@ -618,68 +616,151 @@ export default function Events({ visible, onClose }) {
     }
   }
 
-  const handleAddEvent = () => {
+  const handleAddEvent = async () => {
     if (!newEvent.title.trim()) {
-      Alert.alert('Error', 'Please enter event title')
+      showToast('warning', 'Please enter event title')
       return
     }
     
     if (!newEvent.description.trim()) {
-      Alert.alert('Error', 'Please enter event description')
+      showToast('warning', 'Please enter event description')
       return
     }
 
-    const eventDate = new Date(newEvent.date)
-    const newEventObj = {
-      id: Date.now(),
-      title: newEvent.title.trim(),
-      date: eventDate.toISOString().split('T')[0],
-      description: newEvent.description.trim(),
-      images: newEvent.images
+    try {
+      setActionLoading(true)
+      const response = await eventApi.createEvent(newEvent, newEvent.images)
+      console.log(response.data)
+      if (response.success) {
+        showToast('success', 'Event created successfully!')
+        setCalendarEvents(prev => [response.data, ...prev])
+        setNewEvent({ title: '', date: new Date(), description: '', images: [] })
+        setAddModalVisible(false)
+      } else {
+        showToast('error', response.message || 'Failed to create event')
+      }
+    } catch (error) {
+      showToast('error', error.message || 'Failed to create event')
+    } finally {
+      setActionLoading(false)
     }
-
-    setCalendarEvents(prev => [...prev, newEventObj])
-    setNewEvent({ title: '', date: new Date(), description: '', images: [] })
-    setAddModalVisible(false)
-    Alert.alert('Success', 'Event added successfully!')
   }
 
-  const handleEditEvent = () => {
+  const handleEditEvent = async () => {
     if (!editEvent.title.trim()) {
-      Alert.alert('Error', 'Please enter event title')
+      showToast('warning', 'Please enter event title')
       return
     }
     
     if (!editEvent.description.trim()) {
-      Alert.alert('Error', 'Please enter event description')
+      showToast('warning', 'Please enter event description')
       return
     }
 
-    const eventDate = new Date(editEvent.date)
-    setCalendarEvents(prev => prev.map(e => 
-      e.id === selectedEvent.id 
-        ? { 
-            ...e, 
-            title: editEvent.title.trim(),
-            date: eventDate.toISOString().split('T')[0],
-            description: editEvent.description.trim(),
-            images: editEvent.images
-          } 
-        : e
-    ))
-    
-    setEditModalVisible(false)
-    setSelectedEvent(null)
-    Alert.alert('Success', 'Event updated successfully!')
+    try {
+      setActionLoading(true)
+      
+      // Determine which images to remove
+      // We need to compare the original images with the current ones
+      const existingImages = selectedEvent?.images || []
+      const currentImages = editEvent.images || []
+      
+      // Find images that were in existingImages but are not in currentImages
+      const imagesToRemove = []
+      
+      existingImages.forEach(existingImage => {
+        // Check if this image still exists in currentImages
+        const stillExists = currentImages.some(currentImage => {
+          // Compare by _id if both have it
+          if (existingImage._id && currentImage._id) {
+            return existingImage._id === currentImage._id
+          }
+          // Compare by publicId if both have it
+          if (existingImage.publicId && currentImage.publicId) {
+            return existingImage.publicId === currentImage.publicId
+          }
+          // Fallback: compare by URL
+          return existingImage.url === currentImage.url
+        })
+        
+        // If image doesn't exist in currentImages, mark it for removal
+        if (!stillExists) {
+          // Add the image ID to remove
+          if (existingImage._id) {
+            imagesToRemove.push(existingImage._id)
+          } else if (existingImage.publicId) {
+            imagesToRemove.push(existingImage.publicId)
+          }
+        }
+      })
+      
+      // Separate new images (without _id) from existing images
+      const newImages = editEvent.images.filter(img => !img._id && img.uri)
+      
+      console.log('Images to remove:', imagesToRemove)
+      console.log('New images to add:', newImages.length)
+      
+      const response = await eventApi.updateEvent(
+        selectedEvent._id,
+        {
+          title: editEvent.title,
+          date: editEvent.date,
+          description: editEvent.description
+        },
+        newImages,
+        imagesToRemove
+      )
+      
+      if (response.success) {
+        showToast('success', 'Event updated successfully!')
+        setCalendarEvents(prev => prev.map(e => 
+          e._id === selectedEvent._id ? response.data : e
+        ))
+        setEditModalVisible(false)
+        setSelectedEvent(null)
+        
+        // Reset edit event state
+        setEditEvent({ 
+          title: '', 
+          date: new Date(), 
+          description: '', 
+          images: [] 
+        })
+      } else {
+        showToast('error', response.message || 'Failed to update event')
+      }
+    } catch (error) {
+      console.error('Update event error:', error)
+      showToast('error', error.message || 'Failed to update event')
+    } finally {
+      setActionLoading(false)
+    }
   }
 
-  const handleDeleteEvent = (id) => {
+  const handleDeleteEvent = async (id) => {
     Alert.alert('Confirm Delete', 'Are you sure you want to delete this event?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => {
-        setCalendarEvents(prev => prev.filter(e => e.id !== id))
-        Alert.alert('Success', 'Event deleted successfully!')
-      }}
+      { 
+        text: 'Delete', 
+        style: 'destructive', 
+        onPress: async () => {
+          try {
+            setActionLoading(true)
+            const response = await eventApi.deleteEvent(id)
+            
+            if (response.success) {
+              showToast('success', 'Event deleted successfully!')
+              setCalendarEvents(prev => prev.filter(e => e._id !== id))
+            } else {
+              showToast('error', response.message || 'Failed to delete event')
+            }
+          } catch (error) {
+            showToast('error', error.message || 'Failed to delete event')
+          } finally {
+            setActionLoading(false)
+          }
+        }
+      }
     ])
   }
 
@@ -711,7 +792,7 @@ export default function Events({ visible, onClose }) {
     }
   }
 
-  // Render image grid (3 columns with overlay for more than 3 images)
+  // Render image grid
   const renderImageGrid = (images, isClickable = true, eventTitle = '') => {
     if (!images || images.length === 0) return null
 
@@ -736,7 +817,11 @@ export default function Events({ visible, onClose }) {
               }}
               activeOpacity={isClickable ? 0.7 : 1}
             >
-              <Image source={{ uri: img.uri }} style={styles.image} />
+              <Image 
+                source={{ uri: img.url || img.uri }} 
+                style={styles.image}
+                resizeMode="cover"
+              />
               
               {index === 2 && extraCount > 0 && (
                 <View style={styles.extraImagesOverlay}>
@@ -750,7 +835,7 @@ export default function Events({ visible, onClose }) {
     )
   }
 
-  // Render event card (clickable container - removed view button)
+  // Render event card
   const renderEventCard = (event) => {
     const eventDate = new Date(event.date)
     const isPast = eventDate <= currentDate
@@ -777,7 +862,7 @@ export default function Events({ visible, onClose }) {
             <View style={[styles.dateBadge, { backgroundColor: borderColor + '20' }]}>
               <MaterialCommunityIcons name="calendar" size={14} color={borderColor} />
               <ThemedText style={[styles.dateBadgeText, { color: borderColor }]}>
-                {event.date}
+                {event.formattedDate || event.date.split('T')[0]}
               </ThemedText>
             </View>
           </View>
@@ -791,7 +876,7 @@ export default function Events({ visible, onClose }) {
           {hasImages && renderImageGrid(event.images, true, event.title)}
         </View>
 
-        {/* Event Footer with actions (edit/delete for both past and upcoming) */}
+        {/* Event Footer with actions */}
         <View style={styles.eventFooter}>
           <View style={[styles.eventStatusBadge, { borderColor: statusColor }]}>
             <ThemedText style={[styles.eventStatus, { color: statusColor }]}>
@@ -802,13 +887,15 @@ export default function Events({ visible, onClose }) {
             <TouchableOpacity
               style={[styles.actionBtn, styles.editAction]}
               onPress={() => openEditEvent(event)}
+              disabled={actionLoading}
             >
               <Feather name="edit-2" size={14} color="#FFFFFF" />
               <ThemedText style={styles.actionText}>Edit</ThemedText>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionBtn, styles.deleteAction]}
-              onPress={() => handleDeleteEvent(event.id)}
+              onPress={() => handleDeleteEvent(event._id)}
+              disabled={actionLoading}
             >
               <Feather name="trash-2" size={14} color="#FFFFFF" />
               <ThemedText style={styles.actionText}>Delete</ThemedText>
@@ -822,6 +909,14 @@ export default function Events({ visible, onClose }) {
   // Render event list
   const renderEventList = () => {
     const events = activeTab === 'upcoming' ? upcomingEvents : pastEvents
+
+    if (loading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <LoadingSpinner size={40} color={colors.primary} message="Loading events..." />
+        </View>
+      )
+    }
 
     if (events.length === 0) {
       return (
@@ -838,14 +933,16 @@ export default function Events({ visible, onClose }) {
       <FlatList
         data={events}
         renderItem={({ item }) => renderEventCard(item)}
-        keyExtractor={item => item.id.toString()}
+        keyExtractor={item => item._id}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshing={loading}
+        onRefresh={fetchEvents}
       />
     )
   }
 
-  // Render modal header (matching main header design)
+  // Render modal header
   const ModalHeader = ({ title, subtitle, onClose }) => (
     <LinearGradient
       colors={[colors?.gradientStart || '#3b82f6', colors?.gradientEnd || '#1d4ed8']}
@@ -853,7 +950,11 @@ export default function Events({ visible, onClose }) {
     >
       <SafeAreaView edges={['top']}>
         <View style={styles.modalHeaderRow}>
-          <TouchableOpacity style={styles.modalCloseBtn} onPress={onClose}>
+          <TouchableOpacity 
+            style={styles.modalCloseBtn} 
+            onPress={onClose}
+            disabled={actionLoading}
+          >
             <FontAwesome5 name="chevron-left" size={20} color="#FFFFFF" style={{ marginLeft: -2 }} />
           </TouchableOpacity>
           <View style={styles.modalTitleContainer}>
@@ -862,14 +963,13 @@ export default function Events({ visible, onClose }) {
               <ThemedText style={styles.modalSubtitle}>{subtitle}</ThemedText>
             )}
           </View>
-          {/* Empty view for spacing */}
           <View style={{ width: 44 }} />
         </View>
       </SafeAreaView>
     </LinearGradient>
   )
 
-  // Render modal body for add/edit with improved design
+  // Render modal body for add/edit
   const renderEventModalBody = (isAdd, eventData, setEventData, handleSubmit) => {
     const images = eventData.images || []
     
@@ -885,6 +985,7 @@ export default function Events({ visible, onClose }) {
               placeholderTextColor={colors.textSecondary + '80'}
               value={eventData.title}
               onChangeText={(text) => setEventData({ ...eventData, title: text })}
+              editable={!actionLoading}
             />
           </View>
         </View>
@@ -894,9 +995,12 @@ export default function Events({ visible, onClose }) {
           <TouchableOpacity
             style={[styles.dateInput, { borderColor: colors.primary + '50' }]}
             onPress={() => {
-              setDatePickerType(isAdd ? 'add' : 'edit')
-              setShowDatePicker(true)
+              if (!actionLoading) {
+                setDatePickerType(isAdd ? 'add' : 'edit')
+                setShowDatePicker(true)
+              }
             }}
+            disabled={actionLoading}
           >
             <MaterialCommunityIcons name="calendar" size={20} color={colors.primary} />
             <ThemedText style={styles.dateText}>
@@ -932,6 +1036,7 @@ export default function Events({ visible, onClose }) {
               numberOfLines={5}
               value={eventData.description}
               onChangeText={(text) => setEventData({ ...eventData, description: text })}
+              editable={!actionLoading}
             />
           </View>
         </View>
@@ -948,23 +1053,21 @@ export default function Events({ visible, onClose }) {
             <View style={styles.imagesGrid}>
               {images.map((img, index) => (
                 <View key={index} style={styles.imageItemContainer}>
-                  <TouchableOpacity
-                    onPress={() => {}}
-                  >
-                    <Image
-                      source={{ uri: img.uri }}
-                      style={{
-                        width: (SCREEN_WIDTH - 80) / 3,
-                        height: 100,
-                        borderRadius: 8,
-                        borderWidth: 2,
-                        borderColor: colors.primary + '30',
-                      }}
-                    />
-                  </TouchableOpacity>
+                  <Image
+                    source={{ uri: img.url || img.uri }}
+                    style={{
+                      width: (SCREEN_WIDTH - 80) / 3,
+                      height: 100,
+                      borderRadius: 8,
+                      borderWidth: 2,
+                      borderColor: colors.primary + '30',
+                    }}
+                    resizeMode="cover"
+                  />
                   <TouchableOpacity
                     style={styles.removeImageBtn}
                     onPress={() => removeImage(index, isAdd)}
+                    disabled={actionLoading}
                   >
                     <Feather name="x" size={14} color="#FFFFFF" />
                   </TouchableOpacity>
@@ -973,6 +1076,7 @@ export default function Events({ visible, onClose }) {
               <TouchableOpacity 
                 style={styles.imagePickContainer} 
                 onPress={() => pickImages(isAdd)}
+                disabled={actionLoading}
               >
                 <Feather name="plus" size={28} color={colors.primary} />
               </TouchableOpacity>
@@ -981,6 +1085,7 @@ export default function Events({ visible, onClose }) {
             <TouchableOpacity 
               style={[styles.imagePickContainer, { width: '100%', height: 120 }]} 
               onPress={() => pickImages(isAdd)}
+              disabled={actionLoading}
             >
               <Feather name="image" size={32} color={colors.primary} />
               <ThemedText style={{ color: colors.primary, marginTop: 8, fontSize: 14 }}>
@@ -990,10 +1095,18 @@ export default function Events({ visible, onClose }) {
           )}
         </View>
 
-        <TouchableOpacity style={styles.saveBtn} onPress={handleSubmit}>
-          <ThemedText style={styles.saveBtnText}>
-            {isAdd ? 'Create Event' : 'Update Event'}
-          </ThemedText>
+        <TouchableOpacity 
+          style={[styles.saveBtn, actionLoading && styles.saveBtnDisabled]} 
+          onPress={handleSubmit}
+          disabled={actionLoading}
+        >
+          {actionLoading ? (
+            <LoadingSpinner size={20} color="#FFFFFF" />
+          ) : (
+            <ThemedText style={styles.saveBtnText}>
+              {isAdd ? 'Create Event' : 'Update Event'}
+            </ThemedText>
+          )}
         </TouchableOpacity>
       </ScrollView>
     )
@@ -1037,7 +1150,7 @@ export default function Events({ visible, onClose }) {
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                   <MaterialCommunityIcons name="calendar" size={16} color={borderColor} />
                   <ThemedText style={[styles.viewEventDate, { color: borderColor, marginLeft: 8 }]}>
-                    {selectedEvent.date}
+                    {selectedEvent.formattedDate || selectedEvent.date.split('T')[0]}
                   </ThemedText>
                 </View>
               </View>
@@ -1101,6 +1214,7 @@ export default function Events({ visible, onClose }) {
           }
         ]}
         onPress={() => setActiveTab(tab.key)}
+        disabled={loading}
       >
         <View style={styles.tabIconContainer}>
           <IconComponent
@@ -1156,6 +1270,7 @@ export default function Events({ visible, onClose }) {
                 <TouchableOpacity
                   style={styles.addButton}
                   onPress={() => setAddModalVisible(true)}
+                  disabled={loading || actionLoading}
                 >
                   <Feather name="plus" size={20} color="#FFFFFF" />
                 </TouchableOpacity>
@@ -1203,31 +1318,30 @@ export default function Events({ visible, onClose }) {
       <Modal 
         visible={addModalVisible} 
         animationType="slide"
-        onRequestClose={() => setAddModalVisible(false)}
+        onRequestClose={() => !actionLoading && setAddModalVisible(false)}
         statusBarTranslucent
       >
         <View style={styles.modalContainer}>
           <ModalHeader 
             title="Create New Event" 
             subtitle="Add details for new school event"
-            onClose={() => setAddModalVisible(false)} 
+            onClose={() => !actionLoading && setAddModalVisible(false)} 
           />
           {renderEventModalBody(true, newEvent, setNewEvent, handleAddEvent)}
         </View>
       </Modal>
 
-      {/* Edit Event Modal */}
       <Modal 
         visible={editModalVisible} 
         animationType="slide"
-        onRequestClose={() => setEditModalVisible(false)}
+        onRequestClose={() => !actionLoading && setEditModalVisible(false)}
         statusBarTranslucent
       >
         <View style={styles.modalContainer}>
           <ModalHeader 
             title="Edit Event" 
             subtitle="Update event details"
-            onClose={() => setEditModalVisible(false)} 
+            onClose={() => !actionLoading && setEditModalVisible(false)} 
           />
           {renderEventModalBody(false, editEvent, setEditEvent, handleEditEvent)}
         </View>
@@ -1235,6 +1349,15 @@ export default function Events({ visible, onClose }) {
 
       {/* View Event Modal */}
       {renderViewEventModal()}
+
+      {/* Toast Notification */}
+      <ToastNotification
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        position={toast.position}
+        onHide={hideToast}
+      />
     </>
   )
 }

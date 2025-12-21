@@ -4,15 +4,15 @@ const dotenv = require('dotenv')
 const cors = require('cors')
 const helmet = require('helmet')
 const morgan = require('morgan')
+const path = require('path')
 const authRoute = require('./routes/authRoute')
 const schoolRoute = require('./routes/schoolRoute')
-const studentRoute = require('./routes/studentRoute')
-const staffRoute = require('./routes/staffRoute')
-const classRoute = require('./routes/classRoute')
-const subjectRoute = require('./routes/subjectRoute')
+const eventRoute = require('./routes/eventRoute')
 
 const app = express()
 dotenv.config({ quiet: true })
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 
 const databaseConnection = () => {
   mongoose.connect(process.env.MONGOURI).then(() => {
@@ -33,10 +33,7 @@ app.use(morgan('dev'))
 
 app.use('/server/auth', authRoute)
 app.use('/server/school', schoolRoute)
-app.use('/server/students', studentRoute)
-app.use('/server/staff', staffRoute)
-app.use('/server/classes', classRoute)
-app.use('/server/subjects', subjectRoute)
+app.use('/server/events', eventRoute)
 
 app.use((error, req, res, next) => {
   const errorStatus = error.status || 500

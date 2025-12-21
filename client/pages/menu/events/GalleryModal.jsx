@@ -4,13 +4,13 @@ import {
   StyleSheet,
   Modal,
   Dimensions,
-  Image,
   TouchableOpacity,
   FlatList,
   ScrollView,
   Platform,
   StatusBar,
 } from 'react-native'
+import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { FontAwesome5, Feather, Ionicons } from '@expo/vector-icons'
 import { ThemedText } from '@/components/ui/themed-text'
@@ -475,7 +475,7 @@ const GalleryModal = ({
                   onPress={() => handleGridImagePress(absoluteIndex)}
                   activeOpacity={0.9}
                 >
-                  <Image source={{ uri: item.uri }} style={styles.gridImage} resizeMode="cover" />
+                  <Image source={{ uri: item.url }} style={styles.gridImage} contentFit="cover" />
                 </TouchableOpacity>
               )
             })}
@@ -544,7 +544,7 @@ const GalleryModal = ({
           {pics.map((pic, index) => (
             <View key={index} style={styles.singleImagePage}>
               <View style={styles.singleImageWrapper}>
-                <Image source={{ uri: pic.uri }} style={styles.singleImage} resizeMode="contain" />
+                <Image source={{ uri: pic.url }} style={styles.singleImage} contentFit="contain" />
               </View>
             </View>
           ))}

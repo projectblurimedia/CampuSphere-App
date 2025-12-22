@@ -32,26 +32,24 @@ const eventSchema = new mongoose.Schema({
     timestamps: true
 })
 
-// Virtual for formatted date (YYYY-MM-DD)
 eventSchema.virtual('formattedDate').get(function() {
     return this.date.toISOString().split('T')[0]
 })
 
-// Virtual for checking if event is upcoming
 eventSchema.virtual('isUpcoming').get(function() {
     const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const eventDate = new Date(this.date)
-    return eventDate > now
+    return eventDate > todayStart
 })
 
-// Virtual for checking if event is past
 eventSchema.virtual('isPast').get(function() {
     const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const eventDate = new Date(this.date)
-    return eventDate <= now
+    return eventDate <= todayStart
 })
 
-// Indexes for better performance
 eventSchema.index({ date: 1 })
 eventSchema.index({ createdAt: -1 })
 

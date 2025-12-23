@@ -13,6 +13,17 @@ export const getAllEvents = async () => {
     }
 }
 
+// Get today's events
+export const getTodaysEvents = async () => {
+    try {
+        const response = await axios.get(`${API_URL}/today`)
+        return response.data
+    } catch (error) {
+        console.error('Get today\'s events error:', error.message)
+        throw error.response?.data || { message: 'Network error' }
+    }
+}
+
 // Get upcoming events
 export const getUpcomingEvents = async () => {
     try {
@@ -73,12 +84,6 @@ export const createEvent = async (eventData, images = []) => {
             }
         })
         
-        console.log('Creating event with:', {
-            title: eventData.title,
-            date: eventData.date,
-            imageCount: images.length
-        })
-        
         const response = await axios.post(API_URL, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
@@ -86,7 +91,6 @@ export const createEvent = async (eventData, images = []) => {
             timeout: 30000, // 30 second timeout
         })
         
-        console.log('Create event response:', response.data)
         return response.data
     } catch (error) {
         console.error('Create event error details:', {
@@ -105,16 +109,6 @@ export const createEvent = async (eventData, images = []) => {
 // Update event
 export const updateEvent = async (id, eventData, newImages = [], imagesToRemove = []) => {
     try {
-        console.log('=== Starting update event ===')
-        console.log('Event ID:', id)
-        console.log('Event data:', {
-            title: eventData.title,
-            date: eventData.date,
-            descriptionLength: eventData.description.length
-        })
-        console.log('New images count:', newImages.length)
-        console.log('Images to remove:', imagesToRemove)
-        
         const formData = new FormData()
         
         // Add event data
@@ -124,7 +118,6 @@ export const updateEvent = async (id, eventData, newImages = [], imagesToRemove 
         
         // Add images to remove if any
         if (imagesToRemove.length > 0) {
-            console.log('Adding images to remove:', imagesToRemove)
             formData.append('imagesToRemove', JSON.stringify(imagesToRemove))
         }
         
@@ -148,12 +141,6 @@ export const updateEvent = async (id, eventData, newImages = [], imagesToRemove 
                                 ? 'image/gif'
                                 : 'image/jpeg'
                     
-                    console.log(`Adding image ${index + 1}:`, {
-                        filename,
-                        mimeType,
-                        size: image.fileSize || 'unknown'
-                    })
-                    
                     // Create file object
                     const fileObject = {
                         uri: image.uri,
@@ -164,19 +151,8 @@ export const updateEvent = async (id, eventData, newImages = [], imagesToRemove 
                     formData.append('images', fileObject)
                 }
             })
-        } else {
-            console.log('No new images to add')
         }
         
-        // Log FormData contents for debugging
-        console.log('FormData contents:')
-        for (let pair of formData.entries()) {
-            console.log(pair[0] + ': ' + 
-                (typeof pair[1] === 'object' && pair[1].uri 
-                    ? `[File: ${pair[1].name}]` 
-                    : pair[1])
-            )
-        }
         
         const response = await axios.put(`${API_URL}/${id}`, formData, {
             headers: {
@@ -185,7 +161,6 @@ export const updateEvent = async (id, eventData, newImages = [], imagesToRemove 
             timeout: 60000, // 60 second timeout for large images
         })
         
-        console.log('Update event successful:', response.data)
         return response.data
     } catch (error) {
         console.error('=== Update event failed ===')
@@ -220,6 +195,7 @@ export const deleteEvent = async (id) => {
 
 export default {
     getAllEvents,
+    getTodaysEvents,
     getUpcomingEvents,
     getPastEvents,
     getEventById,

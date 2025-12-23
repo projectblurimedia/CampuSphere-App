@@ -1,9 +1,11 @@
+// routes/eventRoutes.js
 const express = require('express')
 const router = express.Router()
 const {
     getAllEvents,
     getUpcomingEvents,
     getPastEvents,
+    getTodaysEvents,
     getEventById,
     createEvent,
     updateEvent,
@@ -14,12 +16,14 @@ const {
 
 const upload = require('../middleware/uploadMiddleware')
 
-// Event Routes
+// Event retrieval routes
 router.get('/', getAllEvents)
 router.get('/upcoming', getUpcomingEvents)
 router.get('/past', getPastEvents)
+router.get('/today', getTodaysEvents)
 router.get('/:id', getEventById)
 
+// Event CRUD routes
 router.post('/', upload.array('images', 10), createEvent)
 router.put('/:id', upload.array('images', 10), updateEvent)
 router.delete('/:id', deleteEvent)

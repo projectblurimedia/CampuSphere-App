@@ -1,3 +1,4 @@
+// models/Event.js
 const mongoose = require('mongoose')
 
 const eventSchema = new mongoose.Schema({
@@ -37,21 +38,38 @@ eventSchema.virtual('formattedDate').get(function() {
     return this.date.toISOString().split('T')[0]
 })
 
-// Virtual for checking if event is upcoming
+// Virtual for checking if event is upcoming (strictly after today)
 eventSchema.virtual('isUpcoming').get(function() {
-    const now = new Date()
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
     const eventDate = new Date(this.date)
-    return eventDate > now
+    eventDate.setHours(0, 0, 0, 0)
+    return eventDate >= tomorrow
 })
 
-// Virtual for checking if event is past
+// Virtual for checking if event is past (strictly before today)
 eventSchema.virtual('isPast').get(function() {
-    const now = new Date()
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
     const eventDate = new Date(this.date)
-    return eventDate <= now
+    eventDate.setHours(0, 0, 0, 0)
+    return eventDate < today
 })
 
-// Indexes for better performance
+// Virtual for checking if event is today
+eventSchema.virtual('isToday').get(function() {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const eventDate = new Date(this.date)
+    eventDate.setHours(0, 0, 0, 0)
+    return eventDate >= today && eventDate < tomorrow
+})
+
+// Indexes for better performance on date-based queries
 eventSchema.index({ date: 1 })
 eventSchema.index({ createdAt: -1 })
 

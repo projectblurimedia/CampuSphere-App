@@ -1,21 +1,21 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useCallback, useMemo } from 'react'
 import {
   View,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   Platform,
   Dimensions,
-  Modal,
-  Image,
   TextInput,
   Animated,
+  ActivityIndicator,
+  Modal,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
 import DateTimePicker from '@react-native-community/datetimepicker'
+import * as ImagePicker from 'expo-image-picker'
 import {
   FontAwesome5,
   Feather,
@@ -25,8 +25,58 @@ import {
   Ionicons,
 } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
+import { ToastNotification } from '@/components/ui/ToastNotification'
+import axiosApi from '@/utils/axiosApi'
+import { Image } from 'expo-image'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
+
+// Custom Input Component - Fixed keyboard issue
+const CustomInput = React.memo(({
+  value,
+  onChangeText,
+  placeholder,
+  keyboardType,
+  multiline,
+  numberOfLines,
+  style,
+  ...props
+}) => {
+  const { colors } = useTheme()
+  
+  return (
+    <TextInput
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor={colors.textSecondary}
+      keyboardType={keyboardType}
+      multiline={multiline}
+      numberOfLines={numberOfLines}
+      style={[
+        {
+          flex: 1,
+          height: '100%',
+          fontSize: 15,
+          color: colors.text,
+          paddingVertical: 0,
+          paddingRight: 10,
+          margin: 0,
+          fontFamily: 'Poppins-Medium'
+        },
+        multiline && {
+          height: '100%',
+          textAlignVertical: 'top',
+          paddingTop: 0,
+        },
+        style,
+      ]}
+      cursorColor="#1d9bf0"
+      selectionColor="#1d9bf0"
+      {...props}
+    />
+  )
+})
 
 // Custom Dropdown Component
 const CustomDropdown = ({
@@ -219,7 +269,7 @@ export default function CreateStudent({ visible, onClose }) {
     firstName: '',
     lastName: '',
     dob: new Date(),
-    academicYear: '2024-2025',
+    academicYear: '',
     class: '1',
     section: 'A',
     admissionNo: '',
@@ -236,67 +286,182 @@ export default function CreateStudent({ visible, onClose }) {
   const [selectedSection, setSelectedSection] = useState('A')
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [profilePic, setProfilePic] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [toast, setToast] = useState(null)
 
-  const handleSave = () => {
-    if (formData.firstName && formData.lastName && formData.admissionNo && formData.parentPhone) {
-      Alert.alert('Success', 'Student created successfully!', [{ text: 'OK', onPress: onClose }])
-      setFormData({
-        firstName: '',
-        lastName: '',
-        dob: new Date(),
-        academicYear: '2024-2025',
-        class: '1',
-        section: 'A',
-        admissionNo: '',
-        rollNo: '',
-        address: '',
-        village: '',
-        parentName: '',
-        parentPhone: '',
-        parentPhone2: '',
-        parentEmail: '',
-      })
-      setSelectedClass('1')
-      setSelectedSection('A')
-      setProfilePic(null)
-    } else {
-      Alert.alert('Error', 'Please fill required fields')
+  const currentYear = new Date().getFullYear()
+  const academicYears = useMemo(() => 
+    Array.from({ length: 10 }, (_, i) => {
+      const start = currentYear - 2 + i
+      return { label: `${start}-${start + 1}`, value: `${start}-${start + 1}` }
+    }), [currentYear]
+  )
+
+  const classes = useMemo(() => 
+    Array.from({ length: 12 }, (_, i) => ({
+      label: `Class ${i + 1}`,
+      value: `${i + 1}`
+    })), []
+  )
+
+  const sections = useMemo(() => 
+    ['A', 'B', 'C', 'D', 'E'].map(sec => ({
+      label: `Section ${sec}`,
+      value: sec
+    })), []
+  )
+
+  const updateFormData = useCallback((updates) => {
+    setFormData(prev => ({ ...prev, ...updates }))
+  }, [])
+
+  // Show toast notification
+  const showToast = useCallback((message, type = 'error') => {
+    setToast({ message, type })
+  }, [])
+
+  // Hide toast notification
+  const hideToast = useCallback(() => {
+    setToast(null)
+  }, [])
+
+  const handleProfilePic = useCallback(async () => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!permissionResult.granted) {
+      showToast('Gallery access is required to select images.', 'error')
+      return
     }
-  }
 
-  const onDateChange = (event, selectedDate) => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    })
+
+    if (!result.canceled) {
+      setProfilePic(result.assets[0].uri)
+    }
+  }, [showToast])
+
+  const handleSave = useCallback(async () => {
+    if (!formData.firstName || !formData.lastName || !formData.admissionNo || !formData.parentPhone || !formData.academicYear) {
+      showToast('Please fill all required fields', 'error')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const formDataToSend = new FormData()
+      formDataToSend.append('firstName', formData.firstName)
+      formDataToSend.append('lastName', formData.lastName)
+      formDataToSend.append('dob', formData.dob.toISOString())
+      formDataToSend.append('academicYear', formData.academicYear)
+      formDataToSend.append('class', selectedClass)
+      formDataToSend.append('section', selectedSection)
+      formDataToSend.append('admissionNo', formData.admissionNo)
+      formDataToSend.append('rollNo', formData.rollNo)
+      formDataToSend.append('address', formData.address)
+      formDataToSend.append('village', formData.village)
+      formDataToSend.append('parentName', formData.parentName)
+      formDataToSend.append('parentPhone', formData.parentPhone)
+      formDataToSend.append('parentPhone2', formData.parentPhone2)
+      formDataToSend.append('parentEmail', formData.parentEmail)
+
+      if (profilePic) {
+        const uriParts = profilePic.split('.')
+        const fileType = uriParts[uriParts.length - 1]
+        formDataToSend.append('profilePic', {
+          uri: profilePic,
+          name: `profilePic.${fileType}`,
+          type: `image/${fileType}`,
+        })
+      }
+
+      const response = await axiosApi.post('/students', formDataToSend, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+
+      if (response.data.message === 'Student created successfully') {
+        showToast('Student created successfully!', 'success')
+        resetForm()
+        setTimeout(() => onClose(), 1500) // Delay close to show success toast
+      }
+    } catch (error) {
+      console.error('Create student error:', error)
+      let errorMessage = 'Failed to create student'
+      
+      if (error.response) {
+        errorMessage = error.response.data?.message || error.response.data?.error || 'Server error occurred'
+      } else if (error.request) {
+        errorMessage = 'No response from server. Check your internet connection.'
+      } else {
+        errorMessage = error.message || 'Failed to create student'
+      }
+      
+      showToast(errorMessage, 'error')
+    } finally {
+      setLoading(false)
+    }
+  }, [formData, selectedClass, selectedSection, profilePic, showToast, onClose, resetForm])
+
+  const resetForm = useCallback(() => {
+    setFormData({
+      firstName: '',
+      lastName: '',
+      dob: new Date(),
+      academicYear: '',
+      class: '1',
+      section: 'A',
+      admissionNo: '',
+      rollNo: '',
+      address: '',
+      village: '',
+      parentName: '',
+      parentPhone: '',
+      parentPhone2: '',
+      parentEmail: '',
+    })
+    setSelectedClass('1')
+    setSelectedSection('A')
+    setProfilePic(null)
+  }, [])
+
+  const onDateChange = useCallback((event, selectedDate) => {
     setShowDatePicker(Platform.OS === 'ios')
     if (selectedDate) {
-      setFormData({ ...formData, dob: selectedDate })
+      updateFormData({ dob: selectedDate })
     }
-  }
+  }, [updateFormData])
 
-  const handleProfilePic = () => {
-    Alert.alert('Profile Pic', 'Select from gallery or camera', [
-      { text: 'Cancel' },
-      { text: 'Gallery', onPress: () => console.log('Open gallery') },
-      { text: 'Camera', onPress: () => console.log('Open camera') },
-    ])
-  }
+  const onClassSelect = useCallback((value) => {
+    setSelectedClass(value)
+    updateFormData({ class: value })
+  }, [updateFormData])
 
-  const academicYears = [
-    { label: '2023-2024', value: '2023-2024' },
-    { label: '2024-2025', value: '2024-2025' },
-    { label: '2025-2026', value: '2025-2026' },
-    { label: '2026-2027', value: '2026-2027' },
-  ]
+  const onSectionSelect = useCallback((value) => {
+    setSelectedSection(value)
+    updateFormData({ section: value })
+  }, [updateFormData])
 
-  const classes = Array.from({ length: 12 }, (_, i) => ({
-    label: `Class ${i + 1}`,
-    value: `${i + 1}`
-  }))
+  const onAcademicYearSelect = useCallback((value) => {
+    updateFormData({ academicYear: value })
+  }, [updateFormData])
 
-  const sections = ['A', 'B', 'C', 'D', 'E'].map(sec => ({
-    label: `Section ${sec}`,
-    value: sec
-  }))
+  const onFirstNameChange = useCallback((text) => updateFormData({ firstName: text }), [updateFormData])
+  const onLastNameChange = useCallback((text) => updateFormData({ lastName: text }), [updateFormData])
+  const onAdmissionNoChange = useCallback((text) => updateFormData({ admissionNo: text }), [updateFormData])
+  const onRollNoChange = useCallback((text) => updateFormData({ rollNo: text }), [updateFormData])
+  const onAddressChange = useCallback((text) => updateFormData({ address: text }), [updateFormData])
+  const onVillageChange = useCallback((text) => updateFormData({ village: text }), [updateFormData])
+  const onParentNameChange = useCallback((text) => updateFormData({ parentName: text }), [updateFormData])
+  const onParentPhoneChange = useCallback((text) => updateFormData({ parentPhone: text }), [updateFormData])
+  const onParentPhone2Change = useCallback((text) => updateFormData({ parentPhone2: text }), [updateFormData])
+  const onParentEmailChange = useCallback((text) => updateFormData({ parentEmail: text }), [updateFormData])
 
-  const styles = StyleSheet.create({
+  const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
@@ -481,12 +646,15 @@ export default function CreateStudent({ visible, onClose }) {
       overflow: 'hidden',
     },
     saveBtnGradient: {
-      paddingVertical: 13,
-      paddingHorizontal: 18,
       alignItems: 'center',
       justifyContent: 'center',
     },
     saveBtnPressable: {
+      flex: 1,
+      paddingVertical: 13,
+      paddingHorizontal: 18,
+      width: '100%',
+      height: '100%',
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
@@ -496,31 +664,17 @@ export default function CreateStudent({ visible, onClose }) {
       fontSize: 16,
       marginLeft: 8,
     },
-  })
+  }), [colors])
 
-  // Custom Input component that properly fills its container
-  const CustomInput = ({ value, onChangeText, placeholder, keyboardType, multiline, numberOfLines, style, ...props }) => (
-    <TextInput
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={colors.textSecondary}
-      keyboardType={keyboardType}
-      multiline={multiline}
-      numberOfLines={numberOfLines}
-      style={[
-        styles.textInput,
-        multiline && styles.multilineInput,
-        style,
-      ]}
-      cursorColor="#1d9bf0"
-      selectionColor="#1d9bf0"
-      {...props}
-    />
-  )
+  const handleClose = useCallback(() => {
+    if (!loading) {
+      resetForm()
+      onClose()
+    }
+  }, [loading, resetForm, onClose])
 
   return (
-    <Modal visible={visible} animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={visible} animationType="fade" onRequestClose={handleClose} statusBarTranslucent>
       <View style={styles.container}>
         <LinearGradient
           colors={[colors.gradientStart, colors.gradientEnd]}
@@ -528,7 +682,11 @@ export default function CreateStudent({ visible, onClose }) {
         >
           <SafeAreaView edges={['top']}>
             <View style={styles.headerRow}>
-              <TouchableOpacity style={styles.backButton} onPress={onClose}>
+              <TouchableOpacity 
+                style={[styles.backButton, loading && { opacity: 0.5 }]} 
+                onPress={handleClose}
+                disabled={loading}
+              >
                 <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
               </TouchableOpacity>
               <View style={{ flex: 1, alignItems: 'center' }}>
@@ -540,7 +698,12 @@ export default function CreateStudent({ visible, onClose }) {
           </SafeAreaView>
         </LinearGradient>
 
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <ScrollView 
+          style={styles.scrollView} 
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.card}>
             {/* PERSONAL DETAILS */}
             <View style={styles.formGroup}>
@@ -552,7 +715,7 @@ export default function CreateStudent({ visible, onClose }) {
               </View>
 
               <View style={styles.profilePicContainer}>
-                <TouchableOpacity onPress={handleProfilePic} activeOpacity={0.8}>
+                <TouchableOpacity onPress={handleProfilePic} activeOpacity={0.8} disabled={loading}>
                   <LinearGradient
                     colors={[colors.gradientStart, colors.gradientEnd]}
                     style={styles.profilePicOuter}
@@ -577,7 +740,8 @@ export default function CreateStudent({ visible, onClose }) {
                 <CustomInput
                   placeholder="Enter first name"
                   value={formData.firstName}
-                  onChangeText={(text) => setFormData({ ...formData, firstName: text })}
+                  onChangeText={onFirstNameChange}
+                  editable={!loading}
                 />
               </View>
 
@@ -587,7 +751,8 @@ export default function CreateStudent({ visible, onClose }) {
                 <CustomInput
                   placeholder="Enter last name"
                   value={formData.lastName}
-                  onChangeText={(text) => setFormData({ ...formData, lastName: text })}
+                  onChangeText={onLastNameChange}
+                  editable={!loading}
                 />
               </View>
 
@@ -600,11 +765,12 @@ export default function CreateStudent({ visible, onClose }) {
                 />
                 <TouchableOpacity
                   style={styles.dateTouchable}
-                  onPress={() => setShowDatePicker(true)}
+                  onPress={() => !loading && setShowDatePicker(true)}
                   activeOpacity={0.8}
+                  disabled={loading}
                 >
                   <ThemedText style={styles.dateText}>
-                    {formData.dob.toDateString()}
+                    {formData.dob.toLocaleDateString()}
                   </ThemedText>
                 </TouchableOpacity>
                 {showDatePicker && (
@@ -632,30 +798,27 @@ export default function CreateStudent({ visible, onClose }) {
               <CustomDropdown
                 value={formData.academicYear}
                 items={academicYears}
-                onSelect={(value) => setFormData({ ...formData, academicYear: value })}
+                onSelect={onAcademicYearSelect}
                 placeholder="Select Academic Year"
+                style={loading ? { opacity: 0.5 } : {}}
               />
 
               <ThemedText style={styles.fieldLabel}>Class</ThemedText>
               <CustomDropdown
                 value={selectedClass}
                 items={classes}
-                onSelect={(value) => {
-                  setSelectedClass(value)
-                  setFormData({ ...formData, class: value })
-                }}
+                onSelect={onClassSelect}
                 placeholder="Select Class"
+                style={loading ? { opacity: 0.5 } : {}}
               />
 
               <ThemedText style={styles.fieldLabel}>Section</ThemedText>
               <CustomDropdown
                 value={selectedSection}
                 items={sections}
-                onSelect={(value) => {
-                  setSelectedSection(value)
-                  setFormData({ ...formData, section: value })
-                }}
+                onSelect={onSectionSelect}
                 placeholder="Select Section"
+                style={loading ? { opacity: 0.5 } : {}}
               />
 
               <ThemedText style={styles.fieldLabel}>Admission Number *</ThemedText>
@@ -664,8 +827,9 @@ export default function CreateStudent({ visible, onClose }) {
                 <CustomInput
                   placeholder="Enter admission number"
                   value={formData.admissionNo}
-                  onChangeText={(text) => setFormData({ ...formData, admissionNo: text })}
+                  onChangeText={onAdmissionNoChange}
                   keyboardType="numeric"
+                  editable={!loading}
                 />
               </View>
 
@@ -675,8 +839,9 @@ export default function CreateStudent({ visible, onClose }) {
                 <CustomInput
                   placeholder="Enter roll number"
                   value={formData.rollNo}
-                  onChangeText={(text) => setFormData({ ...formData, rollNo: text })}
+                  onChangeText={onRollNoChange}
                   keyboardType="numeric"
+                  editable={!loading}
                 />
               </View>
             </View>
@@ -700,10 +865,11 @@ export default function CreateStudent({ visible, onClose }) {
                 <CustomInput
                   placeholder="Enter full address"
                   value={formData.address}
-                  onChangeText={(text) => setFormData({ ...formData, address: text })}
+                  onChangeText={onAddressChange}
                   multiline
                   numberOfLines={3}
                   style={styles.multilineInput}
+                  editable={!loading}
                 />
               </View>
 
@@ -713,7 +879,8 @@ export default function CreateStudent({ visible, onClose }) {
                 <CustomInput
                   placeholder="Enter village / town"
                   value={formData.village}
-                  onChangeText={(text) => setFormData({ ...formData, village: text })}
+                  onChangeText={onVillageChange}
+                  editable={!loading}
                 />
               </View>
             </View>
@@ -737,7 +904,8 @@ export default function CreateStudent({ visible, onClose }) {
                 <CustomInput
                   placeholder="Enter parent / guardian name"
                   value={formData.parentName}
-                  onChangeText={(text) => setFormData({ ...formData, parentName: text })}
+                  onChangeText={onParentNameChange}
+                  editable={!loading}
                 />
               </View>
 
@@ -747,8 +915,9 @@ export default function CreateStudent({ visible, onClose }) {
                 <CustomInput
                   placeholder="Enter parent phone number"
                   value={formData.parentPhone}
-                  onChangeText={(text) => setFormData({ ...formData, parentPhone: text })}
+                  onChangeText={onParentPhoneChange}
                   keyboardType="phone-pad"
+                  editable={!loading}
                 />
               </View>
 
@@ -758,8 +927,9 @@ export default function CreateStudent({ visible, onClose }) {
                 <CustomInput
                   placeholder="Enter alternate phone number"
                   value={formData.parentPhone2}
-                  onChangeText={(text) => setFormData({ ...formData, parentPhone2: text })}
+                  onChangeText={onParentPhone2Change}
                   keyboardType="phone-pad"
+                  editable={!loading}
                 />
               </View>
 
@@ -769,9 +939,10 @@ export default function CreateStudent({ visible, onClose }) {
                 <CustomInput
                   placeholder="Enter parent email"
                   value={formData.parentEmail}
-                  onChangeText={(text) => setFormData({ ...formData, parentEmail: text })}
+                  onChangeText={onParentEmailChange}
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  editable={!loading}
                 />
               </View>
             </View>
@@ -790,14 +961,32 @@ export default function CreateStudent({ visible, onClose }) {
               <TouchableOpacity
                 onPress={handleSave}
                 activeOpacity={0.9}
-                style={styles.saveBtnPressable}
+                style={[styles.saveBtnPressable, loading && { opacity: 0.5 }]}
+                disabled={loading}
               >
-                <FontAwesome5 name="check-circle" size={18} color="#FFFFFF" />
-                <ThemedText style={styles.saveBtnText}>Save Student</ThemedText>
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <FontAwesome5 name="check-circle" size={18} color="#FFFFFF" />
+                )}
+                <ThemedText style={styles.saveBtnText}>
+                  {loading ? 'Saving...' : 'Save Student'}
+                </ThemedText>
               </TouchableOpacity>
             </LinearGradient>
           </View>
         </View>
+
+        {/* Toast Notification */}
+        <ToastNotification
+          visible={!!toast}
+          type={toast?.type}
+          message={toast?.message}
+          onHide={hideToast}
+          position="bottom-center"
+          duration={3000}
+          showCloseButton={true}
+        />
       </View>
     </Modal>
   )

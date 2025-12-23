@@ -8,6 +8,7 @@ const path = require('path')
 const authRoute = require('./routes/authRoute')
 const schoolRoute = require('./routes/schoolRoute')
 const eventRoute = require('./routes/eventRoute')
+const studentRoute = require('./routes/studentRoute')
 
 const app = express()
 dotenv.config({ quiet: true })
@@ -31,9 +32,11 @@ app.use(cors({
 }))
 app.use(morgan('dev'))
 
+
 app.use('/server/auth', authRoute)
 app.use('/server/school', schoolRoute)
 app.use('/server/events', eventRoute)
+app.use('/server/students', studentRoute)
 
 app.use((error, req, res, next) => {
   const errorStatus = error.status || 500

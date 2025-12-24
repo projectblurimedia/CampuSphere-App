@@ -25,8 +25,11 @@ import SchoolProfile from '@/pages/menu/schoolProfile/SchoolProfile'
 import SchoolStats from '@/pages/menu/schoolStats/SchoolStats'
 import Events from '@/pages/menu/events/Events'
 import CreateStudent from '@/pages/menu/createStudent/CreateStudent'
+import CreateStaff from '@/pages/menu/createStaff/CreateStaff'
 import Attendance from '@/pages/menu/attendance/Attendance'
 import CollectFees from '@/pages/menu/collectFees/CollectFees'
+import BulkImportStudents from '@/pages/menu/bulkImportStudents/BulkImportStudents'
+import BulkImportStaff from '@/pages/menu/bulkImportStaff/BulkImportStaff'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
@@ -35,13 +38,16 @@ export default function DashboardMenu({ visible, onClose }) {
   const [themeModalVisible, setThemeModalVisible] = useState(false)
   const [schoolProfileVisible, setSchoolProfileVisible] = useState(false)
   const [schoolStatsVisible, setSchoolStatsVisible] = useState(false)
-  const [eventsVisible, setEventsVisible] = useState(false) // CHANGED
+  const [eventsVisible, setEventsVisible] = useState(false)
   const [createStudentVisible, setCreateStudentVisible] = useState(false)
+  const [createStaffVisible, setCreateStaffVisible] = useState(false)
   const [markAttendanceVisible, setMarkAttendanceVisible] = useState(false)
   const [collectFeesVisible, setCollectFeesVisible] = useState(false)
+  const [bulkImportStudentsVisible, setBulkImportStudentsVisible] = useState(false)
+  const [bulkImportStaffVisible, setBulkImportStaffVisible] = useState(false)
   const translateX = useRef(new Animated.Value(SCREEN_WIDTH)).current
   const backdropOpacity = useRef(new Animated.Value(0)).current
-
+  
   useEffect(() => {
     if (visible) {
       Animated.parallel([
@@ -86,11 +92,11 @@ export default function DashboardMenu({ visible, onClose }) {
     },
     { 
       id: 2, 
-      title: 'Events', // CHANGED: Merged title
-      icon: 'calendar-star', // NEW: Changed icon
+      title: 'Events',
+      icon: 'calendar-star',
       iconType: 'MaterialCommunityIcons', 
       gradient: ['#10b981', '#059669'], 
-      action: () => setEventsVisible(true) // CHANGED
+      action: () => setEventsVisible(true)
     },
     { 
       id: 3, 
@@ -109,7 +115,31 @@ export default function DashboardMenu({ visible, onClose }) {
       action: () => setCreateStudentVisible(true) 
     },
     { 
-      id: 5, 
+      id: 5,
+      title: 'Bulk Import Students', 
+      icon: 'file-import', 
+      iconType: 'FontAwesome5', 
+      gradient: ['#10b981', '#059669'], 
+      action: () => setBulkImportStudentsVisible(true) 
+    },
+    { 
+      id: 6, 
+      title: 'New Staff', 
+      icon: 'user-tie', 
+      iconType: 'FontAwesome5', 
+      gradient: ['#8b5cf6', '#7c3aed'], 
+      action: () => setCreateStaffVisible(true) 
+    },
+    { 
+      id: 7,
+      title: 'Bulk Import Staff', 
+      icon: 'users', 
+      iconType: 'FontAwesome5', 
+      gradient: ['#f59e0b', '#d97706'], 
+      action: () => setBulkImportStaffVisible(true) 
+    },
+    { 
+      id: 8, 
       title: 'Mark Attendance', 
       icon: 'clipboard-check', 
       iconType: 'MaterialCommunityIcons', 
@@ -117,7 +147,7 @@ export default function DashboardMenu({ visible, onClose }) {
       action: () => setMarkAttendanceVisible(true) 
     },
     { 
-      id: 6, 
+      id: 9, 
       title: 'Collect Fees', 
       icon: 'dollar-sign', 
       iconType: 'FontAwesome5', 
@@ -164,12 +194,24 @@ export default function DashboardMenu({ visible, onClose }) {
     setSchoolStatsVisible(false)
   }
 
-  const handleEventsClose = () => { // CHANGED
+  const handleEventsClose = () => {
     setEventsVisible(false)
   }
 
   const handleCreateStudentClose = () => {
     setCreateStudentVisible(false)
+  }
+
+  const handleCreateStaffClose = () => {
+    setCreateStaffVisible(false)
+  }
+
+  const handleBulkImportStudentsClose = () => {
+    setBulkImportStudentsVisible(false)
+  }
+
+  const handleBulkImportStaffClose = () => {
+    setBulkImportStaffVisible(false)
   }
 
   const handleMarkAttendanceClose = () => {
@@ -247,7 +289,7 @@ export default function DashboardMenu({ visible, onClose }) {
             >
               <View style={styles.section}>
                 <ThemedText type='subtitle' style={[styles.sectionTitle, { color: colors.text }]}>
-                  Menu Details
+                  Management
                 </ThemedText>
                 <View style={styles.items}>
                   {menuItems.map((item) => (
@@ -340,7 +382,6 @@ export default function DashboardMenu({ visible, onClose }) {
         visible={schoolStatsVisible}
         onClose={handleSchoolStatsClose}
       />
-      {/* NEW: Single component for Events & Calendar */}
       <Events
         visible={eventsVisible}
         onClose={handleEventsClose}
@@ -348,6 +389,18 @@ export default function DashboardMenu({ visible, onClose }) {
       <CreateStudent
         visible={createStudentVisible}
         onClose={handleCreateStudentClose}
+      />
+      <BulkImportStudents
+        visible={bulkImportStudentsVisible}
+        onClose={handleBulkImportStudentsClose}
+      />
+      <CreateStaff
+        visible={createStaffVisible}
+        onClose={handleCreateStaffClose}
+      />
+      <BulkImportStaff
+        visible={bulkImportStaffVisible}
+        onClose={handleBulkImportStaffClose}
       />
       <Attendance
         visible={markAttendanceVisible}

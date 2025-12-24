@@ -1,32 +1,21 @@
 const express = require('express')
 const router = express.Router()
 const studentController = require('../controllers/studentController')
+const bulkImportController = require('../controllers/bulkImportController')
 
-// POST /api/students - Create new student
-router.post('/', studentController.createStudent)
-
-// GET /api/students - Get all students
-router.get('/', studentController.getAllStudents)
-
-// GET /api/students/:id - Get student by ID
+router.get('', studentController.getAllStudents)
+router.get('/search', studentController.searchStudents)
+router.get('/statistics', studentController.getStudentStatistics)
 router.get('/:id', studentController.getStudentById)
-
-// PUT /api/students/:id - Update student
+router.post('/', studentController.createStudent)
 router.put('/:id', studentController.updateStudent)
-
-// DELETE /api/students/:id - Delete student
 router.delete('/:id', studentController.deleteStudent)
 
-// POST /api/students/:id/promote - Promote student
-router.post('/:id/promote', studentController.promoteStudent)
-
-// POST /api/students/batch-promote - Batch promote students
+router.put('/:id/promote', studentController.promoteStudent)
 router.post('/batch-promote', studentController.batchPromoteStudents)
 
-// GET /api/students/search - Search students
-router.get('/search', studentController.searchStudents)
-
-// GET /api/students/statistics - Get student statistics
-router.get('/statistics', studentController.getStudentStatistics)
+router.get('/download-template', bulkImportController.downloadExcelTemplate)
+router.post('/bulk-import', bulkImportController.bulkImportStudents)
+router.post('/test-import', bulkImportController.testImport)
 
 module.exports = router

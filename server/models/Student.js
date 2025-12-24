@@ -23,7 +23,7 @@ const studentSchema = new mongoose.Schema({
   class: {
     type: Number,
     required: [true, 'Class is required'],
-    min: 1,
+    min: 0,
     max: 12,
   },
   section: {

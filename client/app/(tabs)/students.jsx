@@ -1,142 +1,68 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   StyleSheet, 
   View, 
   ScrollView, 
-  FlatList,
+  ActivityIndicator,
 } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { useTheme } from '@/hooks/useTheme'
 import SearchBar from '@/components/students/search-bar'
-import StatsCards from '@/components/students/stats-cards'
 import ClassGroup from '@/components/students/class-group'
-import StudentCard from '@/components/students/student-card'
-import QuickActions from '@/components/students/quick-actions'
-
-const studentsData = [
-  {
-    id: '1',
-    name: 'Aarav Sharma',
-    class: 'Class 12 - Science',
-    rollNo: '12A001',
-    attendance: '95%',
-    fees: 'Paid',
-    parent: 'Mr. Ramesh Sharma',
-    contact: '+91 9876543210'
-  },
-  {
-    id: '2',
-    name: 'Priya Patel',
-    class: 'Class 12 - Science',
-    rollNo: '12A002',
-    attendance: '92%',
-    fees: 'Pending',
-    parent: 'Mrs. Sunita Patel',
-    contact: '+91 9876543211'
-  },
-  {
-    id: '3',
-    name: 'Rohan Verma',
-    class: 'Class 12 - Science',
-    rollNo: '12A003',
-    attendance: '98%',
-    fees: 'Paid',
-    parent: 'Mr. Amit Verma',
-    contact: '+91 9876543212'
-  },
-  {
-    id: '4',
-    name: 'Sneha Reddy',
-    class: 'Class 11 - Commerce',
-    rollNo: '11C001',
-    attendance: '90%',
-    fees: 'Paid',
-    parent: 'Mr. Rajesh Reddy',
-    contact: '+91 9876543213'
-  },
-  {
-    id: '5',
-    name: 'Kunal Mehta',
-    class: 'Class 11 - Commerce',
-    rollNo: '11C002',
-    attendance: '88%',
-    fees: 'Pending',
-    parent: 'Mrs. Anita Mehta',
-    contact: '+91 9876543214'
-  },
-  {
-    id: '6',
-    name: 'Anjali Gupta',
-    class: 'Class 10',
-    rollNo: '10A001',
-    attendance: '96%',
-    fees: 'Paid',
-    parent: 'Mr. Sanjay Gupta',
-    contact: '+91 9876543215'
-  },
-  {
-    id: '7',
-    name: 'Vikram Singh',
-    class: 'Class 10',
-    rollNo: '10A002',
-    attendance: '94%',
-    fees: 'Paid',
-    parent: 'Mr. Raj Singh',
-    contact: '+91 9876543216'
-  },
-  {
-    id: '8',
-    name: 'Neha Kapoor',
-    class: 'Class 9',
-    rollNo: '9A001',
-    attendance: '91%',
-    fees: 'Pending',
-    parent: 'Mrs. Meera Kapoor',
-    contact: '+91 9876543217'
-  },
-]
-
-const groupedStudents = studentsData.reduce((acc, student) => {
-  if (!acc[student.class]) {
-    acc[student.class] = []
-  }
-  acc[student.class].push(student)
-  return acc
-}, {})
+import axiosApi from '@/utils/axiosApi'
 
 export default function Students() {
-  const { colors, isDark } = useTheme()
-  const [expandedClasses, setExpandedClasses] = useState([''])
+  const { colors } = useTheme()
+  const [classesSummary, setClassesSummary] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [academicYear, setAcademicYear] = useState('2024-2025')
   const [searchQuery, setSearchQuery] = useState('')
 
-  const dashboardColors = {
-    cardBg: isDark ? '#1e293b' : '#ffffff',
-    border: isDark ? '#334155' : '#e9ecef',
-    success: isDark ? '#34d399' : '#10b981',
-    warning: isDark ? '#fbbf24' : '#f59e0b',
-    info: isDark ? '#60a5fa' : '#3b82f6',
-    danger: isDark ? '#f87171' : '#ef4444',
-    purple: isDark ? '#a78bfa' : '#8b5cf6',
-  }
+  useEffect(() => {
+    fetchClassesSummary()
+  }, [academicYear])
 
-  const toggleClassExpansion = (className) => {
-    if (expandedClasses.includes(className)) {
-      setExpandedClasses(expandedClasses.filter(c => c !== className))
-    } else {
-      setExpandedClasses([...expandedClasses, className])
+  const fetchClassesSummary = async () => {
+    setLoading(true)
+    try {
+      const response = await axiosApi.get(`/students/classes-summary?academicYear=${academicYear}`)
+      if (response.data.success) {
+        setClassesSummary(response.data.data)
+      }
+    } catch (error) {
+      console.error('Error fetching classes summary:', error.response?.data || error.message)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const filteredStudents = searchQuery
-    ? studentsData.filter(student => 
-        student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        student.rollNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        student.class.toLowerCase().includes(searchQuery.toLowerCase())
+  const dashboardColors = {
+    cardBg: colors.cardBackground,
+    border: colors.border,
+    success: colors.success,
+    warning: colors.warning,
+    info: colors.primary,
+    danger: colors.danger,
+    purple: colors.purple,
+  }
+
+  const filteredClasses = searchQuery
+    ? classesSummary.filter(cls => 
+        cls.class.toString().toLowerCase().includes(searchQuery.toLowerCase()) ||
+        cls.totalCount.toString().includes(searchQuery)
       )
-    : studentsData
+    : classesSummary
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.tint} />
+      </View>
+    )
+  }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>      
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <SearchBar 
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -147,50 +73,17 @@ export default function Students() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <StatsCards 
-          studentsData={studentsData}
-          dashboardColors={dashboardColors}
-        />
-
-        <QuickActions 
-          dashboardColors={dashboardColors}
-        />
-
-        {searchQuery ? (
-          <View style={styles.searchResults}>
-            <ThemedText type='subtitle' style={[styles.resultsTitle, { color: colors.text }]}>
-              Search Results ({filteredStudents.length})
-            </ThemedText>
-            <FlatList
-              data={filteredStudents}
-              renderItem={({ item }) => (
-                <StudentCard 
-                  student={item} 
-                  dashboardColors={dashboardColors} 
-                />
-              )}
-              keyExtractor={item => item.id}
-              scrollEnabled={false}
+        <View style={styles.classGroupsContainer}>
+          {filteredClasses.map(classData => (
+            <ClassGroup 
+              key={classData.class}
+              classData={classData}
+              academicYear={academicYear}
+              dashboardColors={dashboardColors}
+              searchQuery={searchQuery}
             />
-          </View>
-        ) : (
-          <View style={styles.classGroupsContainer}>
-            <ThemedText style={[styles.sectionTitle, { color: colors.text }]}>
-              Students by Class
-            </ThemedText>
-            {Object.keys(groupedStudents).map(className => (
-              <ClassGroup 
-                key={className}
-                className={className}
-                students={groupedStudents[className]}
-                isExpanded={expandedClasses.includes(className)}
-                onToggle={toggleClassExpansion}
-                dashboardColors={dashboardColors}
-                searchQuery={searchQuery}
-              />
-            ))}
-          </View>
-        )}
+          ))}
+        </View>
       </ScrollView>
     </View>
   )
@@ -202,21 +95,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 100,
-    paddingHorizontal: 20,
-  },
-  searchResults: {
-    marginBottom: 20,
-  },
-  resultsTitle: {
-    fontSize: 18,
-    opacity: .8,
-    marginBottom: 16,
+    paddingHorizontal: 12,
   },
   classGroupsContainer: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    marginBottom: 16,
+    marginVertical: 10,
   },
 })

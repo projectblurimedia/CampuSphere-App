@@ -15,10 +15,15 @@ const studentSchema = new mongoose.Schema({
     type: Date,
     required: [true, 'Date of birth is required'],
   },
+  gender: {
+    type: String,
+    enum: ['Male', 'Female', 'Not Specified'],
+    default: 'Not Specified'
+  },
   academicYear: {
     type: String,
     required: [true, 'Academic year is required'],
-    enum: ['2023-2024', '2024-2025', '2025-2026', '2026-2027'], // Extend as needed
+    enum: ['2023-2024', '2024-2025', '2025-2026', '2026-2027'], 
   },
   class: {
     type: Number,
@@ -30,7 +35,7 @@ const studentSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Section is required'],
     uppercase: true,
-    enum: ['A', 'B', 'C', 'D', 'E'], // Extend as needed
+    enum: ['A', 'B', 'C', 'D', 'E'], 
   },
   admissionNo: {
     type: String,
@@ -80,6 +85,10 @@ const studentSchema = new mongoose.Schema({
         required: [true, 'Profile picture public ID is required']
       }
     },
+  },
+  originalClassName: {
+    type: String,
+    trim: true,
   },
   createdAt: {
     type: Date,

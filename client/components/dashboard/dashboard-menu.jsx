@@ -30,6 +30,7 @@ import Attendance from '@/pages/menu/attendance/Attendance'
 import CollectFees from '@/pages/menu/collectFees/CollectFees'
 import BulkImportStudents from '@/pages/menu/bulkImportStudents/BulkImportStudents'
 import BulkImportStaff from '@/pages/menu/bulkImportStaff/BulkImportStaff'
+import UploadMarks from '@/pages/menu/uploadMarks/UploadMarks'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
@@ -45,6 +46,7 @@ export default function DashboardMenu({ visible, onClose }) {
   const [collectFeesVisible, setCollectFeesVisible] = useState(false)
   const [bulkImportStudentsVisible, setBulkImportStudentsVisible] = useState(false)
   const [bulkImportStaffVisible, setBulkImportStaffVisible] = useState(false)
+  const [uploadMarksVisible, setUploadMarksVisible] = useState(false) // Add this state
   const translateX = useRef(new Animated.Value(SCREEN_WIDTH)).current
   const backdropOpacity = useRef(new Animated.Value(0)).current
   
@@ -148,6 +150,14 @@ export default function DashboardMenu({ visible, onClose }) {
     },
     { 
       id: 9, 
+      title: 'Upload Marks', // New menu item
+      icon: 'upload', 
+      iconType: 'Feather', 
+      gradient: ['#8b5cf6', '#7c3aed'], 
+      action: () => setUploadMarksVisible(true) 
+    },
+    { 
+      id: 10, 
       title: 'Collect Fees', 
       icon: 'dollar-sign', 
       iconType: 'FontAwesome5', 
@@ -220,6 +230,10 @@ export default function DashboardMenu({ visible, onClose }) {
 
   const handleCollectFeesClose = () => {
     setCollectFeesVisible(false)
+  }
+
+  const handleUploadMarksClose = () => {
+    setUploadMarksVisible(false)
   }
 
   return (
@@ -405,6 +419,10 @@ export default function DashboardMenu({ visible, onClose }) {
       <Attendance
         visible={markAttendanceVisible}
         onClose={handleMarkAttendanceClose}
+      />
+      <UploadMarks // Add this component
+        visible={uploadMarksVisible}
+        onClose={handleUploadMarksClose}
       />
       <CollectFees
         visible={collectFeesVisible}

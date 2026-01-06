@@ -6,48 +6,59 @@ import {
   Platform,
   StatusBar,
   Image,
-  Modal,
   Animated,
   Easing,
+  LayoutAnimation,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
-import { FontAwesome5, Ionicons, Feather, MaterialIcons, Entypo, AntDesign } from '@expo/vector-icons'
+import { FontAwesome5, Ionicons, Feather, MaterialIcons, Entypo } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 import { useState, useRef } from 'react'
 
 export default function Student({ student, onClose }) {
   const { colors } = useTheme()
-  const [selectedYear, setSelectedYear] = useState(0) // Default to current year (first in array)
+  const [selectedYear, setSelectedYear] = useState(0) 
   const [showMarks, setShowMarks] = useState(true)
   const [showFees, setShowFees] = useState(true)
+  const [showAttendance, setShowAttendance] = useState(true)
   const [showYearDropdown, setShowYearDropdown] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
   
   const marksAnimation = useRef(new Animated.Value(1)).current
   const feesAnimation = useRef(new Animated.Value(1)).current
+  const attendanceAnimation = useRef(new Animated.Value(1)).current
   const yearDropdownAnimation = useRef(new Animated.Value(0)).current
 
-  // Static data for demo
+  // Static data for demo - Now includes attendance for each academic year
   const academicYears = [
     {
       id: 1,
       year: '2023-2024',
       class: '11th Grade',
       marks: {
-        math: 85,
-        science: 78,
-        english: 92,
-        history: 88,
-        total: 343,
-        percentage: 85.75
+        subjects: [
+          { name: 'Mathematics', marks: 85, total: 100 },
+          { name: 'Science', marks: 78, total: 100 },
+          { name: 'English', marks: 92, total: 100 },
+          { name: 'History', marks: 88, total: 100 },
+          { name: 'Computer Science', marks: 95, total: 100 },
+        ],
+        total: 438,
+        percentage: 87.6
       },
       fees: {
         total: 25000,
         paid: 25000,
         pending: 0,
         status: 'Paid'
+      },
+      attendance: {
+        totalDays: 220,
+        presentDays: 195,
+        absentDays: 25,
+        percentage: 88.64
       }
     },
     {
@@ -55,18 +66,27 @@ export default function Student({ student, onClose }) {
       year: '2022-2023',
       class: '10th Grade',
       marks: {
-        math: 92,
-        science: 85,
-        english: 88,
-        history: 90,
-        total: 355,
-        percentage: 88.75
+        subjects: [
+          { name: 'Mathematics', marks: 92, total: 100 },
+          { name: 'Science', marks: 85, total: 100 },
+          { name: 'English', marks: 88, total: 100 },
+          { name: 'History', marks: 90, total: 100 },
+          { name: 'Social Studies', marks: 87, total: 100 },
+        ],
+        total: 442,
+        percentage: 88.4
       },
       fees: {
         total: 22000,
         paid: 22000,
         pending: 0,
         status: 'Paid'
+      },
+      attendance: {
+        totalDays: 210,
+        presentDays: 200,
+        absentDays: 10,
+        percentage: 95.24
       }
     },
     {
@@ -74,18 +94,27 @@ export default function Student({ student, onClose }) {
       year: '2021-2022',
       class: '9th Grade',
       marks: {
-        math: 78,
-        science: 82,
-        english: 85,
-        history: 80,
-        total: 325,
-        percentage: 81.25
+        subjects: [
+          { name: 'Mathematics', marks: 78, total: 100 },
+          { name: 'Science', marks: 82, total: 100 },
+          { name: 'English', marks: 85, total: 100 },
+          { name: 'History', marks: 80, total: 100 },
+          { name: 'Geography', marks: 88, total: 100 },
+        ],
+        total: 413,
+        percentage: 82.6
       },
       fees: {
         total: 20000,
         paid: 18000,
         pending: 2000,
         status: 'Pending'
+      },
+      attendance: {
+        totalDays: 200,
+        presentDays: 175,
+        absentDays: 25,
+        percentage: 87.5
       }
     }
   ]
@@ -97,57 +126,78 @@ export default function Student({ student, onClose }) {
     { id: 4, icon: 'assignment', label: 'View Reports', color: colors.info },
     { id: 5, icon: 'picture-as-pdf', label: 'Generate Report Card', color: colors.danger },
     { id: 6, icon: 'notifications', label: 'Send Notification', color: colors.tint },
+    { id: 7, icon: 'person-remove', label: 'Student Completed', color: colors.textSecondary },
   ]
 
   const toggleMarks = () => {
+    const toValue = showMarks ? 0 : 1
     Animated.timing(marksAnimation, {
-      toValue: showMarks ? 0 : 1,
+      toValue,
       duration: 300,
       easing: Easing.bezier(0.4, 0, 0.2, 1),
-      useNativeDriver: false,
+      useNativeDriver: true,
     }).start()
     setShowMarks(!showMarks)
   }
 
   const toggleFees = () => {
+    const toValue = showFees ? 0 : 1
     Animated.timing(feesAnimation, {
-      toValue: showFees ? 0 : 1,
+      toValue,
       duration: 300,
       easing: Easing.bezier(0.4, 0, 0.2, 1),
-      useNativeDriver: false,
+      useNativeDriver: true,
     }).start()
     setShowFees(!showFees)
   }
 
-  const toggleYearDropdown = () => {
-    Animated.timing(yearDropdownAnimation, {
-      toValue: showYearDropdown ? 0 : 1,
+  const toggleAttendance = () => {
+    const toValue = showAttendance ? 0 : 1
+    Animated.timing(attendanceAnimation, {
+      toValue,
       duration: 300,
       easing: Easing.bezier(0.4, 0, 0.2, 1),
-      useNativeDriver: false,
+      useNativeDriver: true,
+    }).start()
+    setShowAttendance(!showAttendance)
+  }
+
+  const toggleYearDropdown = () => {
+    const toValue = showYearDropdown ? 0 : 1
+    Animated.timing(yearDropdownAnimation, {
+      toValue,
+      duration: 300,
+      easing: Easing.bezier(0.4, 0, 0.2, 1),
+      useNativeDriver: true,
     }).start()
     setShowYearDropdown(!showYearDropdown)
   }
 
   const handleYearSelect = (index) => {
     setSelectedYear(index)
+    // Reset all sections to be expanded when year changes
+    setShowMarks(true)
+    setShowFees(true)
+    setShowAttendance(true)
+    
+    // Reset animations
+    marksAnimation.setValue(1)
+    feesAnimation.setValue(1)
+    attendanceAnimation.setValue(1)
+    
     toggleYearDropdown()
   }
 
-  const marksHeight = marksAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 280] // Increased from 240 to 280 to prevent cutting
-  })
-
-  const feesHeight = feesAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 160]
-  })
-
-  const dropdownHeight = yearDropdownAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, academicYears.length * 50]
-  })
+  const handleMoreAction = (action) => {
+    setShowMoreMenu(false)
+    console.log(`Action: ${action.label}`)
+    
+    if (action.id === 7) { // Student Completed action
+      // Add your logic for student completion here
+      console.log('Student marked as completed for this school')
+      // You can show an alert or navigate to another screen
+    }
+  }
 
   const dynamicStyles = {
     infoItem: {
@@ -189,7 +239,6 @@ export default function Student({ student, onClose }) {
       borderWidth: 1,
       borderColor: colors.border,
       marginBottom: 12,
-      paddingBottom: 10,
       overflow: 'hidden',
     },
     feesSection: {
@@ -197,6 +246,15 @@ export default function Student({ student, onClose }) {
       borderRadius: 12,
       borderWidth: 1,
       borderColor: colors.border,
+      marginBottom: 12,
+      overflow: 'hidden',
+    },
+    attendanceSection: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 12,
       overflow: 'hidden',
     },
     sectionHeader: {
@@ -215,6 +273,16 @@ export default function Student({ student, onClose }) {
       borderBottomColor: `${colors.border}20`,
     },
     feesStatus: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: `${colors.background}80`,
+      padding: 12,
+      borderRadius: 8,
+      marginHorizontal: 16,
+      marginVertical: 8,
+    },
+    attendanceStats: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
@@ -298,10 +366,11 @@ export default function Student({ student, onClose }) {
   }
 
   const renderYearDropdown = () => (
-    <Animated.View style={[styles.dropdownContainer, { height: dropdownHeight }]}>
+    <View style={[styles.dropdownContainer, { marginBottom: 16 }]}>
       <ScrollView 
         showsVerticalScrollIndicator={false}
         style={styles.dropdownScroll}
+        nestedScrollEnabled
       >
         {academicYears.map((year, index) => (
           <TouchableOpacity
@@ -333,7 +402,7 @@ export default function Student({ student, onClose }) {
           </TouchableOpacity>
         ))}
       </ScrollView>
-    </Animated.View>
+    </View>
   )
 
   const renderMarksSection = () => {
@@ -362,34 +431,27 @@ export default function Student({ student, onClose }) {
           </Animated.View>
         </TouchableOpacity>
         
-        <Animated.View style={{ height: marksHeight, overflow: 'hidden' }}>
-          <ScrollView 
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 16 }} // Added padding at bottom
-          >
+        {showMarks && (
+          <View style={{ paddingBottom: 8 }}>
             <View style={{ paddingHorizontal: 16 }}>
-              <View style={dynamicStyles.marksItem}>
-                <ThemedText style={[styles.marksLabel, { color: colors.textSecondary }]}>Mathematics</ThemedText>
-                <ThemedText style={[styles.marksValue, { color: colors.text }]}>{year.marks.math}/100</ThemedText>
-              </View>
-              <View style={dynamicStyles.marksItem}>
-                <ThemedText style={[styles.marksLabel, { color: colors.textSecondary }]}>Science</ThemedText>
-                <ThemedText style={[styles.marksValue, { color: colors.text }]}>{year.marks.science}/100</ThemedText>
-              </View>
-              <View style={dynamicStyles.marksItem}>
-                <ThemedText style={[styles.marksLabel, { color: colors.textSecondary }]}>English</ThemedText>
-                <ThemedText style={[styles.marksValue, { color: colors.text }]}>{year.marks.english}/100</ThemedText>
-              </View>
-              <View style={dynamicStyles.marksItem}>
-                <ThemedText style={[styles.marksLabel, { color: colors.textSecondary }]}>History</ThemedText>
-                <ThemedText style={[styles.marksValue, { color: colors.text }]}>{year.marks.history}/100</ThemedText>
-              </View>
-              <View style={[styles.totalContainer, { marginTop: 16 }]}>
+              {year.marks.subjects.map((subject, index) => (
+                <View key={index} style={dynamicStyles.marksItem}>
+                  <ThemedText style={[styles.marksLabel, { color: colors.textSecondary }]}>
+                    {subject.name}
+                  </ThemedText>
+                  <ThemedText style={[styles.marksValue, { color: colors.text }]}>
+                    {subject.marks}/{subject.total}
+                  </ThemedText>
+                </View>
+              ))}
+              <View style={styles.totalContainer}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <ThemedText style={[styles.totalLabel, { color: colors.text }]}>Total Marks</ThemedText>
-                  <ThemedText style={[styles.totalValue, { color: colors.primary }]}>{year.marks.total}/400</ThemedText>
+                  <ThemedText style={[styles.totalValue, { color: colors.primary }]}>
+                    {year.marks.total}/{year.marks.subjects.length * 100}
+                  </ThemedText>
                 </View>
-                <View style={[styles.percentageContainer, { marginTop: 8 }]}>
+                <View style={styles.percentageContainer}>
                   <ThemedText style={[styles.percentageText, { color: colors.success }]}>
                     {year.marks.percentage}%
                   </ThemedText>
@@ -399,8 +461,8 @@ export default function Student({ student, onClose }) {
                 </View>
               </View>
             </View>
-          </ScrollView>
-        </Animated.View>
+          </View>
+        )}
       </View>
     )
   }
@@ -431,7 +493,7 @@ export default function Student({ student, onClose }) {
           </Animated.View>
         </TouchableOpacity>
         
-        <Animated.View style={{ height: feesHeight, overflow: 'hidden' }}>
+        {showFees && (
           <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
             <View style={dynamicStyles.feesStatus}>
               <View>
@@ -477,7 +539,84 @@ export default function Student({ student, onClose }) {
               </ThemedText>
             </View>
           </View>
-        </Animated.View>
+        )}
+      </View>
+    )
+  }
+
+  const renderAttendanceSection = () => {
+    const year = academicYears[selectedYear]
+    
+    return (
+      <View style={dynamicStyles.attendanceSection}>
+        <TouchableOpacity 
+          style={dynamicStyles.sectionHeader}
+          onPress={toggleAttendance}
+          activeOpacity={0.8}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Feather name="calendar" size={20} color={colors.primary} style={{ marginRight: 12 }} />
+            <ThemedText style={[styles.sectionTitle, { color: colors.text }]}>Attendance Details</ThemedText>
+          </View>
+          <Animated.View style={{ 
+            transform: [{
+              rotate: attendanceAnimation.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['0deg', '180deg']
+              })
+            }]
+          }}>
+            <Feather name="chevron-down" size={24} color={colors.primary} />
+          </Animated.View>
+        </TouchableOpacity>
+        
+        {showAttendance && (
+          <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+            <View style={dynamicStyles.attendanceStats}>
+              <View>
+                <ThemedText style={[styles.feesLabel, { color: colors.textSecondary }]}>Total Days</ThemedText>
+                <ThemedText style={[styles.feesValue, { color: colors.text }]}>{year.attendance.totalDays}</ThemedText>
+              </View>
+              <View style={{ alignItems: 'center' }}>
+                <ThemedText style={[styles.feesLabel, { color: colors.textSecondary }]}>Present</ThemedText>
+                <ThemedText style={[styles.feesValue, { color: colors.success }]}>{year.attendance.presentDays}</ThemedText>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <ThemedText style={[styles.feesLabel, { color: colors.textSecondary }]}>Absent</ThemedText>
+                <ThemedText style={[
+                  styles.feesValue, 
+                  { color: year.attendance.absentDays > 15 ? colors.warning : colors.success }
+                ]}>
+                  {year.attendance.absentDays}
+                </ThemedText>
+              </View>
+            </View>
+            <View style={{ 
+              backgroundColor: year.attendance.percentage > 85 ? `${colors.success}15` : `${colors.warning}15`,
+              padding: 12,
+              borderRadius: 8,
+              marginTop: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Feather 
+                name={year.attendance.percentage > 85 ? "trending-up" : "trending-down"} 
+                size={16} 
+                color={year.attendance.percentage > 85 ? colors.success : colors.warning} 
+              />
+              <ThemedText style={[
+                styles.feesStatusText,
+                { 
+                  color: year.attendance.percentage > 85 ? colors.success : colors.warning,
+                  marginLeft: 8
+                }
+              ]}>
+                Attendance Rate: {year.attendance.percentage}%
+              </ThemedText>
+            </View>
+          </View>
+        )}
       </View>
     )
   }
@@ -488,14 +627,17 @@ export default function Student({ student, onClose }) {
         <TouchableOpacity
           key={action.id}
           style={dynamicStyles.menuItem}
-          onPress={() => {
-            setShowMoreMenu(false)
-            console.log(`Action: ${action.label}`)
-          }}
+          onPress={() => handleMoreAction(action)}
           activeOpacity={0.7}
         >
           <MaterialIcons name={action.icon} size={20} color={action.color} style={{ marginRight: 12 }} />
-          <ThemedText style={[styles.menuItemText, { color: colors.text, flex: 1 }]}>
+          <ThemedText style={[
+            styles.menuItemText, 
+            { 
+              color: action.id === 7 ? colors.textSecondary : colors.text, 
+              flex: 1 
+            }
+          ]}>
             {action.label}
           </ThemedText>
           <Feather name="chevron-right" size={16} color={colors.textSecondary} />
@@ -651,6 +793,7 @@ export default function Student({ student, onClose }) {
       backgroundColor: `${colors.background}80`,
       borderRadius: 8,
       padding: 12,
+      marginTop: 8,
     },
     totalLabel: {
       fontSize: 15,
@@ -663,6 +806,8 @@ export default function Student({ student, onClose }) {
     percentageContainer: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'center',
+      paddingTop: 10,
     },
     percentageText: {
       fontSize: 14,
@@ -686,15 +831,13 @@ export default function Student({ student, onClose }) {
       fontWeight: '600',
     },
     dropdownContainer: {
-      overflow: 'hidden',
       backgroundColor: colors.cardBackground,
       borderRadius: 12,
       borderWidth: 1,
       borderColor: colors.border,
-      marginBottom: 16,
     },
     dropdownScroll: {
-      maxHeight: 200,
+      maxHeight: 300,
     },
     sectionContent: {
       flex: 1,
@@ -722,7 +865,7 @@ export default function Student({ student, onClose }) {
             <TouchableOpacity
               style={styles.backButton}
               onPress={onClose}
-              activeOpacity={.9}
+              activeOpacity={0.9}
             >
               <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
             </TouchableOpacity>
@@ -736,7 +879,7 @@ export default function Student({ student, onClose }) {
             <TouchableOpacity
               style={styles.moreButton}
               onPress={handleMoreActions}
-              activeOpacity={.9}
+              activeOpacity={0.9}
             >
               <Entypo name="dots-three-vertical" size={20} color="#FFFFFF" />
             </TouchableOpacity>
@@ -751,7 +894,6 @@ export default function Student({ student, onClose }) {
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.contentContainer}>
-          {/* Avatar and Basic Info */}
           <View style={styles.avatarSection}>
             {renderAvatar()}
             <ThemedText style={[styles.studentName, { color: colors.text }]}>{student.name}</ThemedText>
@@ -780,7 +922,7 @@ export default function Student({ student, onClose }) {
               <View style={[styles.infoItem, dynamicStyles.infoItem]}>
                 <Feather name="calendar" size={18} color={colors.primary} />
                 <View style={styles.infoText}>
-                  <ThemedText style={[styles.infoLabel, { color: colors.textSecondary }]}>Attendance</ThemedText>
+                  <ThemedText style={[styles.infoLabel, { color: colors.textSecondary }]}>Current Attendance</ThemedText>
                   <ThemedText style={[styles.infoValue, { color: colors.text }]}>{student.attendance}</ThemedText>
                 </View>
               </View>
@@ -825,6 +967,7 @@ export default function Student({ student, onClose }) {
               Academic Details
             </ThemedText>
             
+            {/* Year Selection Dropdown */}
             <TouchableOpacity 
               style={dynamicStyles.dropdownButton}
               onPress={toggleYearDropdown}
@@ -856,16 +999,15 @@ export default function Student({ student, onClose }) {
             {/* Year Dropdown */}
             {showYearDropdown && renderYearDropdown()}
 
-            {/* Marks Section */}
+            {/* Marks, Fees, and Attendance Sections for Selected Year */}
             {renderMarksSection()}
-
-            {/* Fees Section */}
+            {renderAttendanceSection()}
             {renderFeesSection()}
           </View>
         </View>
       </ScrollView>
 
-      {/* More Menu Modal - MOVE THIS OUTSIDE THE SCROLLVIEW */}
+      {/* More Menu Modal */}
       {showMoreMenu && (
         <>
           <TouchableOpacity

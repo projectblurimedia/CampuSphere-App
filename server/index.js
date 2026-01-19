@@ -12,6 +12,7 @@ const studentRoute = require('./routes/studentRoute')
 const staffRoute = require('./routes/staffRoute')
 const attendanceRoute = require('./routes/attendanceRoute')
 const marksRoute = require('./routes/marksRoute')
+const feeRoute = require('./routes/feeRoute')
 
 const app = express()
 dotenv.config({ quiet: true })
@@ -43,6 +44,7 @@ app.use('/server/students', studentRoute)
 app.use('/server/staff', staffRoute)
 app.use('/server/attendance', attendanceRoute)
 app.use('/server/marks', marksRoute)
+app.use('/server/fees', feeRoute)
 
 app.use((error, req, res, next) => {
   const errorStatus = error.status || 500

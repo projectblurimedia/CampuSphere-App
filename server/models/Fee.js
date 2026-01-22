@@ -1,40 +1,92 @@
 const mongoose = require('mongoose')
 
 const feeSchema = new mongoose.Schema({
+  // Basic Information
   studentId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Student',
     required: [true, 'Student ID is required'],
-    index: true // Index here
+    index: true
   },
   academicYear: {
     type: String,
     required: [true, 'Academic year is required'],
-    enum: ['2023-2024', '2024-2025', '2025-2026', '2026-2027'],
-    index: true // Index here
+    index: true
   },
-  term: {
+  
+  // Term Information
+  termType: {
     type: String,
-    required: [true, 'Term is required'],
-    enum: ['term-1', 'term-2', 'term-3', 'annual', 'custom']
+    enum: ['term-1', 'term-2', 'term-3', 'term-4', 'annual', 'custom'],
+    required: [true, 'Term type is required']
   },
   termNumber: {
     type: Number,
     min: 1,
-    max: 3
+    max: 4
   },
   customTermName: {
     type: String,
     trim: true
   },
-  dueDate: {
-    type: Date,
-    required: [true, 'Due date is required'],
-    index: true // Index here
-  },
-  amount: {
+  
+  // Fee Amounts
+  baseAmount: {
     type: Number,
-    required: [true, 'Amount is required'],
+    required: [true, 'Base amount is required'],
+    min: 0
+  },
+  busAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  otherCharges: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  previousBalance: {
+    type: Number,
+    default: 0
+  },
+  
+  // Discounts
+  discountType: {
+    type: String,
+    enum: ['percentage', 'fixed', 'category', 'none'],
+    default: 'none'
+  },
+  discountValue: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  discountReason: {
+    type: String,
+    trim: true
+  },
+  discountedAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  
+  // Late Fees
+  lateFeeAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  lateFeeReason: {
+    type: String,
+    trim: true
+  },
+  
+  // Final Calculations
+  totalAmount: {
+    type: Number,
+    required: [true, 'Total amount is required'],
     min: 0
   },
   paidAmount: {
@@ -42,27 +94,36 @@ const feeSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
-  discountAmount: {
+  outstandingAmount: {
     type: Number,
     default: 0,
     min: 0
   },
-  lateFee: {
-    type: Number,
-    default: 0,
-    min: 0
-  },
-  totalAmount: {
-    type: Number,
-    required: [true, 'Total amount is required'],
-    min: 0
-  },
+  
+  // Status
   status: {
     type: String,
     enum: ['pending', 'partial', 'paid', 'overdue', 'cancelled'],
     default: 'pending',
-    index: true // Index here
+    index: true
   },
+  
+  // Dates
+  issueDate: {
+    type: Date,
+    default: Date.now
+  },
+  dueDate: {
+    type: Date,
+    required: [true, 'Due date is required'],
+    index: true
+  },
+  paymentDate: {
+    type: Date,
+    index: true
+  },
+  
+  // Payment Information
   paymentMode: {
     type: String,
     enum: ['cash', 'cheque', 'online', 'card', 'upi', 'bank-transfer', 'other'],
@@ -80,59 +141,49 @@ const feeSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  paymentDate: {
-    type: Date,
-    index: true // Index here
-  },
   receiptNumber: {
     type: String,
     trim: true,
     unique: true,
     sparse: true
   },
+  
+  // Bus Information (if applicable)
+  busRoute: {
+    type: String,
+    trim: true
+  },
+  villageName: {
+    type: String,
+    trim: true
+  },
+  busStop: {
+    type: String,
+    trim: true
+  },
+  hasTransport: {
+    type: Boolean,
+    default: false
+  },
+  
+  // Class Information
+  className: {
+    type: String,
+    required: true,
+    index: true
+  },
+  
+  // Remarks
   remarks: {
     type: String,
     trim: true
   },
-  previousBalance: {
-    type: Number,
-    default: 0
-  },
-  carryForward: {
-    type: Number,
-    default: 0
-  },
-  // Fee breakdown
-  breakdown: {
-    tuitionFee: {
-      type: Number,
-      default: 0
-    },
-    transportFee: {
-      type: Number,
-      default: 0
-    },
-    otherFees: {
-      type: Number,
-      default: 0
-    },
-    previousDue: {
-      type: Number,
-      default: 0
-    },
-    lateFee: {
-      type: Number,
-      default: 0
-    },
-    discount: {
-      type: Number,
-      default: 0
-    }
-  },
+  
+  // Audit Trail
   createdBy: {
     type: String,
-    required: [true, 'Created by is required'],
-    index: true // Index here
+    required: true,
+    index: true
   },
   updatedBy: {
     type: String
@@ -145,49 +196,78 @@ const feeSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   }
+}, {
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 })
 
-// REMOVE these duplicate index definitions (they're already defined above):
-// feeSchema.index({ studentId: 1, academicYear: 1 })
-// feeSchema.index({ status: 1 })
-// feeSchema.index({ dueDate: 1 })
-// feeSchema.index({ receiptNumber: 1 }, { unique: true, sparse: true })
-// feeSchema.index({ studentId: 1, term: 1, academicYear: 1 })
-// feeSchema.index({ paymentDate: 1 })
-// feeSchema.index({ createdBy: 1 })
+// Indexes
+feeSchema.index({ studentId: 1, academicYear: 1, termType: 1 }, { unique: true })
+feeSchema.index({ academicYear: 1, status: 1 })
+feeSchema.index({ dueDate: 1, status: 1 })
+feeSchema.index({ studentId: 1, status: 1 })
+feeSchema.index({ className: 1, academicYear: 1 })
+feeSchema.index({ 'busRoute': 1, 'villageName': 1 })
 
-// Keep ONLY compound indexes (not already defined individually):
-feeSchema.index({ 
-  academicYear: 1,
-  status: 1,
-  dueDate: 1 
-})
-
-feeSchema.index({
-  studentId: 1,
-  academicYear: 1,
-  status: 1
-})
-
-// Add compound indexes for common queries
-feeSchema.index({ studentId: 1, dueDate: 1 })
-feeSchema.index({ academicYear: 1, paymentDate: 1 })
-feeSchema.index({ status: 1, paymentDate: 1 })
-
-// Virtual for outstanding amount
-feeSchema.virtual('outstandingAmount').get(function() {
-  return this.totalAmount - this.paidAmount
+// Virtual for remaining amount
+feeSchema.virtual('remainingAmount').get(function() {
+  return Math.max(0, this.totalAmount - this.paidAmount)
 })
 
 // Virtual for isOverdue
 feeSchema.virtual('isOverdue').get(function() {
-  return this.dueDate < new Date() && this.status !== 'paid'
+  const now = new Date()
+  return this.dueDate < now && this.status !== 'paid' && this.status !== 'cancelled'
 })
 
-// Method to make payment
-feeSchema.methods.makePayment = function(paymentData) {
+// Virtual for discount percentage
+feeSchema.virtual('discountPercentage').get(function() {
+  if (this.baseAmount === 0) return 0
+  return ((this.discountedAmount / this.baseAmount) * 100).toFixed(2)
+})
+
+// Pre-save middleware to calculate amounts
+feeSchema.pre('save', function(next) {
+  // Calculate discounted amount
+  let discountedBase = this.baseAmount
+  
+  if (this.discountType === 'percentage' && this.discountValue > 0) {
+    this.discountedAmount = (this.baseAmount * this.discountValue) / 100
+    discountedBase = this.baseAmount - this.discountedAmount
+  } else if (this.discountType === 'fixed' && this.discountValue > 0) {
+    this.discountedAmount = Math.min(this.discountValue, this.baseAmount)
+    discountedBase = this.baseAmount - this.discountedAmount
+  }
+  
+  // Calculate total amount
+  this.totalAmount = discountedBase + 
+                     (this.hasTransport ? this.busAmount : 0) + 
+                     this.otherCharges + 
+                     this.previousBalance + 
+                     this.lateFeeAmount
+  
+  // Calculate outstanding amount
+  this.outstandingAmount = Math.max(0, this.totalAmount - this.paidAmount)
+  
+  // Update status based on payments
+  if (this.paidAmount >= this.totalAmount) {
+    this.status = 'paid'
+  } else if (this.paidAmount > 0) {
+    this.status = 'partial'
+  } else if (this.isOverdue) {
+    this.status = 'overdue'
+  }
+  
+  // Update timestamp
+  this.updatedAt = new Date()
+  
+  next()
+})
+
+// Method to apply payment
+feeSchema.methods.applyPayment = function(paymentData) {
   const {
-    paidAmount,
+    amount,
     paymentMode = 'cash',
     transactionId = '',
     chequeNumber = '',
@@ -198,244 +278,78 @@ feeSchema.methods.makePayment = function(paymentData) {
   } = paymentData
 
   // Validate payment amount
-  if (paidAmount <= 0) {
+  if (amount <= 0) {
     throw new Error('Payment amount must be greater than 0')
   }
 
-  if (paidAmount > this.totalAmount - this.paidAmount) {
-    throw new Error(`Payment amount cannot exceed outstanding amount of ${this.totalAmount - this.paidAmount}`)
+  const remaining = this.totalAmount - this.paidAmount
+  if (amount > remaining) {
+    throw new Error(`Payment amount cannot exceed remaining amount of ${remaining}`)
   }
 
-  this.paidAmount += paidAmount
-  
-  // Update status
-  if (this.paidAmount >= this.totalAmount) {
-    this.status = 'paid'
-  } else if (this.paidAmount > 0) {
-    this.status = 'partial'
-  }
-  
   // Update payment details
+  this.paidAmount += amount
   this.paymentMode = paymentMode
   this.transactionId = transactionId
   this.chequeNumber = chequeNumber
   this.bankName = bankName
-  this.paymentDate = paymentDate ? new Date(paymentDate) : new Date()
-  this.remarks = remarks
+  this.paymentDate = new Date(paymentDate)
   this.updatedBy = updatedBy
-  this.updatedAt = new Date()
-
-  return this.save()
-}
-
-// Method to add late fee
-feeSchema.methods.addLateFee = function(lateFeeAmount, remarks, updatedBy) {
-  if (lateFeeAmount <= 0) {
-    throw new Error('Late fee amount must be greater than 0')
+  
+  if (remarks) {
+    this.remarks = this.remarks ? `${this.remarks} ${remarks}` : remarks
   }
-
-  this.lateFee += lateFeeAmount
-  this.totalAmount += lateFeeAmount
-  this.breakdown.lateFee += lateFeeAmount
-  this.remarks = this.remarks ? `${this.remarks}; ${remarks}` : remarks
-  this.updatedBy = updatedBy
-  this.updatedAt = new Date()
 
   return this.save()
 }
 
 // Method to apply discount
-feeSchema.methods.applyDiscount = function(discountAmount, discountReason, updatedBy) {
-  if (discountAmount <= 0) {
-    throw new Error('Discount amount must be greater than 0')
+feeSchema.methods.applyDiscount = function(discountData) {
+  const {
+    type,
+    value,
+    reason,
+    updatedBy
+  } = discountData
+
+  if (value <= 0) {
+    throw new Error('Discount value must be greater than 0')
   }
 
-  if (discountAmount > this.amount) {
-    throw new Error('Discount cannot exceed original amount')
+  if (type === 'percentage' && value > 100) {
+    throw new Error('Discount percentage cannot exceed 100%')
   }
 
-  this.discountAmount += discountAmount
-  this.totalAmount -= discountAmount
-  this.breakdown.discount += discountAmount
-  this.remarks = this.remarks ? `${this.remarks}; Discount applied: ${discountReason}` : `Discount applied: ${discountReason}`
+  if (type === 'fixed' && value > this.baseAmount) {
+    throw new Error('Fixed discount cannot exceed base amount')
+  }
+
+  this.discountType = type
+  this.discountValue = value
+  this.discountReason = reason
   this.updatedBy = updatedBy
-  this.updatedAt = new Date()
 
   return this.save()
 }
 
-// Static method to get outstanding fees for a student
-feeSchema.statics.getStudentOutstandingFees = async function(studentId, academicYear) {
-  const fees = await this.find({
-    studentId,
-    academicYear: academicYear || '2024-2025',
-    status: { $in: ['pending', 'partial', 'overdue'] }
-  }).sort({ dueDate: 1 })
+// Method to add late fee
+feeSchema.methods.addLateFee = function(lateFeeData) {
+  const {
+    amount,
+    reason,
+    updatedBy
+  } = lateFeeData
 
-  let totalOutstanding = 0
-  let totalOverdue = 0
-  let upcomingFees = []
-
-  fees.forEach(fee => {
-    const outstanding = fee.totalAmount - fee.paidAmount
-    totalOutstanding += outstanding
-
-    if (fee.dueDate < new Date()) {
-      totalOverdue += outstanding
-    } else {
-      upcomingFees.push({
-        feeId: fee._id,
-        term: fee.term,
-        dueDate: fee.dueDate,
-        amount: fee.totalAmount,
-        paid: fee.paidAmount,
-        outstanding: outstanding,
-        status: fee.status
-      })
-    }
-  })
-
-  return {
-    studentId,
-    academicYear: academicYear || '2024-2025',
-    totalOutstanding,
-    totalOverdue,
-    upcomingFees,
-    feeCount: fees.length
-  }
-}
-
-// Static method to generate fee receipt
-feeSchema.statics.generateFeeReceipt = async function(feeId) {
-  const fee = await this.findById(feeId)
-    .populate('studentId', 'firstName lastName admissionNo class section parentName')
-  
-  if (!fee) {
-    throw new Error('Fee record not found')
+  if (amount <= 0) {
+    throw new Error('Late fee amount must be greater than 0')
   }
 
-  const receipt = {
-    receiptNumber: fee.receiptNumber,
-    date: fee.paymentDate || new Date(),
-    student: {
-      name: `${fee.studentId.firstName} ${fee.studentId.lastName}`,
-      admissionNo: fee.studentId.admissionNo,
-      class: fee.studentId.class,
-      section: fee.studentId.section,
-      parent: fee.studentId.parentName
-    },
-    academicYear: fee.academicYear,
-    term: fee.term,
-    customTermName: fee.customTermName,
-    breakdown: {
-      tuitionFee: fee.breakdown.tuitionFee,
-      transportFee: fee.breakdown.transportFee,
-      otherFees: fee.breakdown.otherFees,
-      previousDue: fee.breakdown.previousDue,
-      lateFee: fee.breakdown.lateFee,
-      discount: fee.breakdown.discount
-    },
-    amounts: {
-      totalAmount: fee.totalAmount,
-      paidAmount: fee.paidAmount,
-      outstandingAmount: fee.totalAmount - fee.paidAmount,
-      discountAmount: fee.discountAmount,
-      lateFee: fee.lateFee
-    },
-    payment: {
-      mode: fee.paymentMode,
-      transactionId: fee.transactionId,
-      chequeNumber: fee.chequeNumber,
-      bankName: fee.bankName
-    },
-    dates: {
-      dueDate: fee.dueDate,
-      paymentDate: fee.paymentDate,
-      createdAt: fee.createdAt
-    },
-    status: fee.status,
-    remarks: fee.remarks
-  }
+  this.lateFeeAmount += amount
+  this.lateFeeReason = this.lateFeeReason ? 
+    `${this.lateFeeReason} ${reason}` : reason
+  this.updatedBy = updatedBy
 
-  return receipt
-}
-
-// Static method to get fee collection report
-feeSchema.statics.getFeeCollectionReport = async function(startDate, endDate, academicYear) {
-  const start = new Date(startDate)
-  start.setHours(0, 0, 0, 0)
-  
-  const end = new Date(endDate)
-  end.setHours(23, 59, 59, 999)
-
-  const fees = await this.find({
-    paymentDate: { $gte: start, $lte: end },
-    academicYear: academicYear || '2024-2025',
-    status: { $in: ['paid', 'partial'] }
-  })
-  .populate('studentId', 'firstName lastName class section')
-  .sort({ paymentDate: -1 })
-
-  let totalCollection = 0
-  let cashCollection = 0
-  let onlineCollection = 0
-  let chequeCollection = 0
-  let otherCollection = 0
-  const dailyCollections = {}
-
-  fees.forEach(fee => {
-    totalCollection += fee.paidAmount
-
-    // Categorize by payment mode
-    switch (fee.paymentMode) {
-      case 'cash':
-        cashCollection += fee.paidAmount
-        break
-      case 'online':
-      case 'card':
-      case 'upi':
-      case 'bank-transfer':
-        onlineCollection += fee.paidAmount
-        break
-      case 'cheque':
-        chequeCollection += fee.paidAmount
-        break
-      default:
-        otherCollection += fee.paidAmount
-    }
-
-    // Group by date
-    const dateStr = fee.paymentDate.toISOString().split('T')[0]
-    if (!dailyCollections[dateStr]) {
-      dailyCollections[dateStr] = 0
-    }
-    dailyCollections[dateStr] += fee.paidAmount
-  })
-
-  // Convert daily collections to array
-  const dailyCollectionArray = Object.entries(dailyCollections)
-    .map(([date, amount]) => ({ date, amount }))
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
-
-  return {
-    period: { start, end },
-    academicYear: academicYear || '2024-2025',
-    summary: {
-      totalFees: fees.length,
-      totalCollection,
-      cashCollection,
-      onlineCollection,
-      chequeCollection,
-      otherCollection
-    },
-    dailyCollections: dailyCollectionArray,
-    modeWisePercentage: {
-      cash: totalCollection > 0 ? ((cashCollection / totalCollection) * 100).toFixed(2) : 0,
-      online: totalCollection > 0 ? ((onlineCollection / totalCollection) * 100).toFixed(2) : 0,
-      cheque: totalCollection > 0 ? ((chequeCollection / totalCollection) * 100).toFixed(2) : 0,
-      other: totalCollection > 0 ? ((otherCollection / totalCollection) * 100).toFixed(2) : 0
-    }
-  }
+  return this.save()
 }
 
 module.exports = mongoose.model('Fee', feeSchema)

@@ -1,33 +1,65 @@
-const express = require('express');
-const router = express.Router();
-const feeController = require('../controllers/feeController');
+const express = require('express')
+const router = express.Router()
+const feeController = require('../controllers/feeController')
 
-// Fee Records Routes
-router.post('/', feeController.createFeeRecord);
-router.get('/', feeController.getAllFees);
-router.get('/:feeId', feeController.getFeeById);
-router.put('/:feeId', feeController.updateFeeRecord);
-router.delete('/:feeId', feeController.deleteFeeRecord);
-router.post('/cancel/:feeId', feeController.cancelFeeRecord);
+// ================= FEE RECORDS ROUTES =================
 
-// Student Fee Routes
-router.get('/student/:studentId', feeController.getStudentFees);
-router.get('/student/:studentId/summary', feeController.getStudentFeeSummary);
-router.post('/generate-term-fees/:studentId', feeController.generateTermFees);
+// Create a new fee record
+router.post('/', feeController.createFeeRecord)
 
-// Payment Routes
-router.post('/payment/:feeId', feeController.makePayment);
-router.get('/receipt/:feeId', feeController.getFeeReceipt);
+// Generate all term fees for a student
+router.post('/generate-all/:studentId', feeController.generateAllTermFees)
 
-// Class Fee Routes
-router.get('/outstanding/class/:className/:section', feeController.getClassOutstandingFees);
+// Get all fees
+router.get('/', feeController.getAllFees)
 
-// Fee Configuration Routes
-router.put('/config/student/:studentId', feeController.updateStudentFeeConfig);
-router.post('/config/bulk-discount', feeController.applyBulkDiscount);
+// Get fee by ID
+router.get('/:feeId', feeController.getFeeById)
 
-// Report Routes
-router.get('/reports/collection', feeController.getFeeCollectionReport);
-router.get('/search/student', feeController.searchFeesByStudent);
+// Update fee record
+router.put('/:feeId', feeController.updateFeeRecord)
 
-module.exports = router;
+// Cancel fee record
+router.post('/:feeId/cancel', feeController.cancelFeeRecord)
+
+// ================= PAYMENT ROUTES =================
+
+// Make payment for fee
+router.post('/:feeId/payment', feeController.makePayment)
+
+// Get fee receipt
+router.get('/:feeId/receipt', feeController.getFeeReceipt)
+
+// ================= DISCOUNT ROUTES =================
+
+// Apply discount to fee
+router.post('/:feeId/discount', feeController.applyDiscount)
+
+// Add late fee to fee
+router.post('/:feeId/late-fee', feeController.addLateFee)
+
+// Apply bulk discount to multiple students
+router.post('/discount/bulk', feeController.applyBulkDiscount)
+
+// ================= STUDENT FEE ROUTES =================
+
+// Get student fee summary
+router.get('/student/:studentId/summary', feeController.getStudentFeeSummary)
+
+// ================= CLASS FEE ROUTES =================
+
+// Get class outstanding fees
+router.get('/class/:className/:section/outstanding', feeController.getClassOutstandingFees)
+
+// ================= SEARCH & REPORTS ROUTES =================
+
+// Search fees with filters
+router.get('/search', feeController.searchFees)
+
+// Get fee collection report
+router.get('/reports/collection', feeController.getFeeCollectionReport)
+
+// Get bus fee report
+router.get('/reports/bus-fees', feeController.getBusFeeReport)
+
+module.exports = router

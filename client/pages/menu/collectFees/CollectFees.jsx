@@ -1,1196 +1,315 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   View,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   Platform,
-  Dimensions,
   FlatList,
   Modal,
   TextInput,
+  ActivityIndicator,
+  Animated,
+  Dimensions,
   ScrollView,
-  Switch,
-  Keyboard,
+  RefreshControl,
+  Alert,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import * as DocumentPicker from 'expo-document-picker'
+import * as FileSystem from 'expo-file-system'
 import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
 import {
   FontAwesome5,
   Feather,
   MaterialIcons,
-  Ionicons,
   MaterialCommunityIcons,
 } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
+import axiosApi from '@/utils/axiosApi'
+import { ToastNotification } from '@/components/ui/ToastNotification'
+import BusFeeSettings from './BusFeeSettings'
+import ClassFeeSettings from './ClassFeeSettings'
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
+const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
-// Custom Dropdown Component for Filter
-const FilterDropdown = ({ isOpen, onClose, onSelect, selectedValue }) => {
-  const { colors } = useTheme()
-  
-  const dropdownStyles = {
-    dropdownOverlay: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      zIndex: 1000,
-    },
-    dropdownBackdrop: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.3)',
-      justifyContent: 'flex-start',
-      paddingTop: 120,
-      paddingHorizontal: 16,
-    },
-    dropdownContainer: {
-      borderRadius: 16,
-      borderWidth: 1,
-      maxHeight: 300,
-      backgroundColor: colors.cardBackground,
-      borderColor: colors.border,
-      ...Platform.select({
-        ios: {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.15,
-          shadowRadius: 16,
-        },
-        android: {
-          elevation: 12,
-        },
-      }),
-    },
-    dropdownHeader: {
-      padding: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-    },
-    dropdownTitle: {
-      fontSize: 16,
-      color: colors.text,
-      textAlign: 'center',
-    },
-    dropdownItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingVertical: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-    },
-    dropdownItemText: {
-      fontSize: 15,
-      fontFamily: 'Poppins-Medium',
-    },
-  }
-  
-  const classes = ['All Classes', ...Array.from({ length: 12 }, (_, i) => `Class ${i + 1}`)]
-  
-  if (!isOpen) return null
-  
-  return (
-    <View style={dropdownStyles.dropdownOverlay}>
-      <TouchableOpacity 
-        style={dropdownStyles.dropdownBackdrop} 
-        onPress={onClose} 
-        activeOpacity={1}
-      >
-        <View style={dropdownStyles.dropdownContainer}>
-          <View style={dropdownStyles.dropdownHeader}>
-            <ThemedText style={dropdownStyles.dropdownTitle}>Select Class</ThemedText>
-          </View>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {classes.map((cls, index) => (
-              <TouchableOpacity
-                key={`class-dropdown-${index}`}
-                style={[
-                  dropdownStyles.dropdownItem,
-                  { 
-                    backgroundColor: selectedValue === (index === 0 ? 'All' : `${index + 1}`) ? colors.primary + '15' : 'transparent',
-                    borderBottomWidth: index === classes.length - 1 ? 0 : 1,
-                  }
-                ]}
-                onPress={() => {
-                  onSelect(index === 0 ? 'All' : `${index + 1}`)
-                  onClose()
-                }}
-              >
-                <ThemedText style={[
-                  dropdownStyles.dropdownItemText,
-                  { 
-                    color: selectedValue === (index === 0 ? 'All' : `${index + 1}`) ? colors.primary : colors.text,
-                    fontFamily: selectedValue === (index === 0 ? 'All' : `${index + 1}`) ? 'Poppins-SemiBold' : 'Poppins-Medium'
-                  }
-                ]}>
-                  {cls}
-                </ThemedText>
-                {selectedValue === (index === 0 ? 'All' : `${index + 1}`) && (
-                  <Feather name="check-circle" size={18} color={colors.primary} />
-                )}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      </TouchableOpacity>
-    </View>
-  )
-}
-
-// Payment Modal Component
-const PaymentModal = ({ 
-  visible, 
-  onClose, 
-  student, 
-  selectedFees, 
-  onPaymentComplete 
-}) => {
-  const { colors } = useTheme()
-  const [paymentMode, setPaymentMode] = useState('Cash')
-  const [amounts, setAmounts] = useState({})
-  const [payAll, setPayAll] = useState(false)
-  const [scrollEnabled, setScrollEnabled] = useState(true)
-  const amountInputsRef = useRef({})
-  
-  // Initialize amounts based on selected fees
-  useEffect(() => {
-    if (!student || !selectedFees.length) return
-    
-    const initialAmounts = {}
-    selectedFees.forEach(fee => {
-      let feeData = null
-      
-      if (fee.academicYear === 'current') {
-        // Current year fee
-        feeData = student[fee.type]
-      } else if (fee.academicYear.startsWith('prev-')) {
-        // Previous year fee
-        const yearIndex = parseInt(fee.academicYear.split('-')[1])
-        if (student.previousYearFees && student.previousYearFees[yearIndex]) {
-          feeData = student.previousYearFees[yearIndex][fee.type]
-        }
-      }
-      
-      if (feeData) {
-        const feeKey = `${fee.academicYear}-${fee.type}`
-        initialAmounts[feeKey] = feeData.due
-      }
-    })
-    setAmounts(initialAmounts)
-  }, [selectedFees, student])
-  
-  const calculateTotal = () => {
-    if (!student) return 0
-    
-    if (payAll) {
-      return student.totalDue
-    }
-    return Object.values(amounts).reduce((sum, amount) => sum + (parseFloat(amount) || 0), 0)
-  }
-  
-  const handlePayment = () => {
-    if (!student) return
-    
-    const totalAmount = calculateTotal()
-    if (totalAmount <= 0) {
-      Alert.alert('Error', 'Please enter valid payment amounts')
-      return
-    }
-    
-    Alert.alert(
-      'Payment Successful',
-      `Payment of ₹${totalAmount.toLocaleString()} processed via ${paymentMode}`,
-      [
-        { 
-          text: 'OK', 
-          onPress: () => {
-            onPaymentComplete(student.id, selectedFees, amounts, paymentMode, totalAmount)
-            onClose()
-          }
-        }
-      ]
-    )
-  }
-  
-  if (!visible || !student) return null
-  
-  const modalStyles = StyleSheet.create({
-    overlay: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 2000,
-    },
-    modalContainer: {
-      width: SCREEN_WIDTH * 0.9,
-      backgroundColor: colors.cardBackground,
-      borderRadius: 20,
-      maxHeight: SCREEN_HEIGHT * 0.8,
-      ...Platform.select({
-        ios: {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 10 },
-          shadowOpacity: 0.2,
-          shadowRadius: 20,
-        },
-        android: {
-          elevation: 15,
-        },
-      }),
-    },
-    modalHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: 20,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-    },
-    modalTitle: {
-      fontSize: 18,
-      color: colors.text,
-    },
-    scrollContent: {
-      padding: 20,
-    },
-    sectionTitle: {
-      fontSize: 16,
-      color: colors.text,
-      marginBottom: 12,
-    },
-    studentInfo: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 16,
-      paddingBottom: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-    },
-    studentProfile: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: student.profileColor + '20',
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginRight: 12,
-      borderWidth: 2,
-      borderColor: student.profileColor + '40',
-    },
-    studentProfileText: {
-      fontSize: 18,
-      fontFamily: 'Poppins-Bold',
-      color: student.profileColor,
-    },
-    studentDetails: {
-      flex: 1,
-    },
-    studentName: {
-      fontSize: 16,
-      color: colors.text,
-      marginBottom: 2,
-    },
-    studentMeta: {
-      fontSize: 13,
-      color: colors.textSecondary,
-    },
-    feeRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 12,
-    },
-    feeInfo: {
-      flex: 1,
-    },
-    feeName: {
-      fontSize: 14,
-      fontFamily: 'Poppins-Medium',
-      color: colors.text,
-    },
-    feeDue: {
-      fontSize: 12,
-      color: colors.textSecondary,
-    },
-    amountInput: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.inputBackground,
-      borderRadius: 10,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      width: 100,
-      textAlign: 'center',
-      color: colors.text,
-      fontSize: 14,
-      fontFamily: 'Poppins-Medium',
-    },
-    payAllContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      backgroundColor: colors.inputBackground,
-      padding: 16,
-      borderRadius: 12,
-      marginBottom: 16,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    payAllText: {
-      fontSize: 16,
-      fontFamily: 'Poppins-Medium',
-      color: colors.text,
-    },
-    modeContainer: {
-      flexDirection: 'row',
-      marginBottom: 20,
-      gap: 10,
-    },
-    modeButton: {
-      flex: 1,
-      paddingVertical: 12,
-      alignItems: 'center',
-      borderRadius: 10,
-      borderWidth: 2,
-      borderColor: colors.border,
-    },
-    modeButtonText: {
-      fontSize: 14,
-      fontFamily: 'Poppins-Medium',
-    },
-    totalContainer: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingTop: 16,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-      marginBottom: 20,
-    },
-    totalLabel: {
-      fontSize: 16,
-      color: colors.text,
-    },
-    totalAmount: {
-      fontSize: 22,
-      fontFamily: 'Poppins-Bold',
-      color: colors.primary,
-    },
-    buttonContainer: {
-      flexDirection: 'row',
-      gap: 12,
-      paddingHorizontal: 20,
-      paddingBottom: 20,
-    },
-    cancelButton: {
-      flex: 1,
-      paddingVertical: 14,
-      alignItems: 'center',
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.inputBackground,
-    },
-    cancelButtonText: {
-      fontSize: 16,
-      color: colors.textSecondary,
-    },
-    payButton: {
-      flex: 1,
-      paddingVertical: 14,
-      alignItems: 'center',
-      borderRadius: 12,
-      backgroundColor: colors.primary,
-    },
-    payButtonText: {
-      fontSize: 16,
-      color: '#FFFFFF',
-    },
-    noFeesText: {
-      textAlign: 'center',
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
-      marginBottom: 20,
-    },
-    selectedFeesTitle: {
-      fontSize: 16,
-      color: colors.text,
-      marginBottom: 16,
-    },
-  })
-  
-  return (
-    <View style={modalStyles.overlay}>
-      <View style={modalStyles.modalContainer}>
-        <View style={modalStyles.modalHeader}>
-          <ThemedText type='subtitle' style={modalStyles.modalTitle}>Make Payment</ThemedText>
-          <TouchableOpacity onPress={onClose} style={{ padding: 4 }}>
-            <Feather name="x" size={24} color={colors.text} />
-          </TouchableOpacity>
-        </View>
-        
-        <ScrollView 
-          contentContainerStyle={modalStyles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          scrollEnabled={scrollEnabled}
-          onContentSizeChange={(width, height) => {
-            setScrollEnabled(height > SCREEN_HEIGHT * .6)
-          }}
-        >
-          {/* Student Info */}
-          <View style={modalStyles.studentInfo}>
-            <View style={modalStyles.studentProfile}>
-              <ThemedText style={modalStyles.studentProfileText}>
-                {student.name.charAt(0)}
-              </ThemedText>
-            </View>
-            <View style={modalStyles.studentDetails}>
-              <ThemedText style={modalStyles.studentName}>
-                {student.name}
-              </ThemedText>
-              <ThemedText style={modalStyles.studentMeta}>
-                Class {student.class} • Sec {student.section} • Roll: {student.rollNo}
-              </ThemedText>
-            </View>
-          </View>
-          
-          <ThemedText style={modalStyles.selectedFeesTitle}>
-            Selected Fees ({selectedFees.length})
-          </ThemedText>
-          
-          <View style={modalStyles.payAllContainer}>
-            <ThemedText style={modalStyles.payAllText}>Pay All Due Amounts</ThemedText>
-            <Switch
-              value={payAll}
-              onValueChange={setPayAll}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor={'#ffffff'}
-              ios_backgroundColor={colors.border}
-            />
-          </View>
-          
-          {!payAll ? (
-            selectedFees.length > 0 ? (
-              selectedFees.map((fee, index) => {
-                let feeData = null
-                
-                if (fee.academicYear === 'current') {
-                  // Current year fee
-                  feeData = student[fee.type]
-                } else if (fee.academicYear.startsWith('prev-')) {
-                  // Previous year fee
-                  const yearIndex = parseInt(fee.academicYear.split('-')[1])
-                  if (student.previousYearFees && student.previousYearFees[yearIndex]) {
-                    feeData = student.previousYearFees[yearIndex][fee.type]
-                  }
-                }
-                
-                if (!feeData || feeData.due <= 0) return null
-                
-                const feeKey = `${fee.academicYear}-${fee.type}`
-                
-                return (
-                  <View key={`fee-modal-${student.id}-${feeKey}-${index}`} style={modalStyles.feeRow}>
-                    <View style={modalStyles.feeInfo}>
-                      <ThemedText style={modalStyles.feeName}>{fee.label}</ThemedText>
-                      <ThemedText style={modalStyles.feeDue}>
-                        Due: ₹{feeData.due.toLocaleString()} • Total: ₹{feeData.amount.toLocaleString()}
-                      </ThemedText>
-                    </View>
-                    <TextInput
-                      ref={ref => amountInputsRef.current[feeKey] = ref}
-                      style={modalStyles.amountInput}
-                      value={amounts[feeKey]?.toString() || ''}
-                      onChangeText={(text) => {
-                        const num = parseFloat(text) || 0
-                        const clampedAmount = Math.min(Math.max(num, 0), feeData.due)
-                        setAmounts(prev => ({
-                          ...prev,
-                          [feeKey]: clampedAmount
-                        }))
-                      }}
-                      placeholder="Amount"
-                      keyboardType="numeric"
-                      placeholderTextColor={colors.textSecondary}
-                      onFocus={() => setScrollEnabled(false)}
-                      onBlur={() => setScrollEnabled(true)}
-                    />
-                  </View>
-                )
-              })
-            ) : (
-              <ThemedText style={modalStyles.noFeesText}>No fees selected</ThemedText>
-            )
-          ) : (
-            <View style={{ marginBottom: 20 }}>
-              <ThemedText style={{ color: colors.textSecondary, marginBottom: 8 }}>
-                All due amounts will be paid:
-              </ThemedText>
-              <ThemedText style={{ color: colors.primary, fontSize: 18, fontFamily: 'Poppins-Bold' }}>
-                ₹{student.totalDue.toLocaleString()}
-              </ThemedText>
-            </View>
-          )}
-          
-          <ThemedText style={[modalStyles.sectionTitle, { marginTop: 16 }]}>Payment Mode:</ThemedText>
-          <View style={modalStyles.modeContainer}>
-            {['Cash', 'Online', 'Cheque'].map(mode => (
-              <TouchableOpacity
-                key={`mode-${mode}`}
-                style={[
-                  modalStyles.modeButton,
-                  {
-                    backgroundColor: paymentMode === mode ? colors.primary + '20' : colors.inputBackground,
-                    borderColor: paymentMode === mode ? colors.primary : colors.border,
-                  }
-                ]}
-                onPress={() => setPaymentMode(mode)}
-              >
-                <ThemedText style={[
-                  modalStyles.modeButtonText,
-                  { 
-                    color: paymentMode === mode ? colors.primary : colors.text,
-                    fontFamily: paymentMode === mode ? 'Poppins-SemiBold' : 'Poppins-Medium'
-                  }
-                ]}>
-                  {mode}
-                </ThemedText>
-              </TouchableOpacity>
-            ))}
-          </View>
-          
-          <View style={modalStyles.totalContainer}>
-            <ThemedText style={modalStyles.totalLabel}>Total Payment:</ThemedText>
-            <ThemedText style={modalStyles.totalAmount}>
-              ₹{calculateTotal().toLocaleString()}
-            </ThemedText>
-          </View>
-        </ScrollView>
-        
-        <View style={modalStyles.buttonContainer}>
-          <TouchableOpacity style={modalStyles.cancelButton} onPress={onClose}>
-            <ThemedText style={modalStyles.cancelButtonText}>Cancel</ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[modalStyles.payButton, { opacity: calculateTotal() > 0 ? 1 : 0.5 }]} 
-            onPress={handlePayment}
-            disabled={calculateTotal() <= 0}
-          >
-            <ThemedText style={modalStyles.payButtonText}>Confirm Payment</ThemedText>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  )
-}
-
-// Updated static fees data
-const staticFeesData = [
-  { 
-    id: 1, 
-    name: 'John Abraham Smith Williams',
-    class: '1', 
-    section: 'A', 
-    rollNo: '1',
-    profileColor: '#3b82f6',
-    academicYear: '2024-2025',
-    term1: { 
-      amount: 5000, 
-      paid: 2000,
-      due: 3000,
-      status: 'partial',
-      history: [
-        { date: '2024-02-15', amount: 1000, mode: 'Cash' },
-        { date: '2024-02-20', amount: 1000, mode: 'Online' }
-      ]
-    }, 
-    term2: { 
-      amount: 5000, 
-      paid: 0,
-      due: 5000,
-      status: 'due',
-      history: []
-    }, 
-    term3: { 
-      amount: 5000, 
-      paid: 0,
-      due: 5000,
-      status: 'due',
-      history: []
-    }, 
-    transport: { 
-      amount: 1000, 
-      paid: 500,
-      due: 500,
-      status: 'partial',
-      history: [
-        { date: '2024-02-10', amount: 500, mode: 'Cash' }
-      ]
-    },
-    previousYearFees: [
-      {
-        academicYear: '2023-2024',
-        term1: { amount: 4500, paid: 0, due: 4500, status: 'due' },
-        term2: { amount: 4500, paid: 2000, due: 2500, status: 'partial' },
-        term3: { amount: 4500, paid: 4500, due: 0, status: 'paid' },
-        transport: { amount: 900, paid: 900, due: 0, status: 'paid' }
-      }
-    ],
-    alert: 'Previous year fees pending: ₹7000',
-    totalDue: 15500
-  },
-  { 
-    id: 2, 
-    name: 'Jane Smith', 
-    class: '1', 
-    section: 'A', 
-    rollNo: '2',
-    profileColor: '#10b981',
-    academicYear: '2024-2025',
-    term1: { 
-      amount: 5000, 
-      paid: 5000,
-      due: 0,
-      status: 'paid',
-      history: [
-        { date: '2024-01-20', amount: 5000, mode: 'Online' }
-      ]
-    }, 
-    term2: { 
-      amount: 5000, 
-      paid: 0,
-      due: 5000,
-      status: 'due',
-      history: []
-    }, 
-    term3: { 
-      amount: 5000, 
-      paid: 0,
-      due: 5000,
-      status: 'due',
-      history: []
-    }, 
-    transport: { 
-      amount: 1000, 
-      paid: 1000,
-      due: 0,
-      status: 'paid',
-      history: [
-        { date: '2024-01-25', amount: 1000, mode: 'Cash' }
-      ]
-    },
-    previousYearFees: [],
-    alert: '',
-    totalDue: 10000
-  },
-  { 
-    id: 3, 
-    name: 'Bob Johnson', 
-    class: '2', 
-    section: 'B', 
-    rollNo: '3',
-    profileColor: '#f59e0b',
-    academicYear: '2024-2025',
-    term1: { 
-      amount: 5000, 
-      paid: 3000,
-      due: 2000,
-      status: 'partial',
-      history: [
-        { date: '2024-02-05', amount: 2000, mode: 'Online' },
-        { date: '2024-02-12', amount: 1000, mode: 'Cash' }
-      ]
-    }, 
-    term2: { 
-      amount: 5000, 
-      paid: 0,
-      due: 5000,
-      status: 'due',
-      history: []
-    }, 
-    term3: { 
-      amount: 5000, 
-      paid: 0,
-      due: 5000,
-      status: 'due',
-      history: []
-    }, 
-    transport: { 
-      amount: 1000, 
-      paid: 0,
-      due: 1000,
-      status: 'due',
-      history: []
-    },
-    previousYearFees: [
-      {
-        academicYear: '2023-2024',
-        term1: { amount: 4500, paid: 4500, due: 0, status: 'paid' },
-        term2: { amount: 4500, paid: 3000, due: 1500, status: 'partial' },
-        term3: { amount: 4500, paid: 4500, due: 0, status: 'paid' },
-        transport: { amount: 900, paid: 900, due: 0, status: 'paid' }
-      }
-    ],
-    alert: 'Previous year fees pending: ₹1500',
-    totalDue: 9500
-  },
-  { 
-    id: 4, 
-    name: 'Alice Brown', 
-    class: '3', 
-    section: 'C', 
-    rollNo: '1',
-    profileColor: '#8b5cf6',
-    academicYear: '2024-2025',
-    term1: { 
-      amount: 5000, 
-      paid: 5000,
-      due: 0,
-      status: 'paid',
-      history: [
-        { date: '2024-01-18', amount: 5000, mode: 'Online' }
-      ]
-    }, 
-    term2: { 
-      amount: 5000, 
-      paid: 5000,
-      due: 0,
-      status: 'paid',
-      history: [
-        { date: '2024-03-15', amount: 5000, mode: 'Online' }
-      ]
-    }, 
-    term3: { 
-      amount: 5000, 
-      paid: 0,
-      due: 5000,
-      status: 'due',
-      history: []
-    }, 
-    transport: { 
-      amount: 1000, 
-      paid: 1000,
-      due: 0,
-      status: 'paid',
-      history: [
-        { date: '2024-03-15', amount: 1000, mode: 'Cash' }
-      ]
-    },
-    previousYearFees: [],
-    alert: '',
-    totalDue: 5000
-  },
+const academicYears = [
+  'All',
+  '2023-2024',
+  '2024-2025',
+  '2025-2026',
+  '2026-2027',
+  '2027-2028',
 ]
 
-const statusColors = {
-  paid: '#10b981',
-  partial: '#f59e0b',
-  due: '#ef4444',
+// Define class order from Pre Nursery to Class 12
+const classOrder = {
+  'pre nursery': 1,
+  'nursery': 2,
+  'kg': 3,
+  'lkg': 4,
+  'ukg': 5,
+  'prep': 6,
+  '1': 7,
+  '2': 8,
+  '3': 9,
+  '4': 10,
+  '5': 11,
+  '6': 12,
+  '7': 13,
+  '8': 14,
+  '9': 15,
+  '10': 16,
+  '11': 17,
+  '12': 18,
+  'i': 15, // Roman numerals support
+  'ii': 16,
+  'iii': 17,
+  'iv': 18,
+  'v': 19,
+  'vi': 20,
+  'vii': 21,
+  'viii': 22,
+  'ix': 23,
+  'x': 24,
+  'xi': 25,
+  'xii': 26,
 }
 
-const statusText = {
-  paid: 'Paid',
-  partial: 'Partial',
-  due: 'Due',
-}
-
-export default function CollectFees({ visible, onClose }) {
-  const { colors } = useTheme()
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedClass, setSelectedClass] = useState('All')
-  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false)
-  const [filteredData, setFilteredData] = useState(staticFeesData)
-  const [selectedStudent, setSelectedStudent] = useState(null)
-  const [selectedFees, setSelectedFees] = useState([])
-  const [paymentModalVisible, setPaymentModalVisible] = useState(false)
-  const [expandedStudents, setExpandedStudents] = useState({})
-  const [expandedAcademicYears, setExpandedAcademicYears] = useState({})
-  const searchInputRef = useRef(null)
-
-  useEffect(() => {
-    filterData(searchQuery, selectedClass)
-  }, [])
-
-  const handleSearch = (query) => {
-    setSearchQuery(query)
-    filterData(query, selectedClass)
-  }
-
-  const handleClassFilter = (cls) => {
-    setSelectedClass(cls)
-    filterData(searchQuery, cls)
-    setFilterDropdownOpen(false)
-    Keyboard.dismiss()
-  }
-
-  const filterData = (query, cls) => {
-    let filtered = staticFeesData
-    if (cls !== 'All') {
-      filtered = filtered.filter(item => item.class === cls)
-    }
-    if (query) {
-      filtered = filtered.filter(item => 
-        item.name.toLowerCase().includes(query.toLowerCase()) ||
-        item.rollNo.includes(query)
-      )
-    }
-    setFilteredData(filtered)
-  }
-
-  const toggleStudentExpansion = (studentId) => {
-    setExpandedStudents(prev => ({
-      ...prev,
-      [studentId]: !prev[studentId]
-    }))
-  }
-
-  const toggleAcademicYearExpansion = (studentId, academicYear) => {
-    const key = `${studentId}-${academicYear}`
-    setExpandedAcademicYears(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }))
-  }
-
-  const handlePayFee = (student, feeType, feeLabel, academicYear = 'current', prevYearIndex = null) => {
-    setSelectedStudent(student)
-    setSelectedFees([{ 
-      type: feeType, 
-      label: feeLabel, 
-      academicYear,
-      prevYearIndex 
-    }])
-    setPaymentModalVisible(true)
-  }
-
-  const handlePayAll = (student) => {
-    setSelectedStudent(student)
-    const fees = []
+// Function to sort classes in proper order
+const sortClassesByOrder = (fees) => {
+  return [...fees].sort((a, b) => {
+    const classA = (a.className || '').toString().toLowerCase().trim()
+    const classB = (b.className || '').toString().toLowerCase().trim()
     
-    // Current year fees
-    if (student.term1.due > 0) fees.push({ 
-      type: 'term1', 
-      label: 'Term 1', 
-      academicYear: 'current' 
-    })
-    if (student.term2.due > 0) fees.push({ 
-      type: 'term2', 
-      label: 'Term 2', 
-      academicYear: 'current' 
-    })
-    if (student.term3.due > 0) fees.push({ 
-      type: 'term3', 
-      label: 'Term 3', 
-      academicYear: 'current' 
-    })
-    if (student.transport.due > 0) fees.push({ 
-      type: 'transport', 
-      label: 'Transport', 
-      academicYear: 'current' 
-    })
-    
-    // Previous year fees
-    student.previousYearFees?.forEach((prevYear, yearIndex) => {
-      const yearKey = `prev-${yearIndex}`
-      if (prevYear.term1.due > 0) fees.push({ 
-        type: 'term1', 
-        label: `Term 1 (${prevYear.academicYear})`, 
-        academicYear: yearKey,
-        prevYearIndex: yearIndex
-      })
-      if (prevYear.term2.due > 0) fees.push({ 
-        type: 'term2', 
-        label: `Term 2 (${prevYear.academicYear})`, 
-        academicYear: yearKey,
-        prevYearIndex: yearIndex
-      })
-      if (prevYear.term3.due > 0) fees.push({ 
-        type: 'term3', 
-        label: `Term 3 (${prevYear.academicYear})`, 
-        academicYear: yearKey,
-        prevYearIndex: yearIndex
-      })
-      if (prevYear.transport.due > 0) fees.push({ 
-        type: 'transport', 
-        label: `Transport (${prevYear.academicYear})`, 
-        academicYear: yearKey,
-        prevYearIndex: yearIndex
-      })
-    })
-    
-    setSelectedFees(fees)
-    setPaymentModalVisible(true)
-  }
-
-  const handlePaymentComplete = (studentId, fees, amounts, paymentMode, totalAmount) => {
-    Alert.alert('Success', `Payment of ₹${totalAmount.toLocaleString()} recorded`)
-    
-    // In real app, update backend here
-    filterData(searchQuery, selectedClass)
-    setPaymentModalVisible(false)
-    setSelectedStudent(null)
-    setSelectedFees([])
-  }
-
-  const getClassLabel = () => {
-    return selectedClass === 'All' ? 'Filter' : `Class ${selectedClass}`
-  }
-
-  const getClassIcon = () => {
-    if (selectedClass === 'All') return 'filter'
-    return 'users'
-  }
-
-  const renderPaymentHistory = (history, studentId, feeType) => {
-    if (!history || history.length === 0) {
-      return (
-        <View key={`no-history-${studentId}-${feeType}`} style={styles.noHistoryContainer}>
-          <ThemedText style={styles.noHistoryText}>No payment history</ThemedText>
-        </View>
-      )
-    }
-
-    return (
-      <View key={`history-container-${studentId}-${feeType}`} style={styles.historyContainer}>
-        {history.map((payment, index) => (
-          <View key={`history-${studentId}-${feeType}-${index}`} style={styles.historyItem}>
-            <View style={styles.historyLeft}>
-              <MaterialCommunityIcons name="cash-check" size={16} color={colors.primary} />
-              <ThemedText style={styles.historyDate}>{payment.date}</ThemedText>
-            </View>
-            <View style={styles.historyRight}>
-              <ThemedText style={styles.historyAmount}>₹{payment.amount.toLocaleString()}</ThemedText>
-              <View style={[styles.modeBadge, { backgroundColor: colors.primary + '20' }]}>
-                <ThemedText style={[styles.modeText, { color: colors.primary }]}>
-                  {payment.mode}
-                </ThemedText>
-              </View>
-            </View>
-          </View>
-        ))}
-      </View>
-    )
-  }
-
-  const renderFeeItem = (student, type, label, data, academicYear = 'current', prevYearIndex = null) => {
-    const progress = data.paid / data.amount
-    const isExpanded = expandedStudents[student.id]
-    
-    return (
-      <View key={`fee-item-${student.id}-${type}-${academicYear}`} style={styles.feeItemCard}>
-        <TouchableOpacity 
-          style={styles.feeItemHeader}
-          onPress={() => toggleStudentExpansion(student.id)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.feeItemTitleRow}>
-            <ThemedText style={styles.feeItemTitle}>{label}</ThemedText>
-            <View style={[styles.statusBadge, { backgroundColor: statusColors[data.status] + '20' }]}>
-              <ThemedText style={[styles.statusText, { color: statusColors[data.status] }]}>
-                {statusText[data.status]}
-              </ThemedText>
-            </View>
-          </View>
-          <Feather 
-            name={isExpanded ? "chevron-up" : "chevron-down"} 
-            size={18} 
-            color={colors.textSecondary} 
-          />
-        </TouchableOpacity>
-        
-        <View style={styles.progressContainer}>
-          <View style={styles.progressLabels}>
-            <ThemedText style={styles.progressLabel}>Paid: ₹{data.paid.toLocaleString()}</ThemedText>
-            <ThemedText style={styles.progressLabel}>Due: ₹{data.due.toLocaleString()}</ThemedText>
-            <ThemedText style={styles.progressLabel}>Total: ₹{data.amount.toLocaleString()}</ThemedText>
-          </View>
-          <View style={styles.progressBar}>
-            <View 
-              style={[
-                styles.progressFill, 
-                { 
-                  width: `${progress * 100}%`,
-                  backgroundColor: statusColors[data.status]
-                }
-              ]} 
-            />
-          </View>
-        </View>
-        
-        {isExpanded && (
-          <View style={styles.expandedContent}>
-            <ThemedText style={styles.historyTitle}>Payment History</ThemedText>
-            {renderPaymentHistory(data.history, student.id, type)}
-          </View>
-        )}
-        
-        {data.due > 0 && (
-          <TouchableOpacity 
-            onPress={() => handlePayFee(student, type, label, academicYear, prevYearIndex)} 
-            style={[styles.payButton, { backgroundColor: colors.primary }]}
-          >
-            <Feather name="credit-card" size={14} color="#FFFFFF" />
-            <ThemedText style={styles.payButtonText}>
-              Pay ₹{data.due.toLocaleString()}
-            </ThemedText>
-          </TouchableOpacity>
-        )}
-      </View>
-    )
-  }
-
-  const renderPreviousYearFees = (student, prevYear, yearIndex) => {
-    const isExpanded = expandedAcademicYears[`${student.id}-${prevYear.academicYear}`]
-    const totalDue = prevYear.term1.due + prevYear.term2.due + prevYear.term3.due + prevYear.transport.due
-    
-    if (totalDue === 0) return null
-    
-    return (
-      <View key={`prev-year-${student.id}-${yearIndex}`} style={styles.previousYearContainer}>
-        <TouchableOpacity 
-          style={styles.previousYearHeader}
-          onPress={() => toggleAcademicYearExpansion(student.id, prevYear.academicYear)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.previousYearTitleRow}>
-            <MaterialIcons name="history" size={20} color="#f59e0b" />
-            <ThemedText style={styles.previousYearTitle}>
-              Previous Year: {prevYear.academicYear}
-            </ThemedText>
-          </View>
-          <View style={styles.previousYearRight}>
-            <ThemedText style={styles.previousYearDue}>
-              Due: ₹{totalDue.toLocaleString()}
-            </ThemedText>
-            <Feather 
-              name={isExpanded ? "chevron-up" : "chevron-down"} 
-              size={18} 
-              color={colors.textSecondary} 
-            />
-          </View>
-        </TouchableOpacity>
-        
-        {isExpanded && (
-          <View style={styles.previousYearFees}>
-            {renderFeeItem(student, 'term1', `Term 1`, prevYear.term1, `prev-${yearIndex}`, yearIndex)}
-            {renderFeeItem(student, 'term2', `Term 2`, prevYear.term2, `prev-${yearIndex}`, yearIndex)}
-            {renderFeeItem(student, 'term3', `Term 3`, prevYear.term3, `prev-${yearIndex}`, yearIndex)}
-            {renderFeeItem(student, 'transport', `Transport`, prevYear.transport, `prev-${yearIndex}`, yearIndex)}
-          </View>
-        )}
-      </View>
-    )
-  }
-
-  const renderStudent = ({ item, index }) => {
-    const isExpanded = expandedStudents[item.id]
-    
-    return (
-      <View style={[styles.studentCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-        <View style={styles.studentHeader}>
-          <View style={styles.studentInfo}>
-            <View style={[styles.profileIcon, { backgroundColor: item.profileColor + '20', borderColor: item.profileColor + '40' }]}>
-              <ThemedText style={[styles.profileText, { color: item.profileColor }]}>
-                {item.name.charAt(0)}
-              </ThemedText>
-            </View>
-            <View style={styles.studentDetails}>
-              <ThemedText 
-                style={styles.studentName} 
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {item.name}
-              </ThemedText>
-              <View style={styles.studentMeta}>
-                <ThemedText style={[styles.studentClass, { color: colors.textSecondary }]}>
-                  Class {item.class} • Sec {item.section} • Roll: {item.rollNo}
-                </ThemedText>
-              </View>
-              <View style={styles.academicYearContainer}>
-                <MaterialIcons name="calendar-today" size={12} color={colors.primary} />
-                <ThemedText style={[styles.academicYear, { color: colors.primary }]}>
-                  {item.academicYear}
-                </ThemedText>
-              </View>
-            </View>
-          </View>
-          <View style={[styles.totalDueBadge, { backgroundColor: item.totalDue > 0 ? colors.primary + '15' : colors.success + '15' }]}>
-            <ThemedText style={[styles.totalDueText, { color: item.totalDue > 0 ? colors.primary : colors.success }]}>
-              ₹{item.totalDue.toLocaleString()}
-            </ThemedText>
-            <ThemedText style={[styles.totalDueLabel, { color: colors.textSecondary }]}>
-              Total Due
-            </ThemedText>
-          </View>
-        </View>
-        
-        {item.alert ? (
-          <View style={styles.alertContainer}>
-            <Ionicons name="alert-circle" size={16} color="#f59e0b" />
-            <ThemedText style={styles.alertText}>{item.alert}</ThemedText>
-          </View>
-        ) : null}
-        
-        <View style={styles.feesGrid}>
-          {renderFeeItem(item, 'term1', 'Term 1', item.term1)}
-          {renderFeeItem(item, 'term2', 'Term 2', item.term2)}
-          {renderFeeItem(item, 'term3', 'Term 3', item.term3)}
-          {renderFeeItem(item, 'transport', 'Transport', item.transport)}
-        </View>
-        
-        {/* Previous Year Fees */}
-        {item.previousYearFees?.map((prevYear, index) => 
-          renderPreviousYearFees(item, prevYear, index)
-        )}
-        
-        {/* Pay All Button at bottom */}
-        {item.totalDue > 0 && (
-          <TouchableOpacity 
-            onPress={() => handlePayAll(item)}
-            style={[styles.payAllButtonBottom, { backgroundColor: colors.primary }]}
-          >
-            <MaterialIcons name="payment" size={18} color="#FFFFFF" />
-            <ThemedText style={styles.payAllButtonText}>
-              Pay All Due: ₹{item.totalDue.toLocaleString()}
-            </ThemedText>
-          </TouchableOpacity>
-        )}
-      </View>
-    )
-  }
-
-  const renderHeader = () => (
-    <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground }]}>
-      <View style={styles.searchHeader}>
-        <View style={styles.searchTitleContainer}>
-          <FontAwesome5 name="search-dollar" size={24} color={colors.primary} />
-          <ThemedText style={styles.searchTitle}>Search & Filter</ThemedText>
-        </View>
-        <ThemedText style={styles.searchSubtitle}>
-          Find students by name, roll number or filter by class
-        </ThemedText>
-      </View>
+    // Extract numeric or named class
+    const getClassValue = (className) => {
+      // Remove non-alphanumeric characters and spaces
+      const cleanClass = className.replace(/[^a-z0-9\s]/gi, '').toLowerCase().trim()
       
-      <View style={styles.searchContainer}>
+      // Check for pre nursery
+      if (cleanClass.includes('pre') && cleanClass.includes('nursery')) return classOrder['pre nursery']
+      
+      // Check for nursery
+      if (cleanClass.includes('nursery') && !cleanClass.includes('pre')) return classOrder['nursery']
+      
+      // Check for KG/LKG/UKG
+      if (cleanClass.includes('kg')) {
+        if (cleanClass.includes('lkg')) return classOrder['lkg']
+        if (cleanClass.includes('ukg')) return classOrder['ukg']
+        return classOrder['kg']
+      }
+      
+      // Check for prep
+      if (cleanClass.includes('prep')) return classOrder['prep']
+      
+      // Extract numeric part
+      const numMatch = cleanClass.match(/\d+/)
+      if (numMatch) {
+        const num = parseInt(numMatch[0])
+        if (num >= 1 && num <= 12) return classOrder[num.toString()]
+      }
+      
+      // Check for roman numerals
+      const romanMatch = cleanClass.match(/\b(i{1,3}|iv|v|vi{0,3}|ix|x|xi|xii)\b/i)
+      if (romanMatch) {
+        const roman = romanMatch[0].toLowerCase()
+        if (classOrder[roman]) return classOrder[roman]
+      }
+      
+      // Default: alphabetical
+      return 100 + className.charCodeAt(0)
+    }
+    
+    const valueA = getClassValue(classA)
+    const valueB = getClassValue(classB)
+    
+    // First sort by order
+    if (valueA !== valueB) return valueA - valueB
+    
+    // If same order, sort by academic year (newest first)
+    const yearA = a.academicYear || ''
+    const yearB = b.academicYear || ''
+    return yearB.localeCompare(yearA)
+  })
+}
+
+// Memoized Header Component
+const HeaderComponent = React.memo(({
+  colors,
+  searchQuery,
+  handleSearch,
+  activeTab,
+  setActiveTab,
+  selectedAcademicYear,
+  renderAcademicYearDropdown,
+  filteredClassFees,
+  filteredBusFees,
+  handleAddClassFee,
+  handleAddBusFee,
+  setShowUploadModal,
+  searchInputRef,
+  slideAnim,
+  flatListRef
+}) => {
+  const styles = useMemo(() => {
+    return StyleSheet.create({
+      headerContainer: {
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+        marginBottom: 8,
+      },
+      searchRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginBottom: 16,
+      },
+      searchInputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderRadius: 14,
+        paddingHorizontal: 16,
+        height: 52,
+      },
+      searchIcon: {
+        marginRight: 5,
+      },
+      searchInput: {
+        flex: 1,
+        height: '100%',
+        fontSize: 14,
+        fontFamily: 'Poppins-Medium',
+        marginBottom: -3,
+      },
+      clearButton: {
+        padding: 4,
+      },
+      tabsContainer: {
+        marginBottom: 16,
+        position: 'relative',
+      },
+      tabsWrapper: {
+        flexDirection: 'row',
+        borderRadius: 12,
+        padding: 4,
+        backgroundColor: colors.inputBackground,
+      },
+      tab: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        paddingVertical: 12,
+        borderRadius: 8,
+        position: 'relative',
+      },
+      activeTab: {
+        backgroundColor: colors.background,
+      },
+      tabText: {
+        fontSize: 14,
+        fontFamily: 'Poppins-SemiBold',
+      },
+      tabBadge: {
+        position: 'absolute',
+        top: 6,
+        right: 8,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 10,
+        minWidth: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      tabBadgeText: {
+        fontSize: 10,
+        fontFamily: 'Poppins-Bold',
+      },
+      tabIndicator: {
+        position: 'absolute',
+        bottom: 0,
+        left: 4,
+        width: '50%',
+        height: 3,
+        borderRadius: 1.5,
+      },
+      actionButtonsContainer: {
+        marginBottom: 5,
+      },
+      actionButtonsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+      },
+      actionButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        paddingVertical: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+      },
+      bulkUploadButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+      },
+      actionButtonText: {
+        fontSize: 14,
+        fontFamily: 'Poppins-SemiBold',
+      },
+      resultsInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 10,
+      },
+      resultsText: {
+        fontSize: 13,
+        fontFamily: 'Poppins-Medium',
+      },
+      clearFiltersButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: colors.border,
+      },
+      clearFiltersText: {
+        fontSize: 12,
+        fontFamily: 'Poppins-Medium',
+        color: colors.textSecondary,
+      },
+    })
+  }, [colors])
+
+  const handleClearSearch = useCallback(() => {
+    handleSearch('')
+  }, [handleSearch])
+
+  return (
+    <View style={[styles.headerContainer, { backgroundColor: colors.cardBackground }]}>
+      <View style={styles.searchRow}>
         <View style={[styles.searchInputContainer, { 
           backgroundColor: colors.inputBackground, 
-          borderColor: colors.primary + '40' 
+          borderColor: colors.primary + '40',
+          flex: 1
         }]}>
           <Feather name="search" size={20} color={colors.primary} style={styles.searchIcon} />
           <TextInput
             ref={searchInputRef}
-            placeholder="Search here"
+            placeholder={`Search ${activeTab === 'class' ? 'class' : 'bus'} fees...`}
             placeholderTextColor={colors.textSecondary}
             value={searchQuery}
             onChangeText={handleSearch}
@@ -1199,65 +318,1250 @@ export default function CollectFees({ visible, onClose }) {
             clearButtonMode="while-editing"
           />
           {searchQuery ? (
-            <TouchableOpacity onPress={() => handleSearch('')} style={styles.clearButton}>
+            <TouchableOpacity 
+              activeOpacity={.9}
+              onPress={handleClearSearch}
+              style={styles.clearButton}
+            >
               <Feather name="x-circle" size={18} color={colors.textSecondary} />
             </TouchableOpacity>
           ) : null}
         </View>
         
-        <TouchableOpacity 
-          style={[styles.filterButton, { 
-            backgroundColor: colors.inputBackground, 
-            borderColor: colors.primary + '40',
-            borderWidth: selectedClass !== 'All' ? 2 : 1,
-          }]}
-          onPress={() => {
-            setFilterDropdownOpen(true)
-            Keyboard.dismiss()
-          }}
-        >
-          <Feather name={getClassIcon()} size={18} color={colors.primary} />
-          <ThemedText style={[styles.filterButtonText, { 
-            color: selectedClass !== 'All' ? colors.primary : colors.text,
-            fontFamily: selectedClass !== 'All' ? 'Poppins-SemiBold' : 'Poppins-Medium'
-          }]}>
-            {getClassLabel()}
-          </ThemedText>
-          {selectedClass !== 'All' && (
-            <View style={[styles.classBadge, { backgroundColor: colors.primary }]}>
-              <ThemedText style={styles.classBadgeText}>{selectedClass}</ThemedText>
-            </View>
-          )}
-        </TouchableOpacity>
+        <View style={{ flex: 1 }}>
+          {renderAcademicYearDropdown()}
+        </View>
       </View>
       
-      {searchQuery || selectedClass !== 'All' && (
-        <View style={styles.resultsInfo}>
-          <View style={styles.resultsInfoRow}>
-            <Feather name="users" size={16} color={colors.textSecondary} />
-            <ThemedText style={[styles.resultsText, { color: colors.textSecondary }]}>
-              {filteredData.length} student{filteredData.length !== 1 ? 's' : ''} found
-              {searchQuery ? ` for "${searchQuery}"` : ''}
-              {selectedClass !== 'All' ? ` in Class ${selectedClass}` : ''}
+      {/* Tabs */}
+      <View style={styles.tabsContainer}>
+        <View style={[styles.tabsWrapper, { backgroundColor: colors.inputBackground }]}>
+          <TouchableOpacity 
+            activeOpacity={.9}
+            style={[styles.tab, activeTab === 'class' && styles.activeTab]}
+            onPress={() => {
+              setActiveTab('class')
+              flatListRef.current?.scrollToOffset({ animated: true, offset: 0 })
+            }}
+          >
+            <MaterialIcons 
+              name="school" 
+              size={20} 
+              color={activeTab === 'class' ? colors.primary : colors.textSecondary} 
+            />
+            <ThemedText style={[
+              styles.tabText, 
+              { color: activeTab === 'class' ? colors.primary : colors.textSecondary }
+            ]}>
+              Class Fees
             </ThemedText>
-          </View>
-          {(searchQuery || selectedClass !== 'All') && (
-            <TouchableOpacity 
-              style={styles.clearFiltersButton}
-              onPress={() => {
-                setSearchQuery('')
-                setSelectedClass('All')
-                filterData('', 'All')
-              }}
-            >
-              <Feather name="x" size={14} color={colors.textSecondary} />
-              <ThemedText style={styles.clearFiltersText}>Clear filters</ThemedText>
-            </TouchableOpacity>
-          )}
+            {filteredClassFees.length > 0 && (
+              <View style={[styles.tabBadge, { backgroundColor: colors.primary + '20' }]}>
+                <ThemedText style={[styles.tabBadgeText, { color: colors.primary }]}>
+                  {filteredClassFees.length}
+                </ThemedText>
+              </View>
+            )}
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            activeOpacity={.9}
+            style={[styles.tab, activeTab === 'bus' && styles.activeTab]}
+            onPress={() => {
+              setActiveTab('bus')
+              flatListRef.current?.scrollToOffset({ animated: true, offset: 0 })
+            }}
+          >
+            <MaterialIcons 
+              name="directions-bus" 
+              size={20} 
+              color={activeTab === 'bus' ? colors.success : colors.textSecondary} 
+            />
+            <ThemedText style={[
+              styles.tabText, 
+              { color: activeTab === 'bus' ? colors.success : colors.textSecondary }
+            ]}>
+              Bus Fees
+            </ThemedText>
+            {filteredBusFees.length > 0 && (
+              <View style={[styles.tabBadge, { backgroundColor: colors.success + '20' }]}>
+                <ThemedText style={[styles.tabBadgeText, { color: colors.success }]}>
+                  {filteredBusFees.length}
+                </ThemedText>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
-      )}
+        
+        {/* Animated indicator bar at bottom */}
+        <Animated.View 
+          style={[
+            styles.tabIndicator,
+            { 
+              backgroundColor: activeTab === 'class' ? colors.primary : colors.success,
+              transform: [{
+                translateX: slideAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 190]
+                })
+              }]
+            }
+          ]}
+        />
+      </View>
+      
+      <View style={styles.actionButtonsContainer}>
+        <View style={styles.actionButtonsRow}>
+          <TouchableOpacity 
+            activeOpacity={.9}
+            style={[
+              styles.actionButton, 
+              { 
+                backgroundColor: activeTab === 'class' ? colors.primary + '15' : colors.success + '15', 
+                borderColor: activeTab === 'class' ? colors.primary : colors.success,
+                flex: 1,
+                marginRight: 8
+              }
+            ]}
+            onPress={activeTab === 'class' ? handleAddClassFee : handleAddBusFee}
+          >
+            <Feather name="plus" size={18} color={activeTab === 'class' ? colors.primary : colors.success} />
+            <ThemedText style={[styles.actionButtonText, { 
+              color: activeTab === 'class' ? colors.primary : colors.success 
+            }]}>
+              Add {activeTab === 'class' ? 'Class Fee' : 'Bus Fee'}
+            </ThemedText>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            activeOpacity={.9}
+            style={[
+              styles.bulkUploadButton,
+              { 
+                backgroundColor: activeTab === 'class' ? colors.primary + '15' : colors.success + '15',
+                borderColor: activeTab === 'class' ? colors.primary : colors.success
+              }
+            ]}
+            onPress={() => setShowUploadModal(true)}
+          >
+            <Feather name="upload" size={16} color={activeTab === 'class' ? colors.primary : colors.success} />
+          </TouchableOpacity>
+        </View>
+      </View>
     </View>
   )
+})
+
+export default function CollectFees({ visible, onClose }) {
+  const { colors } = useTheme()
+  const [searchQuery, setSearchQuery] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [busFeeModalVisible, setBusFeeModalVisible] = useState(false)
+  const [classFeeModalVisible, setClassFeeModalVisible] = useState(false)
+  const [editingBusFee, setEditingBusFee] = useState(null)
+  const [editingClassFee, setEditingClassFee] = useState(null)
+  const [classFees, setClassFees] = useState([])
+  const [busFees, setBusFees] = useState([])
+  const [filteredClassFees, setFilteredClassFees] = useState([])
+  const [filteredBusFees, setFilteredBusFees] = useState([])
+  const [activeTab, setActiveTab] = useState('class')
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState('All')
+  const [showYearDropdown, setShowYearDropdown] = useState(false)
+  const [dropdownPosition, setDropdownPosition] = useState({ x: 0, y: 0, width: 0 })
+  const [toast, setToast] = useState({
+    visible: false,
+    message: '',
+    type: 'info'
+  })
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadResult, setUploadResult] = useState(null)
+  const [templateModalVisible, setTemplateModalVisible] = useState(false)
+  
+  const slideAnim = useRef(new Animated.Value(0)).current
+  const searchInputRef = useRef(null)
+  const yearSelectorRef = useRef(null)
+  const flatListRef = useRef(null)
+
+  const showToast = (message, type = 'info') => {
+    setToast({
+      visible: true,
+      message,
+      type
+    })
+  }
+
+  const hideToast = () => {
+    setToast(prev => ({ ...prev, visible: false }))
+  }
+
+  useEffect(() => {
+    // Animate tab indicator when tab changes
+    Animated.timing(slideAnim, {
+      toValue: activeTab === 'class' ? 0 : 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start()
+  }, [activeTab])
+
+  // Load initial data
+  useEffect(() => {
+    if (visible) {
+      loadData()
+    }
+  }, [visible])
+
+  const loadData = async (pageNum = 1, isRefreshing = false) => {
+    try {
+      if (isRefreshing) {
+        setRefreshing(true)
+      } else if (pageNum === 1) {
+        setLoading(true)
+      }
+
+      const limit = 20
+      const offset = (pageNum - 1) * limit
+
+      // Fetch class fees
+      const classResponse = await axiosApi.get('/class-fees', {
+        params: {
+          page: pageNum,
+          limit: limit,
+          academicYear: selectedAcademicYear !== 'All' ? selectedAcademicYear : undefined,
+          isActive: true
+        }
+      })
+
+      // Fetch bus fees
+      const busResponse = await axiosApi.get('/bus-fees', {
+        params: {
+          page: pageNum,
+          limit: limit,
+          academicYear: selectedAcademicYear !== 'All' ? selectedAcademicYear : undefined,
+          isActive: true
+        }
+      })
+
+      if (pageNum === 1) {
+        const rawClassFees = classResponse.data.data?.classFees || []
+        const sortedClassFees = sortClassesByOrder(rawClassFees)
+        
+        setClassFees(sortedClassFees)
+        setBusFees(busResponse.data.data?.busFees || [])
+        setFilteredClassFees(sortedClassFees)
+        setFilteredBusFees(busResponse.data.data?.busFees || [])
+      } else {
+        const newClassFees = classResponse.data.data?.classFees || []
+        const sortedNewClassFees = sortClassesByOrder(newClassFees)
+        
+        setClassFees(prev => {
+          const combined = [...prev, ...sortedNewClassFees]
+          return sortClassesByOrder(combined)
+        })
+        
+        setBusFees(prev => [...prev, ...(busResponse.data.data?.busFees || [])])
+        setFilteredClassFees(prev => {
+          const combined = [...prev, ...sortedNewClassFees]
+          return sortClassesByOrder(combined)
+        })
+        setFilteredBusFees(prev => [...prev, ...(busResponse.data.data?.busFees || [])])
+      }
+
+      // Update pagination info
+      const classTotalPages = classResponse.data.data?.pagination?.pages || 1
+      const busTotalPages = busResponse.data.data?.pagination?.pages || 1
+      setTotalPages(Math.max(classTotalPages, busTotalPages))
+      setHasMore(pageNum < Math.max(classTotalPages, busTotalPages))
+
+    } catch (error) {
+      console.error('Error loading fees:', error)
+      const errorMessage = error.response?.data?.message || 'Failed to load fees. Please try again.'
+      showToast(errorMessage, 'error')
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }
+
+  const handleRefresh = useCallback(() => {
+    setPage(1)
+    setHasMore(true)
+    loadData(1, true)
+  }, [selectedAcademicYear])
+
+  const handleLoadMore = () => {
+    if (!hasMore || loading || refreshing) return
+    
+    const nextPage = page + 1
+    setPage(nextPage)
+    loadData(nextPage)
+  }
+
+  const handleSearch = useCallback((query) => {
+    setSearchQuery(query)
+    
+    if (!query.trim()) {
+      // If no search query, just filter by academic year
+      if (selectedAcademicYear === 'All') {
+        const sortedClassFees = sortClassesByOrder(classFees)
+        setFilteredClassFees(sortedClassFees)
+        setFilteredBusFees(busFees)
+      } else {
+        const filteredByYear = classFees.filter(fee => fee.academicYear === selectedAcademicYear)
+        const sortedFilteredClassFees = sortClassesByOrder(filteredByYear)
+        setFilteredClassFees(sortedFilteredClassFees)
+        setFilteredBusFees(busFees.filter(fee => fee.academicYear === selectedAcademicYear))
+      }
+      return
+    }
+    
+    const lowerQuery = query.toLowerCase()
+    
+    // Filter based on active tab
+    if (activeTab === 'class') {
+      let filteredClasses = classFees
+      
+      // Filter by academic year if not "All"
+      if (selectedAcademicYear !== 'All') {
+        filteredClasses = filteredClasses.filter(fee => fee.academicYear === selectedAcademicYear)
+      }
+      
+      // Filter by search query
+      if (query.trim()) {
+        filteredClasses = filteredClasses.filter(fee => 
+          fee.className?.toLowerCase().includes(lowerQuery) ||
+          fee.totalAnnualFee?.toString().includes(query)
+        )
+      }
+      
+      // Sort the filtered results
+      const sortedFilteredClasses = sortClassesByOrder(filteredClasses)
+      setFilteredClassFees(sortedFilteredClasses)
+    } else {
+      let filteredBuses = busFees
+      
+      // Filter by academic year if not "All"
+      if (selectedAcademicYear !== 'All') {
+        filteredBuses = filteredBuses.filter(fee => fee.academicYear === selectedAcademicYear)
+      }
+      
+      // Filter by search query
+      if (query.trim()) {
+        filteredBuses = filteredBuses.filter(fee => 
+          fee.villageName?.toLowerCase().includes(lowerQuery) ||
+          fee.vehicleType?.toLowerCase().includes(lowerQuery) ||
+          fee.feeAmount?.toString().includes(query) ||
+          fee.distance?.toString().includes(query)
+        )
+      }
+      
+      setFilteredBusFees(filteredBuses)
+    }
+  }, [activeTab, selectedAcademicYear, classFees, busFees])
+
+  const handleYearSelect = async (year) => {
+    setSelectedAcademicYear(year)
+    setShowYearDropdown(false)
+    setSearchQuery('')
+    setPage(1)
+    setHasMore(true)
+
+    try {
+      setLoading(true)
+
+      const limit = 20
+      
+      // Fetch filtered data
+      const classResponse = await axiosApi.get('/class-fees', {
+        params: {
+          page: 1,
+          limit: limit,
+          academicYear: year !== 'All' ? year : undefined,
+          isActive: true
+        }
+      })
+
+      const busResponse = await axiosApi.get('/bus-fees', {
+        params: {
+          page: 1,
+          limit: limit,
+          academicYear: year !== 'All' ? year : undefined,
+          isActive: true
+        }
+      })
+
+      const rawClassFees = classResponse.data.data?.classFees || []
+      const sortedClassFees = sortClassesByOrder(rawClassFees)
+      
+      setClassFees(sortedClassFees)
+      setBusFees(busResponse.data.data?.busFees || [])
+      setFilteredClassFees(sortedClassFees)
+      setFilteredBusFees(busResponse.data.data?.busFees || [])
+
+      // Update pagination info
+      const classTotalPages = classResponse.data.data?.pagination?.pages || 1
+      const busTotalPages = busResponse.data.data?.pagination?.pages || 1
+      setTotalPages(Math.max(classTotalPages, busTotalPages))
+      setHasMore(1 < Math.max(classTotalPages, busTotalPages))
+
+    } catch (error) {
+      console.error('Error loading filtered fees:', error)
+      const errorMessage = error.response?.data?.message || 'Failed to load filtered fees.'
+      showToast(errorMessage, 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAddBusFee = useCallback(() => {
+    setEditingBusFee(null)
+    setBusFeeModalVisible(true)
+  }, [])
+
+  const handleEditBusFee = useCallback((busFee) => {
+    setEditingBusFee(busFee)
+    setBusFeeModalVisible(true)
+  }, [])
+
+  const handleAddClassFee = useCallback(() => {
+    setEditingClassFee(null)
+    setClassFeeModalVisible(true)
+  }, [])
+
+  const handleEditClassFee = useCallback((classFee) => {
+    setEditingClassFee(classFee)
+    setClassFeeModalVisible(true)
+  }, [])
+
+  const handleBusFeeSave = async (data, isDeleted = false) => {
+    try {
+      if (isDeleted) {
+        // Refresh data after deletion
+        await loadData(1, true)
+        showToast('Bus fee deleted successfully!', 'success')
+      } else if (data) {
+        // Refresh data after save
+        await loadData(1, true)
+        showToast('Bus fee saved successfully!', 'success')
+      }
+      
+      setBusFeeModalVisible(false)
+      setEditingBusFee(null)
+    } catch (error) {
+      console.error('Error handling bus fee save:', error)
+      const errorMessage = error.response?.data?.message || 'Failed to update bus fee.'
+      showToast(errorMessage, 'error')
+    }
+  }
+
+  const handleClassFeeSave = async (data, isDeleted = false) => {
+    try {
+      if (isDeleted) {
+        // Refresh data after deletion
+        await loadData(1, true)
+        showToast('Class fee deleted successfully!', 'success')
+      } else if (data) {
+        // Refresh data after save
+        await loadData(1, true)
+        showToast('Class fee saved successfully!', 'success')
+      }
+      
+      setClassFeeModalVisible(false)
+      setEditingClassFee(null)
+    } catch (error) {
+      console.error('Error handling class fee save:', error)
+      const errorMessage = error.response?.data?.message || 'Failed to update class fee.'
+      showToast(errorMessage, 'error')
+    }
+  }
+
+  const downloadTemplate = async () => {
+    try {
+      setLoading(true)
+      
+      // Determine which template to download
+      const endpoint = activeTab === 'class' 
+        ? '/class-fees/download-template' 
+        : '/bus-fees/download-template'
+      
+      const response = await axiosApi.get(endpoint, {
+        responseType: 'blob',
+      })
+      
+      // Create blob from response
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      })
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${activeTab === 'class' ? 'class_fees_template' : 'bus_fees_template'}.xlsx`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      showToast('Template downloaded successfully!', 'success')
+      setTemplateModalVisible(false)
+      
+    } catch (error) {
+      console.error('Error downloading template:', error)
+      showToast('Failed to download template. Please try again.', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleBulkUpload = async () => {
+    try {
+      // Pick Excel file
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'application/vnd.ms-excel',
+          '.xlsx',
+          '.xls'
+        ],
+        copyToCacheDirectory: true,
+      })
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return
+      }
+
+      const asset = result.assets[0]
+      
+      // Validate file
+      const validExtensions = ['.xlsx', '.xls']
+      const fileExtension = asset.name.toLowerCase().slice(asset.name.lastIndexOf('.'))
+      
+      if (!validExtensions.includes(fileExtension)) {
+        showToast('Please select an Excel file (.xlsx or .xls)', 'error')
+        return
+      }
+      
+      if (asset.size > 10 * 1024 * 1024) {
+        showToast('File size must be less than 10MB', 'error')
+        return
+      }
+
+      setUploading(true)
+      setUploadProgress(0)
+      setUploadResult(null)
+
+      // Get the actual file URI
+      let fileUri = asset.uri;
+      
+      // For iOS, we might need to add file:// prefix
+      if (Platform.OS === 'ios' && !fileUri.startsWith('file://')) {
+        fileUri = `file://${fileUri}`;
+      }
+      
+      // Create FormData
+      const formData = new FormData();
+      
+      // Get the filename
+      const fileName = asset.name || `${activeTab}_fees_${Date.now()}.xlsx`;
+      
+      // Append the file
+      formData.append('file', {
+        uri: fileUri,
+        name: fileName,
+        type: asset.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+
+      console.log('Uploading file:', fileName);
+
+      // Upload to backend
+      const endpoint = activeTab === 'class' ? '/class-fees/bulk-upload' : '/bus-fees/bulk-upload'
+      const response = await axiosApi.post(endpoint, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          )
+          setUploadProgress(percentCompleted)
+        },
+      })
+
+      if (response.data.success) {
+        const results = response.data.data
+        setUploadResult(results)
+        
+        let successMessage = `Bulk upload completed! `;
+        if (results.created) successMessage += `Created: ${results.created}, `;
+        if (results.updated) successMessage += `Updated: ${results.updated}`;
+        
+        showToast(successMessage, 'success')
+        
+        if (results.errors && results.errors.length > 0) {
+          showToast(`${results.errors.length} errors occurred during upload. Check details below.`, 'warning')
+        }
+        
+        // Refresh data
+        await loadData(1, true)
+      }
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      
+      let errorMessage = 'Failed to upload file';
+      
+      if (error.response) {
+        errorMessage = error.response.data?.message || 
+                      error.response.data?.error || 
+                      `Server error: ${error.response.status}`;
+      } else if (error.request) {
+        errorMessage = 'No response from server. Check your internet connection.';
+      } else {
+        errorMessage = error.message || 'Failed to upload file';
+      }
+      
+      showToast(errorMessage, 'error');
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+    }
+  }
+
+  const resetUpload = () => {
+    setUploadResult(null)
+    setUploadProgress(0)
+    setShowUploadModal(false)
+  }
+
+  const renderUploadModal = () => (
+    <Modal
+      transparent
+      visible={showUploadModal}
+      animationType="fade"
+      onRequestClose={() => {
+        if (!uploading) {
+          resetUpload()
+        }
+      }}
+      statusBarTranslucent={true}
+    >
+      <View style={styles.uploadModalOverlay}>
+        <View style={[styles.uploadModalContainer, { backgroundColor: colors.cardBackground }]}>
+          <View style={styles.uploadModalHeader}>
+            <View style={[styles.uploadModalIconContainer, { backgroundColor: colors.primary + '15' }]}>
+              <Feather name="upload" size={24} color={colors.primary} />
+            </View>
+            <View style={styles.uploadModalTitleContainer}>
+              <ThemedText type="title" style={[styles.uploadModalTitle, { color: colors.text }]}>
+                Bulk Upload {activeTab === 'class' ? 'Class Fees' : 'Bus Fees'}
+              </ThemedText>
+              <ThemedText style={[styles.uploadModalSubtitle, { color: colors.textSecondary }]}>
+                Upload Excel file with {activeTab === 'class' ? 'class fee' : 'bus fee'} data
+              </ThemedText>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                if (!uploading) resetUpload()
+              }}
+              disabled={uploading}
+              style={styles.closeButton}
+            >
+              <Feather name="x" size={24} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView style={styles.uploadModalContent} showsVerticalScrollIndicator={false}>
+            {/* Template Download */}
+            <View style={[styles.stepCard, { backgroundColor: colors.primary + '05', borderColor: colors.primary + '20' }]}>
+              <View style={styles.stepHeader}>
+                <View style={[styles.stepIcon, { backgroundColor: colors.primary + '15' }]}>
+                  <MaterialCommunityIcons name="file-download" size={20} color={colors.primary} />
+                </View>
+                <View style={styles.stepTextContainer}>
+                  <ThemedText type="subtitle" style={[styles.stepTitle, { color: colors.primary }]}>
+                    Step 1: Download Template
+                  </ThemedText>
+                  <ThemedText style={[styles.stepDescription, { color: colors.textSecondary }]}>
+                    Download the Excel template with correct column structure
+                  </ThemedText>
+                </View>
+              </View>
+              
+              <TouchableOpacity
+                style={[styles.downloadButton, { 
+                  backgroundColor: colors.primary + '10',
+                  borderColor: colors.primary
+                }]}
+                onPress={downloadTemplate}
+                disabled={loading}
+              >
+                <MaterialCommunityIcons name="file-excel" size={20} color={colors.primary} />
+                <ThemedText style={[styles.downloadButtonText, { color: colors.primary }]}>
+                  Download Excel Template
+                </ThemedText>
+              </TouchableOpacity>
+              
+              <View style={styles.templateInfoContainer}>
+                <ThemedText type="caption" style={[styles.templateInfoTitle, { color: colors.text }]}>
+                  Required Columns for {activeTab === 'class' ? 'Class Fees' : 'Bus Fees'}:
+                </ThemedText>
+                <View style={styles.columnsList}>
+                  {activeTab === 'class' ? (
+                    <>
+                      <View style={styles.columnItem}>
+                        <Feather name="check" size={12} color={colors.success} />
+                        <ThemedText style={[styles.columnText, { color: colors.text }]}>className</ThemedText>
+                      </View>
+                      <View style={styles.columnItem}>
+                        <Feather name="check" size={12} color={colors.success} />
+                        <ThemedText style={[styles.columnText, { color: colors.text }]}>academicYear</ThemedText>
+                      </View>
+                      <View style={styles.columnItem}>
+                        <Feather name="check" size={12} color={colors.success} />
+                        <ThemedText style={[styles.columnText, { color: colors.text }]}>totalAnnualFee</ThemedText>
+                      </View>
+                      <View style={styles.columnItem}>
+                        <Feather name="circle" size={12} color={colors.textSecondary} />
+                        <ThemedText style={[styles.columnText, { color: colors.textSecondary }]}>totalTerms (optional)</ThemedText>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.columnItem}>
+                        <Feather name="check" size={12} color={colors.success} />
+                        <ThemedText style={[styles.columnText, { color: colors.text }]}>villageName</ThemedText>
+                      </View>
+                      <View style={styles.columnItem}>
+                        <Feather name="check" size={12} color={colors.success} />
+                        <ThemedText style={[styles.columnText, { color: colors.text }]}>distance</ThemedText>
+                      </View>
+                      <View style={styles.columnItem}>
+                        <Feather name="check" size={12} color={colors.success} />
+                        <ThemedText style={[styles.columnText, { color: colors.text }]}>feeAmount</ThemedText>
+                      </View>
+                      <View style={styles.columnItem}>
+                        <Feather name="check" size={12} color={colors.success} />
+                        <ThemedText style={[styles.columnText, { color: colors.text }]}>academicYear</ThemedText>
+                      </View>
+                      <View style={styles.columnItem}>
+                        <Feather name="circle" size={12} color={colors.textSecondary} />
+                        <ThemedText style={[styles.columnText, { color: colors.textSecondary }]}>vehicleType (optional)</ThemedText>
+                      </View>
+                    </>
+                  )}
+                </View>
+              </View>
+            </View>
+
+            {/* File Upload */}
+            <View style={[styles.stepCard, { backgroundColor: colors.primary + '05', borderColor: colors.primary + '20' }]}>
+              <View style={styles.stepHeader}>
+                <View style={[styles.stepIcon, { backgroundColor: colors.primary + '15' }]}>
+                  <Feather name="upload-cloud" size={20} color={colors.primary} />
+                </View>
+                <View style={styles.stepTextContainer}>
+                  <ThemedText type="subtitle" style={[styles.stepTitle, { color: colors.primary }]}>
+                    Step 2: Upload File
+                  </ThemedText>
+                  <ThemedText style={[styles.stepDescription, { color: colors.textSecondary }]}>
+                    Select your prepared Excel file. Existing records will be updated, new ones created.
+                  </ThemedText>
+                </View>
+              </View>
+              
+              <View style={styles.uploadInstructions}>
+                <ThemedText type="caption" style={[styles.instructionsTitle, { color: colors.text }]}>
+                  File Requirements:
+                </ThemedText>
+                <View style={styles.instructionsList}>
+                  <View style={styles.instructionItem}>
+                    <MaterialIcons name="check-circle" size={16} color={colors.success} />
+                    <ThemedText style={[styles.instructionText, { color: colors.textSecondary }]}>
+                      Excel format (.xlsx or .xls)
+                    </ThemedText>
+                  </View>
+                  <View style={styles.instructionItem}>
+                    <MaterialIcons name="check-circle" size={16} color={colors.success} />
+                    <ThemedText style={[styles.instructionText, { color: colors.textSecondary }]}>
+                      Maximum file size: 10MB
+                    </ThemedText>
+                  </View>
+                  <View style={styles.instructionItem}>
+                    <MaterialIcons name="check-circle" size={16} color={colors.success} />
+                    <ThemedText style={[styles.instructionText, { color: colors.textSecondary }]}>
+                      First row should contain headers
+                    </ThemedText>
+                  </View>
+                </View>
+              </View>
+              
+              <TouchableOpacity
+                style={[styles.uploadFileButton, { 
+                  backgroundColor: colors.primary + '10',
+                  borderColor: colors.primary,
+                  borderStyle: 'dashed'
+                }]}
+                onPress={handleBulkUpload}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <ThemedText style={[styles.uploadFileButtonText, { color: colors.primary }]}>
+                      Uploading... {uploadProgress}%
+                    </ThemedText>
+                  </>
+                ) : (
+                  <>
+                    <Feather name="upload-cloud" size={24} color={colors.primary} />
+                    <ThemedText style={[styles.uploadFileButtonText, { color: colors.primary }]}>
+                      Select Excel File
+                    </ThemedText>
+                  </>
+                )}
+              </TouchableOpacity>
+              
+              {uploading && uploadProgress > 0 && (
+                <View style={styles.progressContainer}>
+                  <View style={styles.progressBarContainer}>
+                    <View 
+                      style={[
+                        styles.progressBarFill,
+                        { 
+                          backgroundColor: colors.primary,
+                          width: `${uploadProgress}%` 
+                        }
+                      ]} 
+                    />
+                  </View>
+                  <ThemedText style={[styles.progressText, { color: colors.textSecondary }]}>
+                    {uploadProgress}% uploaded
+                  </ThemedText>
+                </View>
+              )}
+            </View>
+
+            {/* Upload Results */}
+            {uploadResult && (
+              <View style={[styles.resultCard, { 
+                borderColor: (uploadResult.errors && uploadResult.errors.length > 0) ? colors.warning : colors.success,
+                backgroundColor: (uploadResult.errors && uploadResult.errors.length > 0) ? colors.warning + '10' : colors.success + '10'
+              }]}>
+                <View style={styles.resultHeader}>
+                  <View style={[styles.resultIconContainer, { 
+                    backgroundColor: (uploadResult.errors && uploadResult.errors.length > 0) ? colors.warning + '20' : colors.success + '20' 
+                  }]}>
+                    <Feather 
+                      name={(uploadResult.errors && uploadResult.errors.length > 0) ? "alert-triangle" : "check-circle"} 
+                      size={24} 
+                      color={(uploadResult.errors && uploadResult.errors.length > 0) ? colors.warning : colors.success} 
+                    />
+                  </View>
+                  <View style={styles.resultTitleContainer}>
+                    <ThemedText type="subtitle" style={[styles.resultTitle, { 
+                      color: (uploadResult.errors && uploadResult.errors.length > 0) ? colors.warning : colors.success
+                    }]}>
+                      {(uploadResult.errors && uploadResult.errors.length > 0) ? 'Upload Completed with Errors' : 'Upload Successful!'}
+                    </ThemedText>
+                    <ThemedText style={[styles.resultSubtitle, { color: colors.textSecondary }]}>
+                      {uploadResult.created || uploadResult.updated ? 'Data processed successfully' : 'No data was processed'}
+                    </ThemedText>
+                  </View>
+                </View>
+                
+                <View style={styles.resultStats}>
+                  <View style={styles.statItem}>
+                    <ThemedText style={[styles.statValue, { color: colors.text }]}>
+                      {(uploadResult.created || 0) + (uploadResult.updated || 0)}
+                    </ThemedText>
+                    <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
+                      Total Processed
+                    </ThemedText>
+                  </View>
+                  
+                  {uploadResult.created > 0 && (
+                    <View style={styles.statItem}>
+                      <ThemedText style={[styles.statValue, { color: colors.success }]}>
+                        {uploadResult.created}
+                      </ThemedText>
+                      <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
+                        Created
+                      </ThemedText>
+                    </View>
+                  )}
+                  
+                  {uploadResult.updated > 0 && (
+                    <View style={styles.statItem}>
+                      <ThemedText style={[styles.statValue, { color: colors.info }]}>
+                        {uploadResult.updated}
+                      </ThemedText>
+                      <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
+                        Updated
+                      </ThemedText>
+                    </View>
+                  )}
+                  
+                  {uploadResult.errors && uploadResult.errors.length > 0 && (
+                    <View style={styles.statItem}>
+                      <ThemedText style={[styles.statValue, { color: colors.error }]}>
+                        {uploadResult.errors.length}
+                      </ThemedText>
+                      <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
+                        Errors
+                      </ThemedText>
+                    </View>
+                  )}
+                  
+                  {uploadResult.skipped > 0 && (
+                    <View style={styles.statItem}>
+                      <ThemedText style={[styles.statValue, { color: colors.textSecondary }]}>
+                        {uploadResult.skipped}
+                      </ThemedText>
+                      <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
+                        Skipped
+                      </ThemedText>
+                    </View>
+                  )}
+                </View>
+                
+                {uploadResult.errors && uploadResult.errors.length > 0 && (
+                  <View style={styles.errorSection}>
+                    <View style={styles.errorHeader}>
+                      <Feather name="alert-circle" size={16} color={colors.error} />
+                      <ThemedText style={[styles.errorTitle, { color: colors.text }]}>
+                        Errors ({uploadResult.errors.length}):
+                      </ThemedText>
+                    </View>
+                    <ScrollView style={styles.errorsList} showsVerticalScrollIndicator={false}>
+                      {uploadResult.errors.slice(0, 10).map((error, index) => (
+                        <View key={index} style={[styles.errorItem, { 
+                          backgroundColor: colors.error + '10',
+                          borderLeftColor: colors.error
+                        }]}>
+                          <ThemedText style={[styles.errorRow, { color: colors.text }]}>
+                            Row {error.row}: 
+                          </ThemedText>
+                          <ThemedText style={[styles.errorText, { color: colors.error }]}>
+                            {error.message || error.error}
+                          </ThemedText>
+                        </View>
+                      ))}
+                      {uploadResult.errors.length > 10 && (
+                        <View style={styles.moreErrors}>
+                          <ThemedText style={[styles.moreErrorsText, { color: colors.textSecondary }]}>
+                            + {uploadResult.errors.length - 10} more errors...
+                          </ThemedText>
+                        </View>
+                      )}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+            )}
+          </ScrollView>
+          
+          <View style={[styles.uploadModalButtons, { borderTopColor: colors.border }]}>
+            <TouchableOpacity
+              style={[styles.uploadModalButton, { 
+                backgroundColor: colors.inputBackground,
+                borderColor: colors.border
+              }]}
+              onPress={() => {
+                if (uploadResult) {
+                  // If we have results, just close
+                  resetUpload()
+                } else if (uploading) {
+                  // If uploading, show confirmation
+                  Alert.alert(
+                    'Cancel Upload',
+                    'Are you sure you want to cancel the upload?',
+                    [
+                      { text: 'No', style: 'cancel' },
+                      { 
+                        text: 'Yes', 
+                        style: 'destructive',
+                        onPress: () => {
+                          setUploading(false)
+                          setUploadProgress(0)
+                          setShowUploadModal(false)
+                        }
+                      }
+                    ]
+                  )
+                } else {
+                  resetUpload()
+                }
+              }}
+              disabled={uploading && !uploadResult}
+            >
+              <ThemedText style={[styles.uploadModalButtonText, { color: colors.text }]}>
+                {uploadResult ? 'Close' : uploading ? 'Cancel' : 'Cancel Upload'}
+              </ThemedText>
+            </TouchableOpacity>
+            
+            {uploadResult && (
+              <TouchableOpacity
+                style={[styles.uploadModalButton, { 
+                  backgroundColor: colors.primary,
+                  borderColor: colors.primary
+                }]}
+                onPress={() => {
+                  resetUpload()
+                  loadData(1, true)
+                }}
+              >
+                <Feather name="refresh-cw" size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <ThemedText style={[styles.uploadModalButtonText, { color: '#FFFFFF' }]}>
+                  Refresh Data
+                </ThemedText>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
+
+  const renderClassFeeItem = useCallback(({ item }) => {
+    const termAmount = item.totalAnnualFee / (item.totalTerms || 3)
+    
+    // Format class name display
+    const formatClassName = (className) => {
+      if (!className) return 'Class'
+      
+      const str = className.toString()
+      // Capitalize first letter of each word
+      return str.replace(/\b\w/g, char => char.toUpperCase())
+    }
+    
+    return (
+      <TouchableOpacity
+        activeOpacity={.9}
+        style={[styles.classFeeCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+        onPress={() => handleEditClassFee(item)}
+      >
+        <View style={styles.classFeeHeader}>
+          <View style={[styles.classIcon, { backgroundColor: colors.primary + '20' }]}>
+            <MaterialIcons name="school" size={24} color={colors.primary} />
+          </View>
+          <View style={styles.classFeeInfo}>
+            <ThemedText style={styles.className}>Class {formatClassName(item.className)}</ThemedText>
+            <View style={styles.classMetaRow}>
+              <View style={[styles.academicYearBadge, { backgroundColor: colors.primary + '10' }]}>
+                <Feather name="calendar" size={10} color={colors.primary} />
+                <ThemedText style={[styles.academicYearText, { color: colors.primary }]}>
+                  {item.academicYear}
+                </ThemedText>
+              </View>
+              <View style={[styles.termsBadge, { backgroundColor: colors.info + '10' }]}>
+                <MaterialIcons name="layers" size={10} color={colors.info} />
+                <ThemedText style={[styles.termsText, { color: colors.info }]}>
+                  {item.totalTerms || 3} Terms
+                </ThemedText>
+              </View>
+            </View>
+          </View>
+          <View style={[styles.editIconContainer, { backgroundColor: colors.primary + '15' }]}>
+            <Feather name="edit" size={16} color={colors.primary} />
+          </View>
+        </View>
+        
+        <View style={styles.feeAmountContainer}>
+          <View style={styles.feeColumn}>
+            <ThemedText style={styles.feeLabel}>Annual Fee</ThemedText>
+            <ThemedText style={styles.annualFee}>₹{item.totalAnnualFee?.toLocaleString() || '0'}</ThemedText>
+          </View>
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <View style={styles.feeColumn}>
+            <ThemedText style={styles.feeLabel}>Per Term</ThemedText>
+            <ThemedText style={styles.termFee}>₹{termAmount.toLocaleString()}</ThemedText>
+          </View>
+        </View>
+        
+        {item.description && (
+          <View style={[styles.descriptionContainer, { backgroundColor: colors.inputBackground }]}>
+            <Feather name="file-text" size={12} color={colors.textSecondary} />
+            <ThemedText style={[styles.descriptionText, { color: colors.textSecondary }]} numberOfLines={1}>
+              {item.description}
+            </ThemedText>
+          </View>
+        )}
+      </TouchableOpacity>
+    )
+  }, [colors])
+
+  const renderBusFeeItem = useCallback(({ item }) => {
+    return (
+      <TouchableOpacity
+        activeOpacity={.9}
+        style={[styles.busFeeCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+        onPress={() => handleEditBusFee(item)}
+      >
+        <View style={styles.busFeeHeader}>
+          <View style={[styles.busIcon, { backgroundColor: colors.success + '20' }]}>
+            <MaterialIcons name="directions-bus" size={24} color={colors.success} />
+          </View>
+          <View style={styles.busFeeInfo}>
+            <ThemedText style={styles.busVillage}>{item.villageName}</ThemedText>
+            <View style={styles.busMeta}>
+              <View style={[styles.distanceBadge, { backgroundColor: colors.success + '10' }]}>
+                <Feather name="map-pin" size={10} color={colors.success} />
+                <ThemedText style={[styles.distanceText, { color: colors.success }]}>
+                  {item.distance} km
+                </ThemedText>
+              </View>
+              <View style={[styles.vehicleBadge, { backgroundColor: colors.warning + '10' }]}>
+                <MaterialIcons name="directions-car" size={10} color={colors.warning} />
+                <ThemedText style={[styles.vehicleText, { color: colors.warning }]}>
+                  {item.vehicleType || 'Bus'}
+                </ThemedText>
+              </View>
+              <View style={[styles.yearBadge, { backgroundColor: colors.info + '10' }]}>
+                <Feather name="calendar" size={10} color={colors.info} />
+                <ThemedText style={[styles.yearText, { color: colors.info }]}>
+                  {item.academicYear}
+                </ThemedText>
+              </View>
+            </View>
+          </View>
+          <View style={[styles.editIconContainer, { backgroundColor: colors.success + '15' }]}>
+            <Feather name="edit" size={16} color={colors.success} />
+          </View>
+        </View>
+        
+        <View style={[styles.busFeeAmountContainer, { backgroundColor: colors.inputBackground }]}>
+          <View style={styles.busFeeInfoRow}>
+            <FontAwesome5 name="rupee-sign" size={14} color={colors.textSecondary} />
+            <ThemedText style={[styles.busFeeLabel, { color: colors.textSecondary }]}>
+              Bus Fee:
+            </ThemedText>
+          </View>
+          <ThemedText style={styles.busFeeAmount}>₹{item.feeAmount?.toLocaleString() || '0'}</ThemedText>
+        </View>
+        
+        {item.description && (
+          <View style={[styles.descriptionContainer, { backgroundColor: colors.inputBackground }]}>
+            <Feather name="file-text" size={12} color={colors.textSecondary} />
+            <ThemedText style={[styles.descriptionText, { color: colors.textSecondary }]} numberOfLines={1}>
+              {item.description}
+            </ThemedText>
+          </View>
+        )}
+      </TouchableOpacity>
+    )
+  }, [colors])
+
+  const renderAcademicYearDropdown = useCallback(() => {
+    return (
+      <View style={styles.dropdownContainer}>
+        <TouchableOpacity
+          activeOpacity={.9}
+          style={[styles.yearSelector, { 
+            backgroundColor: colors.inputBackground, 
+            borderColor: colors.primary + '40' 
+          }]}
+          ref={yearSelectorRef}
+          onPress={() => {
+            yearSelectorRef.current.measure((x, y, width, height, pageX, pageY) => {
+              setDropdownPosition({
+                x: pageX,
+                y: pageY + height + 8,
+                width: width
+              })
+              setShowYearDropdown(true)
+            })
+          }}
+        >
+          <Feather name="calendar" size={16} color={colors.primary} />
+          <ThemedText style={[styles.selectedYearText, { color: colors.text }]}>
+            {selectedAcademicYear}
+          </ThemedText>
+          <Feather 
+            name={showYearDropdown ? "chevron-up" : "chevron-down"} 
+            size={16} 
+            color={colors.textSecondary} 
+          />
+        </TouchableOpacity>
+
+        <Modal
+          transparent={true}
+          visible={showYearDropdown}
+          animationType="fade"
+          onRequestClose={() => setShowYearDropdown(false)}
+          statusBarTranslucent={true}
+        >
+          <TouchableOpacity
+            style={styles.dropdownOverlay}
+            activeOpacity={1}
+            onPress={() => setShowYearDropdown(false)}
+          >
+            <ScrollView style={[
+              styles.dropdownListModal,
+              { 
+                backgroundColor: colors.cardBackground,
+                borderColor: colors.border,
+                position: 'absolute',
+                top: dropdownPosition.y,
+                left: dropdownPosition.x,
+                width: dropdownPosition.width,
+                maxHeight: 300,
+                borderRadius: 12,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.2,
+                shadowRadius: 8,
+                elevation: 5,
+              }
+            ]}>
+              {academicYears.map((year, index) => (
+                <TouchableOpacity
+                  key={year}
+                  activeOpacity={.9}
+                  style={[
+                    styles.dropdownItem,
+                    index === academicYears.length - 1 ? {} : { borderBottomColor: colors.border + '50' },
+                    selectedAcademicYear === year && { backgroundColor: colors.primary + '10' }
+                  ]}
+                  onPress={() => handleYearSelect(year)}
+                >
+                  <ThemedText style={[
+                    styles.dropdownItemText,
+                    selectedAcademicYear === year && { color: colors.primary, fontFamily: 'Poppins-SemiBold' }
+                  ]}>
+                    {year}
+                  </ThemedText>
+                  {selectedAcademicYear === year && (
+                    <Feather name="check" size={16} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </TouchableOpacity>
+        </Modal>
+      </View>
+    )
+  }, [colors, selectedAcademicYear, showYearDropdown, dropdownPosition])
+
+  const renderFooter = () => {
+    if (!hasMore || loading || refreshing) return null
+    return (
+      <View style={styles.loadMoreContainer}>
+        <TouchableOpacity 
+          style={[styles.loadMoreButton, { backgroundColor: colors.primary + '15' }]}
+          onPress={handleLoadMore}
+        >
+          <ThemedText style={[styles.loadMoreText, { color: colors.primary }]}>
+            Load More
+          </ThemedText>
+          <Feather name="chevron-down" size={16} color={colors.primary} />
+        </TouchableOpacity>
+      </View>
+    )
+  }
 
   const styles = StyleSheet.create({
     container: {
@@ -1299,420 +1603,665 @@ export default function CollectFees({ visible, onClose }) {
     content: {
       flex: 1,
     },
-    headerContainer: {
-      paddingHorizontal: 16,
-      paddingTop: 16,
-      paddingBottom: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-      marginBottom: 8,
+    dropdownContainer: {
+      position: 'relative',
     },
-    searchHeader: {
-      marginBottom: 16,
-    },
-    searchTitleContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      marginBottom: 6,
-    },
-    searchTitle: {
-      fontSize: 18,
-      color: colors.text,
-    },
-    searchSubtitle: {
-      fontSize: 13,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
-    },
-    searchContainer: {
-      flexDirection: 'row',
-      gap: 12,
-      marginBottom: 12,
-    },
-    searchInputContainer: {
+    dropdownOverlay: {
       flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderWidth: 1,
-      borderRadius: 14,
-      paddingHorizontal: 16,
-      height: 52,
+      backgroundColor: 'rgba(0, 0, 0, 0.3)',
     },
-    searchIcon: {
-      marginRight: 10,
-    },
-    searchInput: {
-      flex: 1,
-      height: '100%',
-      fontSize: 15,
-      fontFamily: 'Poppins-Medium',
-    },
-    clearButton: {
-      padding: 4,
-    },
-    filterButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderRadius: 14,
-      paddingHorizontal: 16,
-      height: 52,
-      gap: 8,
-      minWidth: 90,
-      justifyContent: 'center',
-    },
-    filterButtonText: {
-      fontSize: 14,
-    },
-    classBadge: {
-      width: 24,
-      height: 24,
-      borderRadius: 12,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginLeft: 4,
-    },
-    classBadgeText: {
-      color: '#FFFFFF',
-      fontSize: 12,
-      fontFamily: 'Poppins-Bold',
-    },
-    resultsInfo: {
+    yearSelector: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: 8,
-    },
-    resultsInfoRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
-    resultsText: {
-      fontSize: 13,
-      fontFamily: 'Poppins-Medium',
-    },
-    clearFiltersButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      paddingVertical: 6,
-      paddingHorizontal: 10,
-      backgroundColor: colors.inputBackground,
-      borderRadius: 8,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderRadius: 14,
+      paddingHorizontal: 16,
+      paddingVertical: 15,
+      height: 52,
     },
-    clearFiltersText: {
-      fontSize: 12,
+    selectedYearText: {
+      fontSize: 15,
       fontFamily: 'Poppins-Medium',
-      color: colors.textSecondary,
+      flex: 1,
+      marginLeft: 8,
     },
-    studentCard: {
-      borderRadius: 18,
-      padding: 18,
+    dropdownListModal: {
+      borderWidth: 1,
+      maxHeight: 200,
+      elevation: 5,
+    },
+    dropdownItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+    },
+    dropdownItemSelected: {
+      backgroundColor: colors.primary + '10',
+    },
+    dropdownItemText: {
+      fontSize: 14,
+      color: colors.text,
+      fontFamily: 'Poppins-Medium',
+    },
+    classFeeCard: {
+      borderRadius: 16,
+      padding: 16,
       marginHorizontal: 16,
-      marginBottom: 16,
+      marginBottom: 12,
       borderWidth: 1,
       ...Platform.select({
         ios: {
           shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.08,
-          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 8,
         },
         android: {
-          elevation: 4,
+          elevation: .5,
         },
       }),
     },
-    studentHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      marginBottom: 12,
-    },
-    studentInfo: {
+    classFeeHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      flex: 1,
+      marginBottom: 12,
     },
-    profileIcon: {
-      width: 52,
-      height: 52,
-      borderRadius: 26,
+    classIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
       justifyContent: 'center',
       alignItems: 'center',
       marginRight: 12,
-      borderWidth: 2,
     },
-    profileText: {
-      fontSize: 20,
-      fontFamily: 'Poppins-Bold',
-    },
-    studentDetails: {
+    classFeeInfo: {
       flex: 1,
-      marginRight: 8,
     },
-    studentName: {
+    className: {
       fontSize: 16,
       color: colors.text,
-      marginBottom: 2,
+      fontFamily: 'Poppins-SemiBold',
+      marginBottom: 8,
     },
-    studentMeta: {
+    classMetaRow: {
       flexDirection: 'row',
       alignItems: 'center',
+      gap: 8,
     },
-    studentClass: {
-      fontSize: 13,
-      fontFamily: 'Poppins-Medium',
-    },
-    academicYearContainer: {
+    academicYearBadge: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      marginTop: 2,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
     },
-    academicYear: {
-      fontSize: 11,
-      fontFamily: 'Poppins-Medium',
-    },
-    totalDueBadge: {
-      alignItems: 'center',
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 12,
-      minWidth: 80,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    totalDueText: {
-      fontSize: 16,
-      fontFamily: 'Poppins-Bold',
-    },
-    totalDueLabel: {
+    academicYearText: {
       fontSize: 10,
       fontFamily: 'Poppins-Medium',
-      marginTop: 2,
     },
-    payAllButtonBottom: {
+    termsBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+    },
+    termsText: {
+      fontSize: 10,
+      fontFamily: 'Poppins-Medium',
+    },
+    editIconContainer: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    feeAmountContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.inputBackground,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 8,
+    },
+    feeColumn: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    divider: {
+      width: 1,
+      height: 30,
+      backgroundColor: colors.border,
+    },
+    feeLabel: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      fontFamily: 'Poppins-Medium',
+      marginBottom: 4,
+    },
+    annualFee: {
+      fontSize: 16,
+      color: colors.primary,
+      fontFamily: 'Poppins-Bold',
+    },
+    termFee: {
+      fontSize: 14,
+      color: colors.secondary,
+      fontFamily: 'Poppins-SemiBold',
+    },
+    busFeeCard: {
+      borderRadius: 16,
+      padding: 16,
+      marginHorizontal: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 8,
+        },
+        android: {
+          elevation: .5,
+        },
+      }),
+    },
+    busFeeHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    busIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 12,
+    },
+    busFeeInfo: {
+      flex: 1,
+    },
+    busVillage: {
+      fontSize: 16,
+      color: colors.text,
+      fontFamily: 'Poppins-SemiBold',
+      marginBottom: 8,
+    },
+    busMeta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    distanceBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+    },
+    distanceText: {
+      fontSize: 10,
+      fontFamily: 'Poppins-Medium',
+    },
+    vehicleBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+    },
+    vehicleText: {
+      fontSize: 10,
+      fontFamily: 'Poppins-Medium',
+    },
+    yearBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+    },
+    yearText: {
+      fontSize: 10,
+      fontFamily: 'Poppins-Medium',
+    },
+    busFeeAmountContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginBottom: 8,
+    },
+    busFeeInfoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    busFeeLabel: {
+      fontSize: 13,
+      fontFamily: 'Poppins-Medium',
+    },
+    busFeeAmount: {
+      fontSize: 16,
+      color: colors.success,
+      fontFamily: 'Poppins-Bold',
+    },
+    descriptionContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+    },
+    descriptionText: {
+      fontSize: 11,
+      fontFamily: 'Poppins-Medium',
+      flex: 1,
+    },
+    emptyContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 40,
+      paddingHorizontal: 20,
+    },
+    emptyIconContainer: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    emptyTitle: {
+      fontSize: 18,
+      fontFamily: 'Poppins-SemiBold',
+      textAlign: 'center',
+      marginBottom: 8,
+    },
+    emptySubtitle: {
+      fontSize: 14,
+      fontFamily: 'Poppins-Medium',
+      textAlign: 'center',
+      marginBottom: 24,
+    },
+    emptyButtonsContainer: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    addButton: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: 14,
-      borderRadius: 14,
       gap: 8,
-      marginTop: 16,
-    },
-    payAllButtonText: {
-      color: '#FFFFFF',
-      fontSize: 15,
-    },
-    alertContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: '#fef3c7',
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      borderRadius: 10,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: '#fbbf24',
-    },
-    alertText: {
-      fontSize: 13,
-      color: '#92400e',
-      marginLeft: 8,
-      flex: 1,
-      fontFamily: 'Poppins-Medium',
-    },
-    feesGrid: {
-      gap: 12,
-      marginBottom: 16,
-    },
-    feeItemCard: {
-      backgroundColor: colors.inputBackground,
-      borderRadius: 14,
-      padding: 16,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    feeItemHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 12,
-    },
-    feeItemTitleRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      flex: 1,
-    },
-    feeItemTitle: {
-      fontSize: 15,
-      color: colors.text,
-      flex: 1,
-    },
-    statusBadge: {
-      paddingHorizontal: 10,
-      paddingVertical: 4,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
       borderRadius: 12,
     },
-    statusText: {
-      fontSize: 11,
+    addButtonText: {
+      fontSize: 14,
+      color: '#FFFFFF',
+      fontFamily: 'Poppins-SemiBold',
     },
-    progressContainer: {
-      marginBottom: 12,
-    },
-    progressLabels: {
+    uploadFromExcelButton: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
-      marginBottom: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderRadius: 12,
+      borderWidth: 1,
     },
-    progressLabel: {
-      fontSize: 12,
+    uploadFromExcelText: {
+      fontSize: 14,
+      fontFamily: 'Poppins-SemiBold',
+    },
+    loadingContainer: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.background + 'CC',
+    },
+    loadingText: {
+      marginTop: 12,
       color: colors.textSecondary,
       fontFamily: 'Poppins-Medium',
     },
-    progressBar: {
-      height: 8,
-      backgroundColor: colors.border,
-      borderRadius: 4,
-      overflow: 'hidden',
+    loadMoreContainer: {
+      alignItems: 'center',
+      paddingVertical: 20,
     },
-    progressFill: {
-      height: '100%',
-      borderRadius: 4,
+    loadMoreButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.primary + '30',
     },
-    expandedContent: {
-      marginTop: 12,
-      paddingTop: 12,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-    },
-    historyTitle: {
+    loadMoreText: {
       fontSize: 14,
-      color: colors.text,
-      marginBottom: 8,
+      fontFamily: 'Poppins-SemiBold',
     },
-    historyContainer: {
-      backgroundColor: colors.cardBackground,
-      borderRadius: 10,
-      padding: 10,
+    // Upload Modal Styles
+    uploadModalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    uploadModalContainer: {
+      width: SCREEN_WIDTH * 0.9,
+      maxHeight: '80%',
+      borderRadius: 20,
+      overflow: 'hidden',
       borderWidth: 1,
       borderColor: colors.border,
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: 0.3,
+          shadowRadius: 20,
+        },
+        android: {
+          elevation: 15,
+        },
+      }),
     },
-    historyItem: {
+    uploadModalHeader: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: 10,
+      paddingHorizontal: 20,
+      paddingVertical: 16,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
     },
-    historyLeft: {
-      flexDirection: 'row',
+    uploadModalIconContainer: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: 'center',
       alignItems: 'center',
-      gap: 8,
+      marginRight: 12,
     },
-    historyDate: {
+    uploadModalTitleContainer: {
+      flex: 1,
+    },
+    uploadModalTitle: {
+      fontSize: 18,
+      marginBottom: 2,
+    },
+    uploadModalSubtitle: {
       fontSize: 12,
-      color: colors.text,
-      fontFamily: 'Poppins-Medium',
     },
-    historyRight: {
+    closeButton: {
+      padding: 4,
+    },
+    uploadModalContent: {
+      maxHeight: 500,
+      padding: 20,
+    },
+    stepCard: {
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      borderWidth: 1,
+    },
+    stepHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
+      marginBottom: 16,
     },
-    historyAmount: {
-      fontSize: 14,
-      color: colors.text,
-    },
-    modeBadge: {
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 6,
-    },
-    modeText: {
-      fontSize: 10,
-    },
-    noHistoryContainer: {
+    stepIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: 'center',
       alignItems: 'center',
-      paddingVertical: 16,
+      marginRight: 12,
     },
-    noHistoryText: {
-      fontSize: 13,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
+    stepTextContainer: {
+      flex: 1,
     },
-    payButton: {
+    stepTitle: {
+      fontSize: 15,
+      marginBottom: 4,
+    },
+    stepDescription: {
+      fontSize: 12,
+      lineHeight: 16,
+    },
+    downloadButton: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: 12,
-      borderRadius: 10,
-      gap: 8,
-    },
-    payButtonText: {
-      color: '#FFFFFF',
-      fontSize: 14,
-    },
-    previousYearContainer: {
-      backgroundColor: '#fff7ed',
-      borderRadius: 14,
+      gap: 10,
+      paddingVertical: 14,
+      borderRadius: 12,
       borderWidth: 1,
-      borderColor: '#fdba74',
-      marginBottom: 12,
-      overflow: 'hidden',
+      marginBottom: 16,
     },
-    previousYearHeader: {
+    downloadButtonText: {
+      fontSize: 14,
+      fontFamily: 'Poppins-SemiBold',
+    },
+    templateInfoContainer: {
+      padding: 12,
+      backgroundColor: colors.inputBackground,
+      borderRadius: 8,
+    },
+    templateInfoTitle: {
+      fontSize: 12,
+      marginBottom: 8,
+      fontFamily: 'Poppins-Medium',
+    },
+    columnsList: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    columnItem: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: 14,
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      backgroundColor: colors.background,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: colors.border,
     },
-    previousYearTitleRow: {
+    columnText: {
+      fontSize: 10,
+      fontFamily: 'Poppins-Medium',
+    },
+    uploadInstructions: {
+      marginBottom: 16,
+    },
+    instructionsTitle: {
+      fontSize: 12,
+      marginBottom: 8,
+      fontFamily: 'Poppins-Medium',
+    },
+    instructionsList: {
+      gap: 6,
+    },
+    instructionItem: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
+    },
+    instructionText: {
+      fontSize: 11,
+      fontFamily: 'Poppins-Medium',
+    },
+    uploadFileButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+      paddingVertical: 18,
+      borderRadius: 12,
+      borderWidth: 2,
+      marginBottom: 8,
+    },
+    uploadFileButtonText: {
+      fontSize: 15,
+      fontFamily: 'Poppins-SemiBold',
+    },
+    progressContainer: {
+      marginTop: 8,
+    },
+    progressBarContainer: {
+      height: 6,
+      backgroundColor: colors.border,
+      borderRadius: 3,
+      overflow: 'hidden',
+      marginBottom: 4,
+    },
+    progressBarFill: {
+      height: '100%',
+      borderRadius: 3,
+    },
+    progressText: {
+      fontSize: 11,
+      textAlign: 'center',
+      fontFamily: 'Poppins-Medium',
+    },
+    resultCard: {
+      borderRadius: 12,
+      padding: 16,
+      marginTop: 8,
+      borderWidth: 1,
+    },
+    resultHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    resultIconContainer: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 12,
+    },
+    resultTitleContainer: {
       flex: 1,
     },
-    previousYearTitle: {
-      fontSize: 14,
-      color: '#9a3412',
+    resultTitle: {
+      fontSize: 16,
+      marginBottom: 2,
     },
-    previousYearRight: {
+    resultSubtitle: {
+      fontSize: 12,
+    },
+    resultStats: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      marginBottom: 16,
+      paddingVertical: 12,
+      backgroundColor: colors.background,
+      borderRadius: 8,
+    },
+    statItem: {
+      alignItems: 'center',
+    },
+    statValue: {
+      fontSize: 18,
+      fontFamily: 'Poppins-Bold',
+      marginBottom: 2,
+    },
+    statLabel: {
+      fontSize: 10,
+      fontFamily: 'Poppins-Medium',
+    },
+    errorSection: {
+      marginTop: 8,
+    },
+    errorHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
+      gap: 6,
+      marginBottom: 8,
     },
-    previousYearDue: {
+    errorTitle: {
       fontSize: 13,
-      fontFamily: 'Poppins-Medium',
-      color: '#9a3412',
+      fontFamily: 'Poppins-SemiBold',
     },
-    previousYearFees: {
-      padding: 14,
-      paddingTop: 0,
+    errorsList: {
+      maxHeight: 150,
+    },
+    errorItem: {
+      borderRadius: 6,
+      padding: 10,
+      marginBottom: 6,
+      borderLeftWidth: 3,
+    },
+    errorRow: {
+      fontSize: 11,
+      fontFamily: 'Poppins-Medium',
+      marginBottom: 2,
+    },
+    errorText: {
+      fontSize: 11,
+      fontFamily: 'Poppins-Medium',
+    },
+    moreErrors: {
+      alignItems: 'center',
+      padding: 8,
+    },
+    moreErrorsText: {
+      fontSize: 11,
+      fontFamily: 'Poppins-Medium',
+    },
+    uploadModalButtons: {
+      flexDirection: 'row',
+      padding: 16,
+      borderTopWidth: 1,
       gap: 12,
     },
-    emptyContainer: {
+    uploadModalButton: {
       flex: 1,
-      justifyContent: 'center',
+      paddingVertical: 14,
       alignItems: 'center',
-      paddingVertical: 60,
+      borderRadius: 12,
+      borderWidth: 1,
+      flexDirection: 'row',
+      justifyContent: 'center',
     },
-    emptyText: {
-      fontSize: 16,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
-      marginTop: 16,
-      textAlign: 'center',
-      paddingHorizontal: 20,
+    uploadModalButtonText: {
+      fontSize: 14,
+      fontFamily: 'Poppins-SemiBold',
     },
   })
+
+  if (!visible) return null
 
   return (
     <Modal 
@@ -1728,12 +2277,12 @@ export default function CollectFees({ visible, onClose }) {
         >
           <SafeAreaView edges={['top']}>
             <View style={styles.headerRow}>
-              <TouchableOpacity style={styles.backButton} onPress={onClose}>
-                <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
+              <TouchableOpacity activeOpacity={.9} style={styles.backButton} onPress={onClose}>
+                <FontAwesome5 name="chevron-left" size={20} color="#FFFFFF" />
               </TouchableOpacity>
               <View style={{ flex: 1, alignItems: 'center' }}>
-                <ThemedText style={styles.title}>Collect Fees</ThemedText>
-                <ThemedText style={styles.subtitle}>Manage student payments</ThemedText>
+                <ThemedText style={styles.title}>Fee Settings</ThemedText>
+                <ThemedText style={styles.subtitle}>Manage class and bus fees</ThemedText>
               </View>
               <View style={{ width: 44 }} />
             </View>
@@ -1741,53 +2290,100 @@ export default function CollectFees({ visible, onClose }) {
         </LinearGradient>
 
         <FlatList
-          data={filteredData}
-          renderItem={renderStudent}
-          keyExtractor={(item) => `student-${item.id}`}
-          ListHeaderComponent={renderHeader}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              {searchQuery || selectedClass !== 'All' ? (
-                <>
-                  <Feather name="users" size={60} color={colors.textSecondary} />
-                  <ThemedText style={styles.emptyText}>
-                    {searchQuery ? `No students found for "${searchQuery}"` : 'No students found'}
-                    {selectedClass !== 'All' && ` in Class ${selectedClass}`}
-                  </ThemedText>
-                </>
-              ) : (
-                <>
-                  <Feather name="search" size={60} color={colors.textSecondary} />
-                  <ThemedText style={styles.emptyText}>
-                    Enter a name or roll number to search
-                  </ThemedText>
-                </>
-              )}
-            </View>
+          ref={flatListRef}
+          data={activeTab === 'class' ? filteredClassFees : filteredBusFees}
+          renderItem={activeTab === 'class' ? renderClassFeeItem : renderBusFeeItem}
+          keyExtractor={(item) => activeTab === 'class' ? `class-fee-${item._id}` : `bus-fee-${item._id}`}
+          ListHeaderComponent={
+            <HeaderComponent
+              colors={colors}
+              searchQuery={searchQuery}
+              handleSearch={handleSearch}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              selectedAcademicYear={selectedAcademicYear}
+              renderAcademicYearDropdown={renderAcademicYearDropdown}
+              filteredClassFees={filteredClassFees}
+              filteredBusFees={filteredBusFees}
+              handleAddClassFee={handleAddClassFee}
+              handleAddBusFee={handleAddBusFee}
+              setShowUploadModal={setShowUploadModal}
+              searchInputRef={searchInputRef}
+              slideAnim={slideAnim}
+              flatListRef={flatListRef}
+            />
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
           }
           showsVerticalScrollIndicator={true}
           contentContainerStyle={{ paddingBottom: 20 }}
           keyboardShouldPersistTaps="handled"
           removeClippedSubviews={false}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          ListEmptyComponent={
+            <View style={{ height: 200, justifyContent: 'center', alignItems: 'center' }}>
+              <ThemedText style={{ color: colors.textSecondary }}>
+                No data available
+              </ThemedText>
+            </View>
+          }
+          ListFooterComponent={renderFooter}
         />
 
-        <FilterDropdown
-          isOpen={filterDropdownOpen}
-          onClose={() => setFilterDropdownOpen(false)}
-          onSelect={handleClassFilter}
-          selectedValue={selectedClass}
-        />
+        {loading && !refreshing && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <ThemedText style={styles.loadingText}>Loading fee settings...</ThemedText>
+          </View>
+        )}
 
-        <PaymentModal
-          visible={paymentModalVisible}
+        {uploading && !showUploadModal && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <ThemedText style={styles.loadingText}>Uploading file...</ThemedText>
+          </View>
+        )}
+
+        <BusFeeSettings
+          visible={busFeeModalVisible}
           onClose={() => {
-            setPaymentModalVisible(false)
-            setSelectedStudent(null)
-            setSelectedFees([])
+            setBusFeeModalVisible(false)
+            setEditingBusFee(null)
           }}
-          student={selectedStudent}
-          selectedFees={selectedFees}
-          onPaymentComplete={handlePaymentComplete}
+          onSave={handleBusFeeSave}
+          initialData={editingBusFee}
+          existingBusFees={busFees}
+        />
+
+        <ClassFeeSettings
+          visible={classFeeModalVisible}
+          onClose={() => {
+            setClassFeeModalVisible(false)
+            setEditingClassFee(null)
+          }}
+          onSave={handleClassFeeSave}
+          initialData={editingClassFee}
+          existingClassFees={classFees}
+        />
+
+        {/* Bulk Upload Modal */}
+        {renderUploadModal()}
+
+        {/* Toast Notification */}
+        <ToastNotification
+          visible={toast.visible}
+          type={toast.type}
+          message={toast.message}
+          duration={3000}
+          onHide={hideToast}
+          position="top-center"
         />
       </View>
     </Modal>

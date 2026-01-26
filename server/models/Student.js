@@ -23,7 +23,7 @@ const studentSchema = new mongoose.Schema({
   academicYear: {
     type: String,
     required: [true, 'Academic year is required'],
-    enum: ['2023-2024', '2024-2025', '2025-2026', '2026-2027'], 
+    enum: ['2024-2025', '2025-2026', '2026-2027', '2027-2028', '2028-2029', '2029-2030', '2030-2031']
   },
   class: {
     type: Number,
@@ -50,6 +50,53 @@ const studentSchema = new mongoose.Schema({
   address: {
     type: String,
     trim: true,
+  },
+  studentType: {
+    type: String,
+    enum: ['Day Scholar', 'Hosteller'],
+    default: 'Day Scholar',
+    required: [true, 'Student type is required']
+  },
+  isUsingSchoolTransport: {
+    type: Boolean,
+    default: false,
+  },
+  // Fee discount fields
+  schoolFeeDiscount: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 0,
+    validate: {
+      validator: function(value) {
+        return value >= 0 && value <= 100
+      },
+      message: 'School fee discount must be between 0 and 100 percent'
+    }
+  },
+  transportFeeDiscount: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 0,
+    validate: {
+      validator: function(value) {
+        return value >= 0 && value <= 100
+      },
+      message: 'Transport fee discount must be between 0 and 100 percent'
+    }
+  },
+  hostelFeeDiscount: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 0,
+    validate: {
+      validator: function(value) {
+        return value >= 0 && value <= 100
+      },
+      message: 'Hostel fee discount must be between 0 and 100 percent'
+    }
   },
   village: {
     type: String,
@@ -96,7 +143,7 @@ const studentSchema = new mongoose.Schema({
       academicYear: {
         type: String,
         required: true,
-        enum: ['2023-2024', '2024-2025', '2025-2026', '2026-2027']
+        enum: ['2024-2025', '2025-2026', '2026-2027', '2027-2028', '2028-2029', '2029-2030', '2030-2031']
       },
       records: [
         {
@@ -123,13 +170,13 @@ const studentSchema = new mongoose.Schema({
       ]
     }
   ],
-  // NEW: Marks array organized by academic year with subject support
+  // Marks array organized by academic year with subject support
   marks: [
     {
       academicYear: {
         type: String,
         required: true,
-        enum: ['2023-2024', '2024-2025', '2025-2026', '2026-2027']
+        enum: ['2024-2025', '2025-2026', '2026-2027', '2027-2028', '2028-2029', '2029-2030', '2030-2031']      
       },
       records: [
         {
@@ -195,6 +242,184 @@ const studentSchema = new mongoose.Schema({
       ]
     }
   ],
+  // Simplified fee details organized by academic year
+  feeDetails: [
+    {
+      academicYear: {
+        type: String,
+        required: true,
+        enum: ['2024-2025', '2025-2026', '2026-2027', '2027-2028', '2028-2029', '2029-2030', '2030-2031']
+      },
+      schoolFee: {
+        type: Number,
+        required: [true, 'School fee is required'],
+        min: 0,
+        default: 0
+      },
+      transportFee: {
+        type: Number,
+        min: 0,
+        default: 0
+      },
+      hostelFee: {
+        type: Number,
+        min: 0,
+        default: 0
+      },
+      totalFee: {
+        type: Number,
+        min: 0,
+        default: 0
+      },
+      terms: {
+        type: Number,
+        min: 1,
+        max: 4,
+        default: 3
+      },
+      schoolFeePaid: {
+        type: Number,
+        min: 0,
+        default: 0
+      },
+      transportFeePaid: {
+        type: Number,
+        min: 0,
+        default: 0
+      },
+      hostelFeePaid: {
+        type: Number,
+        min: 0,
+        default: 0
+      },
+      totalPaid: {
+        type: Number,
+        min: 0,
+        default: 0
+      },
+      totalDue: {
+        type: Number,
+        min: 0,
+        default: 0
+      },
+      // Discounts applied for this academic year
+      schoolFeeDiscountApplied: {
+        type: Number,
+        min: 0,
+        max: 100,
+        default: 0
+      },
+      transportFeeDiscountApplied: {
+        type: Number,
+        min: 0,
+        max: 100,
+        default: 0
+      },
+      hostelFeeDiscountApplied: {
+        type: Number,
+        min: 0,
+        max: 100,
+        default: 0
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now
+      },
+      updatedAt: {
+        type: Date,
+        default: Date.now
+      }
+    }
+  ],
+  // Payment history tracking individual fee components
+  paymentHistory: [
+    {
+      paymentId: {
+        type: String,
+        required: [true, 'Payment ID is required'],
+        trim: true
+      },
+      academicYear: {
+        type: String,
+        required: true,
+        enum: ['2024-2025', '2025-2026', '2026-2027', '2027-2028', '2028-2029', '2029-2030', '2030-2031']
+      },
+      date: {
+        type: Date,
+        required: [true, 'Payment date is required'],
+        default: Date.now
+      },
+      // Individual fee component payments
+      schoolFeePaid: {
+        type: Number,
+        min: 0,
+        default: 0
+      },
+      transportFeePaid: {
+        type: Number,
+        min: 0,
+        default: 0
+      },
+      hostelFeePaid: {
+        type: Number,
+        min: 0,
+        default: 0
+      },
+      totalAmount: {
+        type: Number,
+        required: [true, 'Total payment amount is required'],
+        min: 0
+      },
+      receiptNo: {
+        type: String,
+        required: [true, 'Receipt number is required'],
+        trim: true
+      },
+      paymentMode: {
+        type: String,
+        required: [true, 'Payment mode is required'],
+        enum: ['Cash', 'Cheque', 'Bank Transfer', 'Online Payment', 'Card', 'Other']
+      },
+      description: {
+        type: String,
+        trim: true
+      },
+      chequeNo: {
+        type: String,
+        trim: true
+      },
+      bankName: {
+        type: String,
+        trim: true
+      },
+      transactionId: {
+        type: String,
+        trim: true
+      },
+      receivedBy: {
+        type: String,
+        required: [true, 'Received by is required'],
+        trim: true
+      },
+      status: {
+        type: String,
+        enum: ['Pending', 'Completed', 'Failed', 'Refunded'],
+        default: 'Completed'
+      },
+      notes: {
+        type: String,
+        trim: true
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now
+      }
+    }
+  ],
+  feeCalculationDetails: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
   createdAt: {
     type: Date,
     default: Date.now,
@@ -211,6 +436,11 @@ studentSchema.index({ 'attendance.academicYear': 1 })
 studentSchema.index({ 'attendance.records.date': 1 })
 studentSchema.index({ 'marks.academicYear': 1 })
 studentSchema.index({ 'marks.records.examType': 1, 'marks.records.subject': 1 })
+// Indexes for fee and payment queries
+studentSchema.index({ 'feeDetails.academicYear': 1 })
+studentSchema.index({ 'paymentHistory.academicYear': 1 })
+studentSchema.index({ 'paymentHistory.date': 1 })
+studentSchema.index({ 'paymentHistory.receiptNo': 1 })
 
 // Compound indexes
 studentSchema.index({ 
@@ -633,880 +863,1117 @@ studentSchema.methods.getSubjectPerformance = function() {
   return subjectPerformance.sort((a, b) => a.subject.localeCompare(b.subject))
 }
 
+// ================= FEE METHODS =================
+
+// Method to set or update fee details for an academic year with discounts
+studentSchema.methods.setFeeDetails = function(academicYear, schoolFee, transportFee, hostelFee, discounts = {}) {
+  // Validate based on student type and transport usage
+  if (this.studentType === 'Day Scholar' && hostelFee > 0) {
+    throw new Error('Day scholar cannot have hostel fee')
+  }
+  
+  if (!this.isUsingSchoolTransport && transportFee > 0) {
+    throw new Error('Student is not using school transport')
+  }
+  
+  // Apply student-level discounts if not provided
+  const schoolFeeDiscount = discounts.schoolFeeDiscount !== undefined ? discounts.schoolFeeDiscount : this.schoolFeeDiscount
+  const transportFeeDiscount = discounts.transportFeeDiscount !== undefined ? discounts.transportFeeDiscount : this.transportFeeDiscount
+  const hostelFeeDiscount = discounts.hostelFeeDiscount !== undefined ? discounts.hostelFeeDiscount : this.hostelFeeDiscount
+  
+  // Find or create fee record for academic year
+  let feeRecord = this.feeDetails.find(
+    record => record.academicYear === academicYear
+  )
+  
+  if (!feeRecord) {
+    feeRecord = {
+      academicYear,
+      schoolFee: schoolFee || 0,
+      transportFee: this.isUsingSchoolTransport ? (transportFee || 0) : 0,
+      hostelFee: this.studentType === 'Hosteller' ? (hostelFee || 0) : 0,
+      schoolFeePaid: 0,
+      transportFeePaid: 0,
+      hostelFeePaid: 0,
+      terms: 3,
+      totalPaid: 0,
+      totalDue: 0,
+      schoolFeeDiscountApplied: schoolFeeDiscount,
+      transportFeeDiscountApplied: transportFeeDiscount,
+      hostelFeeDiscountApplied: hostelFeeDiscount
+    }
+    this.feeDetails.push(feeRecord)
+  } else {
+    feeRecord.schoolFee = schoolFee || 0
+    feeRecord.transportFee = this.isUsingSchoolTransport ? (transportFee || 0) : 0
+    feeRecord.hostelFee = this.studentType === 'Hosteller' ? (hostelFee || 0) : 0
+    feeRecord.schoolFeeDiscountApplied = schoolFeeDiscount
+    feeRecord.transportFeeDiscountApplied = transportFeeDiscount
+    feeRecord.hostelFeeDiscountApplied = hostelFeeDiscount
+    feeRecord.updatedAt = new Date()
+  }
+  
+  // Calculate totals (fees should already have discounts applied from controller)
+  feeRecord.totalFee = feeRecord.schoolFee + feeRecord.transportFee + feeRecord.hostelFee
+  
+  // Calculate due amount (totalFee - totalPaid)
+  feeRecord.totalDue = Math.max(0, feeRecord.totalFee - feeRecord.totalPaid)
+  
+  return this.save()
+}
+
+// Method to update student-level discount percentages
+studentSchema.methods.updateDiscounts = function(schoolFeeDiscount, transportFeeDiscount, hostelFeeDiscount) {
+  this.schoolFeeDiscount = schoolFeeDiscount || 0
+  this.transportFeeDiscount = transportFeeDiscount || 0
+  this.hostelFeeDiscount = hostelFeeDiscount || 0
+  
+  return this.save()
+}
+
+// Method to get fee details for an academic year
+studentSchema.methods.getFeeDetails = function(academicYear) {
+  const feeRecord = this.feeDetails.find(
+    record => record.academicYear === academicYear
+  )
+  
+  if (!feeRecord) return null
+  
+  return {
+    academicYear: feeRecord.academicYear,
+    schoolFee: feeRecord.schoolFee,
+    transportFee: feeRecord.transportFee,
+    hostelFee: feeRecord.hostelFee,
+    totalFee: feeRecord.totalFee,
+    schoolFeePaid: feeRecord.schoolFeePaid,
+    transportFeePaid: feeRecord.transportFeePaid,
+    hostelFeePaid: feeRecord.hostelFeePaid,
+    totalPaid: feeRecord.totalPaid,
+    totalDue: feeRecord.totalDue,
+    schoolFeeDiscountApplied: feeRecord.schoolFeeDiscountApplied,
+    transportFeeDiscountApplied: feeRecord.transportFeeDiscountApplied,
+    hostelFeeDiscountApplied: feeRecord.hostelFeeDiscountApplied,
+    schoolFeeDue: Math.max(0, feeRecord.schoolFee - feeRecord.schoolFeePaid),
+    transportFeeDue: Math.max(0, feeRecord.transportFee - feeRecord.transportFeePaid),
+    hostelFeeDue: Math.max(0, feeRecord.hostelFee - feeRecord.hostelFeePaid),
+    createdAt: feeRecord.createdAt,
+    updatedAt: feeRecord.updatedAt
+  }
+}
+
+// ================= PAYMENT METHODS =================
+
+// Helper function to generate payment ID
+const generatePaymentId = () => {
+  const timestamp = Date.now().toString(36)
+  const random = Math.random().toString(36).substring(2, 8)
+  return `PAY-${timestamp}-${random}`.toUpperCase()
+}
+
+// Helper function to generate receipt number
+const generateReceiptNo = () => {
+  const date = new Date()
+  const year = date.getFullYear().toString().slice(-2)
+  const month = (date.getMonth() + 1).toString().padStart(2, '0')
+  const day = date.getDate().toString().padStart(2, '0')
+  const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+  return `RCPT-${year}${month}${day}-${random}`
+}
+
+// Method to record a payment with individual fee components
+studentSchema.methods.recordPayment = function(
+  academicYear, 
+  paymentData,
+  receivedBy, 
+  options = {}
+) {
+  const {
+    schoolFeePaid = 0,
+    transportFeePaid = 0,
+    hostelFeePaid = 0,
+    description = '',
+    paymentMode = 'Cash',
+    chequeNo = '',
+    bankName = '',
+    transactionId = '',
+    notes = '',
+    customReceiptNo = null,
+    customPaymentId = null
+  } = paymentData
+  
+  // Validate at least one fee component is being paid
+  const totalAmount = schoolFeePaid + transportFeePaid + hostelFeePaid
+  if (totalAmount <= 0) {
+    throw new Error('Payment amount must be greater than zero')
+  }
+  
+  // Get fee details for this academic year
+  const feeRecord = this.feeDetails.find(
+    record => record.academicYear === academicYear
+  )
+  
+  if (!feeRecord) {
+    throw new Error('Fee details not found for this academic year')
+  }
+  
+  // Validate payment amounts don't exceed due amounts
+  if (schoolFeePaid > (feeRecord.schoolFee - feeRecord.schoolFeePaid)) {
+    throw new Error(`School fee payment exceeds due amount. Due: ${feeRecord.schoolFee - feeRecord.schoolFeePaid}, Trying to pay: ${schoolFeePaid}`)
+  }
+  
+  if (transportFeePaid > (feeRecord.transportFee - feeRecord.transportFeePaid)) {
+    throw new Error(`Transport fee payment exceeds due amount. Due: ${feeRecord.transportFee - feeRecord.transportFeePaid}, Trying to pay: ${transportFeePaid}`)
+  }
+  
+  if (hostelFeePaid > (feeRecord.hostelFee - feeRecord.hostelFeePaid)) {
+    throw new Error(`Hostel fee payment exceeds due amount. Due: ${feeRecord.hostelFee - feeRecord.hostelFeePaid}, Trying to pay: ${hostelFeePaid}`)
+  }
+  
+  // Generate unique payment ID and receipt number
+  const paymentId = customPaymentId || generatePaymentId()
+  const receiptNo = customReceiptNo || generateReceiptNo()
+  
+  // Create payment record
+  const paymentRecord = {
+    paymentId,
+    academicYear,
+    date: new Date(),
+    schoolFeePaid,
+    transportFeePaid,
+    hostelFeePaid,
+    totalAmount,
+    receiptNo,
+    paymentMode,
+    description,
+    chequeNo,
+    bankName,
+    transactionId,
+    receivedBy,
+    status: 'Completed',
+    notes,
+    createdAt: new Date()
+  }
+  
+  // Add to payment history
+  this.paymentHistory.push(paymentRecord)
+  
+  // Update fee details with individual component payments
+  feeRecord.schoolFeePaid += schoolFeePaid
+  feeRecord.transportFeePaid += transportFeePaid
+  feeRecord.hostelFeePaid += hostelFeePaid
+  feeRecord.totalPaid += totalAmount
+  feeRecord.totalDue = Math.max(0, feeRecord.totalFee - feeRecord.totalPaid)
+  feeRecord.updatedAt = new Date()
+  
+  return this.save()
+}
+
+// Method to get payment by ID
+studentSchema.methods.getPayment = function(paymentId) {
+  const payment = this.paymentHistory.find(
+    record => record.paymentId === paymentId
+  )
+  
+  if (!payment) return null
+  
+  return {
+    paymentId: payment.paymentId,
+    academicYear: payment.academicYear,
+    date: payment.date,
+    schoolFeePaid: payment.schoolFeePaid,
+    transportFeePaid: payment.transportFeePaid,
+    hostelFeePaid: payment.hostelFeePaid,
+    totalAmount: payment.totalAmount,
+    receiptNo: payment.receiptNo,
+    paymentMode: payment.paymentMode,
+    description: payment.description,
+    chequeNo: payment.chequeNo,
+    bankName: payment.bankName,
+    transactionId: payment.transactionId,
+    receivedBy: payment.receivedBy,
+    status: payment.status,
+    notes: payment.notes,
+    createdAt: payment.createdAt
+  }
+}
+
+// Method to get all payments for an academic year
+studentSchema.methods.getPaymentsByAcademicYear = function(academicYear) {
+  return this.paymentHistory
+    .filter(record => record.academicYear === academicYear)
+    .map(payment => ({
+      paymentId: payment.paymentId,
+      date: payment.date,
+      schoolFeePaid: payment.schoolFeePaid,
+      transportFeePaid: payment.transportFeePaid,
+      hostelFeePaid: payment.hostelFeePaid,
+      totalAmount: payment.totalAmount,
+      receiptNo: payment.receiptNo,
+      paymentMode: payment.paymentMode,
+      description: payment.description,
+      status: payment.status,
+      receivedBy: payment.receivedBy
+    }))
+    .sort((a, b) => b.date - a.date)
+}
+
+// Method to get payment summary for an academic year
+studentSchema.methods.getPaymentSummary = function(academicYear) {
+  const feeRecord = this.feeDetails.find(
+    record => record.academicYear === academicYear
+  )
+  
+  if (!feeRecord) {
+    throw new Error('Fee details not found for this academic year')
+  }
+  
+  const payments = this.paymentHistory.filter(
+    record => record.academicYear === academicYear && record.status === 'Completed'
+  )
+  
+  const totalPayments = payments.reduce((sum, payment) => sum + payment.totalAmount, 0)
+  const paymentCount = payments.length
+  
+  // Calculate component-wise payment totals
+  const totalSchoolFeePaid = payments.reduce((sum, payment) => sum + payment.schoolFeePaid, 0)
+  const totalTransportFeePaid = payments.reduce((sum, payment) => sum + payment.transportFeePaid, 0)
+  const totalHostelFeePaid = payments.reduce((sum, payment) => sum + payment.hostelFeePaid, 0)
+  
+  return {
+    academicYear,
+    feeSummary: {
+      schoolFee: {
+        total: feeRecord.schoolFee,
+        paid: feeRecord.schoolFeePaid,
+        due: Math.max(0, feeRecord.schoolFee - feeRecord.schoolFeePaid),
+        discount: feeRecord.schoolFeeDiscountApplied
+      },
+      transportFee: {
+        total: feeRecord.transportFee,
+        paid: feeRecord.transportFeePaid,
+        due: Math.max(0, feeRecord.transportFee - feeRecord.transportFeePaid),
+        discount: feeRecord.transportFeeDiscountApplied
+      },
+      hostelFee: {
+        total: feeRecord.hostelFee,
+        paid: feeRecord.hostelFeePaid,
+        due: Math.max(0, feeRecord.hostelFee - feeRecord.hostelFeePaid),
+        discount: feeRecord.hostelFeeDiscountApplied
+      },
+      overall: {
+        totalFee: feeRecord.totalFee,
+        totalPaid: feeRecord.totalPaid,
+        totalDue: feeRecord.totalDue
+      }
+    },
+    paymentSummary: {
+      totalPayments,
+      paymentCount,
+      componentBreakdown: {
+        schoolFee: totalSchoolFeePaid,
+        transportFee: totalTransportFeePaid,
+        hostelFee: totalHostelFeePaid
+      },
+      lastPaymentDate: payments.length > 0 ? new Date(Math.max(...payments.map(p => p.date))) : null,
+      paymentStatus: feeRecord.totalDue === 0 ? 'Paid' : feeRecord.totalDue === feeRecord.totalFee ? 'Unpaid' : 'Partial'
+    },
+    payments: payments.map(p => ({
+      date: p.date,
+      schoolFeePaid: p.schoolFeePaid,
+      transportFeePaid: p.transportFeePaid,
+      hostelFeePaid: p.hostelFeePaid,
+      totalAmount: p.totalAmount,
+      receiptNo: p.receiptNo,
+      paymentMode: p.paymentMode,
+      description: p.description
+    }))
+  }
+}
+
+// Method to get fee component-wise breakdown with discounts
+studentSchema.methods.getFeeBreakdown = function(academicYear) {
+  const feeRecord = this.feeDetails.find(
+    record => record.academicYear === academicYear
+  )
+  
+  if (!feeRecord) return null
+  
+  return {
+    academicYear,
+    schoolFee: {
+      total: feeRecord.schoolFee,
+      paid: feeRecord.schoolFeePaid,
+      due: Math.max(0, feeRecord.schoolFee - feeRecord.schoolFeePaid),
+      percentagePaid: feeRecord.schoolFee > 0 ? (feeRecord.schoolFeePaid / feeRecord.schoolFee * 100).toFixed(2) : 0,
+      discount: feeRecord.schoolFeeDiscountApplied
+    },
+    transportFee: {
+      total: feeRecord.transportFee,
+      paid: feeRecord.transportFeePaid,
+      due: Math.max(0, feeRecord.transportFee - feeRecord.transportFeePaid),
+      percentagePaid: feeRecord.transportFee > 0 ? (feeRecord.transportFeePaid / feeRecord.transportFee * 100).toFixed(2) : 0,
+      discount: feeRecord.transportFeeDiscountApplied
+    },
+    hostelFee: {
+      total: feeRecord.hostelFee,
+      paid: feeRecord.hostelFeePaid,
+      due: Math.max(0, feeRecord.hostelFee - feeRecord.hostelFeePaid),
+      percentagePaid: feeRecord.hostelFee > 0 ? (feeRecord.hostelFeePaid / feeRecord.hostelFee * 100).toFixed(2) : 0,
+      discount: feeRecord.hostelFeeDiscountApplied
+    },
+    overall: {
+      totalFee: feeRecord.totalFee,
+      totalPaid: feeRecord.totalPaid,
+      totalDue: feeRecord.totalDue,
+      percentagePaid: feeRecord.totalFee > 0 ? (feeRecord.totalPaid / feeRecord.totalFee * 100).toFixed(2) : 0
+    },
+    studentDiscounts: {
+      schoolFee: this.schoolFeeDiscount,
+      transportFee: this.transportFeeDiscount,
+      hostelFee: this.hostelFeeDiscount
+    }
+  }
+}
+
 // ================= STATIC METHODS =================
 
-// ================= ATTENDANCE STATIC METHODS =================
-
-// Static method to check if attendance already exists
-studentSchema.statics.checkAttendanceExists = async function(className, section, date, academicYear, session) {
-  const classNum = mapClassToNumber(className)
-  if (classNum === null) {
-    throw new Error(`Invalid class: "${className}"`)
-  }
-
-  // Parse the date to ensure consistent format
-  const attendanceDate = new Date(date)
-  attendanceDate.setHours(0, 0, 0, 0)
-
-  // Find students in the specified class, section, and academic year
-  const students = await this.find({
-    class: classNum,
-    section: section.toUpperCase(),
-    academicYear: academicYear || '2024-2025'
-  }).select('_id firstName lastName rollNo attendance')
-
-  let markedStudents = []
-  let totalMarked = 0
-
-  // Check each student for existing attendance
-  students.forEach(student => {
-    const academicYearRecord = student.attendance.find(
-      record => record.academicYear === (academicYear || '2024-2025')
-    )
-    
-    if (academicYearRecord) {
-      const record = academicYearRecord.records.find(
-        record => record.date.getTime() === attendanceDate.getTime()
-      )
-      
-      if (record) {
-        let isMarked = false
-        
-        if (session === 'fullday') {
-          // For fullday, check if both sessions are marked (not null)
-          isMarked = record.morning !== null && record.afternoon !== null
-        } else {
-          // For specific session, check if that session is marked (not null)
-          isMarked = record[session] !== null
-        }
-        
-        if (isMarked) {
-          totalMarked++
-          markedStudents.push({
-            studentId: student._id,
-            name: `${student.firstName} ${student.lastName}`,
-            rollNo: student.rollNo,
-            morning: record.morning,
-            afternoon: record.afternoon,
-            markedBy: record.markedBy,
-            updatedAt: record.updatedAt
-          })
-        }
-      }
-    }
-  })
-
-  return {
-    exists: totalMarked > 0,
-    totalMarked,
-    totalStudents: students.length,
-    markedStudents
-  }
-}
-
-// Static method to mark class attendance
-studentSchema.statics.markClassAttendance = async function(data) {
-  const { 
-    date, 
-    className, 
-    section, 
-    academicYear, 
-    session, 
-    studentAttendance, 
-    markedBy 
-  } = data
-  
-  const classNum = mapClassToNumber(className)
-  if (classNum === null) {
-    throw new Error(`Invalid class: "${className}"`)
-  }
-
-  // Parse and normalize the date to UTC midnight
-  const attendanceDate = new Date(date)
-  const utcDate = new Date(Date.UTC(
-    attendanceDate.getUTCFullYear(),
-    attendanceDate.getUTCMonth(),
-    attendanceDate.getUTCDate(),
-    0, 0, 0, 0
-  ))
-
-  const students = await this.find({
-    class: classNum,
-    section: section.toUpperCase(),
-    academicYear: academicYear || '2024-2025'
-  })
-
-  if (students.length === 0) {
-    throw new Error('No students found in the specified class and section')
-  }
-
-  const studentIds = studentAttendance.map(item => item.studentId)
-  const validStudentIds = students.map(student => student._id.toString())
-  
-  const invalidIds = studentIds.filter(id => !validStudentIds.includes(id.toString()))
-  if (invalidIds.length > 0) {
-    throw new Error(`Invalid student IDs: ${invalidIds.join(', ')}`)
-  }
-
-  // Create a map for quick lookup
-  const attendanceMap = {}
-  studentAttendance.forEach(item => {
-    attendanceMap[item.studentId] = item.status === 'present'
-  })
-
-  const results = []
-  let presentCount = 0
-  let absentCount = 0
-
-  for (const student of students) {
-    const studentStatus = attendanceMap[student._id.toString()]
-    const isPresent = studentStatus === true
-    
-    if (session === 'fullday') {
-      // Mark both sessions for fullday
-      await student.markFullDayAttendance(utcDate, isPresent, markedBy)
-    } else {
-      // Mark specific session
-      await student.markAttendance(utcDate, session, isPresent, markedBy)
-    }
-    
-    await student.save()
-    
-    // Update counts
-    if (isPresent) presentCount++
-    else absentCount++
-    
-    results.push({
-      studentId: student._id,
-      name: `${student.firstName} ${student.lastName}`,
-      rollNo: student.rollNo,
-      status: isPresent ? 'present' : 'absent',
-      session: session
-    })
-  }
-
-  return {
-    date: utcDate,
-    className,
-    section,
-    academicYear: academicYear || '2024-2025',
-    session,
-    markedCount: results.length,
-    totalStudents: students.length,
-    presentCount,
-    absentCount,
-    markedBy,
-    results
-  }
-}
-
-// Static method to get class attendance for a specific date
-studentSchema.statics.getClassAttendance = async function(className, section, date, academicYear, session = null) {
-  const classNum = mapClassToNumber(className)
-  if (classNum === null) {
-    throw new Error(`Invalid class: "${className}"`)
-  }
-
-  // Parse the date
-  const attendanceDate = new Date(date)
-  attendanceDate.setHours(0, 0, 0, 0)
-
-  const students = await this.find({
-    class: classNum,
-    section: section.toUpperCase(),
-    academicYear: academicYear || '2024-2025'
-  }).select('firstName lastName rollNo admissionNo attendance')
-
-  const attendanceRecords = []
-
-  students.forEach(student => {
-    const academicYearRecord = student.attendance.find(
-      record => record.academicYear === (academicYear || '2024-2025')
-    )
-    
-    let morningStatus = null
-    let afternoonStatus = null
-    let markedBy = null
-    let updatedAt = null
-    
-    if (academicYearRecord) {
-      const record = academicYearRecord.records.find(
-        record => record.date.getTime() === attendanceDate.getTime()
-      )
-      
-      if (record) {
-        morningStatus = record.morning
-        afternoonStatus = record.afternoon
-        markedBy = record.markedBy
-        updatedAt = record.updatedAt
-      }
-    }
-
-    let status = 'not marked'
-    if (session === 'morning') {
-      status = morningStatus === true ? 'present' : 
-               morningStatus === false ? 'absent' : 'not marked'
-    } else if (session === 'afternoon') {
-      status = afternoonStatus === true ? 'present' : 
-               afternoonStatus === false ? 'absent' : 'not marked'
-    } else if (session === 'fullday') {
-      if (morningStatus === true && afternoonStatus === true) {
-        status = 'present'
-      } else if (morningStatus === false && afternoonStatus === false) {
-        status = 'absent'
-      } else if (morningStatus === true || afternoonStatus === true) {
-        status = 'halfday'
-      } else {
-        status = 'not marked'
-      }
-    } else {
-      // No session specified, return both
-      status = {
-        morning: morningStatus === true ? 'present' : 
-                morningStatus === false ? 'absent' : 'not marked',
-        afternoon: afternoonStatus === true ? 'present' : 
-                   afternoonStatus === false ? 'absent' : 'not marked'
-      }
-    }
-
-    attendanceRecords.push({
-      studentId: student._id,
-      name: `${student.firstName} ${student.lastName}`,
-      rollNo: student.rollNo,
-      admissionNo: student.admissionNo,
-      status,
-      markedBy,
-      updatedAt
-    })
-  })
-
-  return {
-    date: attendanceDate,
-    className,
-    section,
-    academicYear: academicYear || '2024-2025',
-    session,
-    totalStudents: students.length,
-    attendanceRecords
-  }
-}
-
-// Static method to get class attendance summary for a date
-studentSchema.statics.getClassAttendanceSummary = async function(className, section, date, academicYear) {
-  const classNum = mapClassToNumber(className)
-  if (classNum === null) {
-    throw new Error(`Invalid class: "${className}"`)
-  }
-
-  // Parse the date
-  const attendanceDate = new Date(date)
-  attendanceDate.setHours(0, 0, 0, 0)
-
-  const students = await this.find({
-    class: classNum,
-    section: section.toUpperCase(),
-    academicYear: academicYear || '2024-2025'
-  }).select('attendance')
-
-  let morningPresent = 0
-  let morningAbsent = 0
-  let morningNotMarked = 0
-  
-  let afternoonPresent = 0
-  let afternoonAbsent = 0
-  let afternoonNotMarked = 0
-  
-  let fullDayPresent = 0
-  let fullDayAbsent = 0
-  let fullDayHalfDay = 0
-  let fullDayNotMarked = 0
-
-  students.forEach(student => {
-    const academicYearRecord = student.attendance.find(
-      record => record.academicYear === (academicYear || '2024-2025')
-    )
-    
-    let morningStatus = null
-    let afternoonStatus = null
-    
-    if (academicYearRecord) {
-      const record = academicYearRecord.records.find(
-        record => record.date.getTime() === attendanceDate.getTime()
-      )
-      
-      if (record) {
-        morningStatus = record.morning
-        afternoonStatus = record.afternoon
-      }
-    }
-
-    // Morning session counts
-    if (morningStatus === true) morningPresent++
-    else if (morningStatus === false) morningAbsent++
-    else morningNotMarked++
-
-    // Afternoon session counts
-    if (afternoonStatus === true) afternoonPresent++
-    else if (afternoonStatus === false) afternoonAbsent++
-    else afternoonNotMarked++
-
-    // Full day counts
-    if (morningStatus === true && afternoonStatus === true) {
-      fullDayPresent++
-    } else if (morningStatus === false && afternoonStatus === false) {
-      fullDayAbsent++
-    } else if (morningStatus === true || afternoonStatus === true) {
-      fullDayHalfDay++
-    } else {
-      fullDayNotMarked++
-    }
-  })
-
-  return {
-    date: attendanceDate,
-    className,
-    section,
-    academicYear: academicYear || '2024-2025',
-    totalStudents: students.length,
-    morning: {
-      present: morningPresent,
-      absent: morningAbsent,
-      notMarked: morningNotMarked,
-      percentage: students.length > 0 ? ((morningPresent / students.length) * 100).toFixed(2) : 0
-    },
-    afternoon: {
-      present: afternoonPresent,
-      absent: afternoonAbsent,
-      notMarked: afternoonNotMarked,
-      percentage: students.length > 0 ? ((afternoonPresent / students.length) * 100).toFixed(2) : 0
-    },
-    fullday: {
-      present: fullDayPresent,
-      absent: fullDayAbsent,
-      halfDay: fullDayHalfDay,
-      notMarked: fullDayNotMarked,
-      percentage: students.length > 0 ? ((fullDayPresent / students.length) * 100).toFixed(2) : 0
-    }
-  }
-}
-
-// ================= MARKS STATIC METHODS =================
-
-// Static method to get students for marks upload
+// Static method to get students for marks
 studentSchema.statics.getStudentsForMarks = async function(className, section, academicYear) {
   const classNum = mapClassToNumber(className)
   if (classNum === null) {
     throw new Error(`Invalid class: "${className}"`)
   }
-  
+
   const students = await this.find({
     class: classNum,
     section: section.toUpperCase(),
     academicYear: academicYear || '2024-2025'
-  }).select('firstName lastName rollNo admissionNo marks')
-    .sort({ rollNo: 1 })
-  
+  })
+  .select('_id rollNo firstName lastName admissionNo')
+  .sort({ rollNo: 1 })
+  .lean()
+
   return students.map(student => ({
     id: student._id,
-    name: `${student.firstName} ${student.lastName}`,
     rollNo: student.rollNo,
-    admissionNumber: student.admissionNo,
-    marks: student.marks
+    name: `${student.firstName} ${student.lastName}`,
+    admissionNo: student.admissionNo
   }))
 }
 
-// Static method to check if marks already exist
+// Static method to check if marks exist
 studentSchema.statics.checkMarksExist = async function(className, section, examType, subject, academicYear) {
   const classNum = mapClassToNumber(className)
   if (classNum === null) {
     throw new Error(`Invalid class: "${className}"`)
   }
-  
+
   const students = await this.find({
     class: classNum,
     section: section.toUpperCase(),
     academicYear: academicYear || '2024-2025'
-  }).select('_id firstName lastName rollNo marks')
-  
-  let markedStudents = []
+  })
+
+  if (students.length === 0) {
+    return {
+      exists: false,
+      totalStudents: 0,
+      totalMarked: 0,
+      markedStudents: [],
+      message: 'No students found in this class'
+    }
+  }
+
   let totalMarked = 0
-  
+  const markedStudents = []
+
+  for (const student of students) {
+    const marksRecord = student.getMarksForExam(examType, subject)
+    if (marksRecord) {
+      totalMarked++
+      markedStudents.push({
+        studentId: student._id,
+        name: `${student.firstName} ${student.lastName}`,
+        rollNo: student.rollNo,
+        marks: marksRecord.marks,
+        totalMarks: marksRecord.totalMarks,
+        percentage: marksRecord.percentage,
+        grade: marksRecord.grade,
+        result: marksRecord.result
+      })
+    }
+  }
+
+  return {
+    exists: totalMarked > 0,
+    totalStudents: students.length,
+    totalMarked,
+    markedStudents,
+    canOverride: totalMarked > 0
+  }
+}
+
+// Static method to upload class marks
+studentSchema.statics.uploadClassMarks = async function({ examType, customExamName, subject, className, section, academicYear, totalMarks, passingPercentage, studentMarks, uploadedBy }) {
+  const classNum = mapClassToNumber(className)
+  if (classNum === null) {
+    throw new Error(`Invalid class: "${className}"`)
+  }
+
+  const students = await this.find({
+    class: classNum,
+    section: section.toUpperCase(),
+    academicYear: academicYear || '2024-2025'
+  })
+
+  if (students.length === 0) {
+    throw new Error('No students found in this class')
+  }
+
+  const studentMap = {}
   students.forEach(student => {
+    studentMap[student._id.toString()] = student
+  })
+
+  let markedCount = 0
+  let passCount = 0
+  let failCount = 0
+  const marksResults = []
+
+  for (const markData of studentMarks) {
+    const student = studentMap[markData.studentId]
+    
+    if (!student) {
+      console.warn(`Student not found: ${markData.studentId}`)
+      continue
+    }
+
+    try {
+      await student.uploadMarks(
+        examType,
+        customExamName,
+        subject,
+        parseFloat(markData.marks),
+        parseFloat(totalMarks),
+        uploadedBy,
+        parseFloat(passingPercentage)
+      )
+      
+      markedCount++
+      
+      const uploadedMarks = student.getMarksForExam(examType, subject)
+      if (uploadedMarks) {
+        if (uploadedMarks.result === 'Pass') passCount++
+        else failCount++
+      }
+
+      marksResults.push({
+        studentId: student._id,
+        name: `${student.firstName} ${student.lastName}`,
+        rollNo: student.rollNo,
+        marks: markData.marks,
+        result: uploadedMarks ? uploadedMarks.result : 'N/A'
+      })
+    } catch (error) {
+      console.error(`Error uploading marks for ${student.firstName}:`, error)
+    }
+  }
+
+  return {
+    className: mapNumberToClassName(classNum),
+    section: section.toUpperCase(),
+    examType,
+    subject,
+    totalMarks: parseFloat(totalMarks),
+    passingPercentage: parseFloat(passingPercentage),
+    totalStudents: students.length,
+    markedCount,
+    passCount,
+    failCount,
+    passPercentage: markedCount > 0 ? ((passCount / markedCount) * 100).toFixed(2) : 0,
+    marksResults,
+    uploadedBy
+  }
+}
+
+// Static method to override class marks
+studentSchema.statics.overrideClassMarks = async function({ examType, customExamName, subject, className, section, academicYear, totalMarks, passingPercentage, studentMarks, uploadedBy }) {
+  const classNum = mapClassToNumber(className)
+  if (classNum === null) {
+    throw new Error(`Invalid class: "${className}"`)
+  }
+
+  const students = await this.find({
+    class: classNum,
+    section: section.toUpperCase(),
+    academicYear: academicYear || '2024-2025'
+  })
+
+  // Remove existing marks for this exam and subject
+  for (const student of students) {
     const academicYearRecord = student.marks.find(
-      record => record.academicYear === (academicYear || '2024-2025')
+      record => record.academicYear === (academicYear || student.academicYear)
     )
     
     if (academicYearRecord) {
-      const record = academicYearRecord.records.find(
+      const recordIndex = academicYearRecord.records.findIndex(
         record => record.examType === examType && record.subject === subject
       )
       
-      if (record) {
-        totalMarked++
-        markedStudents.push({
-          studentId: student._id,
-          name: `${student.firstName} ${student.lastName}`,
-          rollNo: student.rollNo,
-          marks: record.marks,
-          totalMarks: record.totalMarks,
-          percentage: record.percentage,
-          grade: record.grade,
-          result: record.result
-        })
+      if (recordIndex !== -1) {
+        academicYearRecord.records.splice(recordIndex, 1)
+        await student.save()
       }
     }
-  })
-  
-  return {
-    exists: totalMarked > 0,
-    totalMarked,
-    totalStudents: students.length,
-    markedStudents
   }
-}
 
-// Static method to upload class marks with pass/fail calculation
-studentSchema.statics.uploadClassMarks = async function(data) {
-  const { 
-    examType, 
-    customExamName, 
-    subject, 
-    className, 
-    section, 
-    academicYear, 
-    totalMarks, 
-    studentMarks, 
-    uploadedBy,
-    passingPercentage = 35
-  } = data
-  
-  const classNum = mapClassToNumber(className)
-  if (classNum === null) {
-    throw new Error(`Invalid class: "${className}"`)
-  }
-  
-  const students = await this.find({
-    class: classNum,
-    section: section.toUpperCase(),
-    academicYear: academicYear || '2024-2025'
-  })
-  
-  if (students.length === 0) {
-    throw new Error('No students found in the specified class and section')
-  }
-  
-  const studentIds = studentMarks.map(item => item.studentId)
-  const validStudentIds = students.map(student => student._id.toString())
-  
-  const invalidIds = studentIds.filter(id => !validStudentIds.includes(id.toString()))
-  if (invalidIds.length > 0) {
-    throw new Error(`Invalid student IDs: ${invalidIds.join(', ')}`)
-  }
-  
-  // Create a map for quick lookup
-  const marksMap = {}
-  studentMarks.forEach(item => {
-    if (item.marks > totalMarks) {
-      throw new Error(`Student ${item.studentId}: Marks (${item.marks}) cannot exceed total marks (${totalMarks})`)
-    }
-    marksMap[item.studentId] = item
-  })
-  
-  const results = []
-  let passCount = 0
-  let failCount = 0
-  
-  for (const student of students) {
-    const studentMarkData = marksMap[student._id.toString()]
-    
-    if (!studentMarkData) {
-      continue
-    }
-    
-    // Calculate percentage
-    const percentage = totalMarks > 0 ? ((studentMarkData.marks / totalMarks) * 100).toFixed(2) : 0
-    
-    // Calculate grade and result
-    const grade = calculateGrade(percentage)
-    const result = determineResult(percentage, passingPercentage)
-    
-    // Update counts
-    if (result === 'Pass') passCount++
-    if (result === 'Fail') failCount++
-    
-    // Find or create academic year record
-    let academicYearRecord = student.marks.find(
-      record => record.academicYear === (academicYear || '2024-2025')
-    )
-    
-    if (!academicYearRecord) {
-      academicYearRecord = {
-        academicYear: academicYear || '2024-2025',
-        records: []
-      }
-      student.marks.push(academicYearRecord)
-    }
-    
-    // Find existing record
-    const existingRecord = academicYearRecord.records.find(
-      record => record.examType === examType && record.subject === subject
-    )
-    
-    if (existingRecord) {
-      // Update existing record
-      existingRecord.marks = studentMarkData.marks
-      existingRecord.totalMarks = totalMarks
-      existingRecord.percentage = percentage
-      existingRecord.grade = grade
-      existingRecord.result = result
-      existingRecord.passingPercentage = passingPercentage
-      if (customExamName) existingRecord.customExamName = customExamName
-      existingRecord.uploadedBy = uploadedBy
-      existingRecord.updatedAt = new Date()
-    } else {
-      // Create new record
-      const newRecord = {
-        examType,
-        subject,
-        marks: studentMarkData.marks,
-        totalMarks,
-        percentage,
-        grade,
-        result,
-        passingPercentage,
-        uploadedBy,
-        uploadedAt: new Date(),
-        updatedAt: new Date()
-      }
-      
-      if (customExamName) {
-        newRecord.customExamName = customExamName
-      }
-      
-      academicYearRecord.records.push(newRecord)
-    }
-    
-    // Sort records by exam type
-    academicYearRecord.records.sort((a, b) => a.examType.localeCompare(b.examType))
-    
-    // Save the student document
-    await student.save()
-    
-    results.push({
-      studentId: student._id,
-      name: `${student.firstName} ${student.lastName}`,
-      rollNo: student.rollNo,
-      marks: studentMarkData.marks,
-      totalMarks: totalMarks,
-      percentage: percentage,
-      grade: grade,
-      result: result,
-      passingPercentage: passingPercentage,
-      status: 'uploaded',
-      isUpdated: !!existingRecord
-    })
-  }
-  
-  // Calculate pass percentage
-  const totalUploaded = results.length
-  const passPercentage = totalUploaded > 0 ? ((passCount / totalUploaded) * 100).toFixed(2) : 0
-  
-  return {
+  // Call uploadClassMarks to upload new marks
+  return await this.uploadClassMarks({
     examType,
-    customExamName: customExamName || null,
+    customExamName,
     subject,
     className,
     section,
-    academicYear: academicYear || '2024-2025',
+    academicYear,
     totalMarks,
     passingPercentage,
-    uploadedBy,
-    markedCount: results.length,
-    totalStudents: students.length,
-    passCount,
-    failCount,
-    passPercentage,
-    results
-  }
+    studentMarks,
+    uploadedBy
+  })
 }
 
-// Static method to override existing marks with pass/fail calculation
-studentSchema.statics.overrideClassMarks = async function(data) {
-  const { 
-    examType, 
-    customExamName, 
-    subject, 
-    className, 
-    section, 
-    academicYear, 
-    totalMarks, 
-    studentMarks, 
-    uploadedBy,
-    passingPercentage = 35 
-  } = data
-  
-  const classNum = mapClassToNumber(className)
-  if (classNum === null) {
-    throw new Error(`Invalid class: "${className}"`)
-  }
-  
-  const students = await this.find({
-    class: classNum,
-    section: section.toUpperCase(),
-    academicYear: academicYear || '2024-2025'
-  })
-  
-  if (students.length === 0) {
-    throw new Error('No students found in the specified class and section')
-  }
-  
-  // Create a map for quick lookup
-  const marksMap = {}
-  studentMarks.forEach(item => {
-    // Validate marks don't exceed total marks
-    if (item.marks > totalMarks) {
-      throw new Error(`Student ${item.studentId}: Marks (${item.marks}) cannot exceed total marks (${totalMarks})`)
-    }
-    marksMap[item.studentId] = item
-  })
-  
-  const results = []
-  let passCount = 0
-  let failCount = 0
-  
-  for (const student of students) {
-    const studentMarkData = marksMap[student._id.toString()]
-    
-    // Calculate percentage if marks exist for this student
-    let marks = 0
-    let percentage = 0
-    let grade = 'N/A'
-    let result = 'N/A'
-    
-    if (studentMarkData) {
-      marks = studentMarkData.marks
-      percentage = totalMarks > 0 ? ((marks / totalMarks) * 100).toFixed(2) : 0
-      grade = calculateGrade(percentage)
-      result = determineResult(percentage, passingPercentage)
-      
-      // Update counts
-      if (result === 'Pass') passCount++
-      if (result === 'Fail') failCount++
-    }
-    
-    let academicYearRecord = student.marks.find(
-      record => record.academicYear === (academicYear || '2024-2025')
-    )
-    
-    if (!academicYearRecord) {
-      academicYearRecord = {
-        academicYear: academicYear || '2024-2025',
-        records: []
-      }
-      student.marks.push(academicYearRecord)
-    }
-    
-    const existingRecord = academicYearRecord.records.find(
-      record => record.examType === examType && record.subject === subject
-    )
-    
-    if (existingRecord) {
-      // Update existing record
-      existingRecord.marks = marks
-      existingRecord.totalMarks = totalMarks
-      existingRecord.percentage = percentage
-      existingRecord.grade = grade
-      existingRecord.result = result
-      existingRecord.passingPercentage = passingPercentage
-      if (customExamName) existingRecord.customExamName = customExamName
-      existingRecord.uploadedBy = uploadedBy
-      existingRecord.updatedAt = new Date()
-    } else {
-      // Create new record
-      const newRecord = {
-        examType,
-        subject,
-        marks: marks,
-        totalMarks,
-        percentage,
-        grade,
-        result,
-        passingPercentage,
-        uploadedBy,
-        uploadedAt: new Date(),
-        updatedAt: new Date()
-      }
-      
-      if (customExamName) {
-        newRecord.customExamName = customExamName
-      }
-      
-      academicYearRecord.records.push(newRecord)
-    }
-    
-    // Sort records by exam type
-    academicYearRecord.records.sort((a, b) => a.examType.localeCompare(b.examType))
-    
-    await student.save()
-    
-    results.push({
-      studentId: student._id,
-      name: `${student.firstName} ${student.lastName}`,
-      rollNo: student.rollNo,
-      marks: marks,
-      totalMarks: totalMarks,
-      percentage: percentage,
-      grade: grade,
-      result: result,
-      passingPercentage: passingPercentage,
-      status: 'uploaded',
-      isUpdated: !!existingRecord
-    })
-  }
-  
-  // Calculate pass percentage
-  const totalUploaded = results.filter(r => r.marks > 0).length
-  const passPercentage = totalUploaded > 0 ? ((passCount / totalUploaded) * 100).toFixed(2) : 0
-  
-  return {
-    examType,
-    customExamName: customExamName || null,
-    subject,
-    className,
-    section,
-    academicYear: academicYear || '2024-2025',
-    totalMarks,
-    passingPercentage,
-    uploadedBy,
-    markedCount: results.filter(r => r.marks > 0).length,
-    totalStudents: students.length,
-    passCount,
-    failCount,
-    passPercentage,
-    results
-  }
-}
-
-// Static method to get marks summary for a class with pass/fail statistics
+// Static method to get class marks summary
 studentSchema.statics.getClassMarksSummary = async function(className, section, examType, subject, academicYear) {
   const classNum = mapClassToNumber(className)
   if (classNum === null) {
     throw new Error(`Invalid class: "${className}"`)
   }
-  
+
   const students = await this.find({
     class: classNum,
     section: section.toUpperCase(),
     academicYear: academicYear || '2024-2025'
-  }).select('firstName lastName rollNo marks')
-  
+  }).sort('rollNo')
+
   const marksDetails = []
-  let marksArray = []
-  let totalMarksValue = 0
+  let totalMarksSum = 0
+  let totalPossibleMarks = 0
   let passCount = 0
   let failCount = 0
-  let gradeDistribution = {
-    'A+': 0, 'A': 0, 'B+': 0, 'B': 0, 'C': 0, 'D': 0, 'E': 0, 'F': 0, 'N/A': 0
-  }
-  
-  students.forEach(student => {
-    const academicYearRecord = student.marks.find(
-      record => record.academicYear === (academicYear || '2024-2025')
-    )
+  let aPlusCount = 0, aCount = 0, bPlusCount = 0, bCount = 0, cCount = 0, dCount = 0, eCount = 0, fCount = 0
+
+  for (const student of students) {
+    const marksRecord = student.getMarksForExam(examType, subject)
     
-    let studentMarks = null
-    let studentTotalMarks = 0
-    let studentPercentage = 0
-    let studentGrade = 'N/A'
-    let studentResult = 'N/A'
-    
-    if (academicYearRecord) {
-      const record = academicYearRecord.records.find(
-        record => record.examType === examType && record.subject === subject
-      )
+    if (marksRecord) {
+      totalMarksSum += marksRecord.marks
+      totalPossibleMarks += marksRecord.totalMarks
       
-      if (record) {
-        studentMarks = record.marks
-        studentTotalMarks = record.totalMarks
-        studentPercentage = record.percentage
-        studentGrade = record.grade
-        studentResult = record.result
-        marksArray.push(record.marks)
-        totalMarksValue = record.totalMarks
-        
-        // Update counts
-        if (studentResult === 'Pass') passCount++
-        if (studentResult === 'Fail') failCount++
-        
-        // Update grade distribution
-        if (gradeDistribution.hasOwnProperty(studentGrade)) {
-          gradeDistribution[studentGrade]++
-        }
+      if (marksRecord.result === 'Pass') passCount++
+      else failCount++
+      
+      // Count grades
+      switch (marksRecord.grade) {
+        case 'A+': aPlusCount++; break
+        case 'A': aCount++; break
+        case 'B+': bPlusCount++; break
+        case 'B': bCount++; break
+        case 'C': cCount++; break
+        case 'D': dCount++; break
+        case 'E': eCount++; break
+        case 'F': fCount++; break
       }
+
+      marksDetails.push({
+        studentId: student._id,
+        name: `${student.firstName} ${student.lastName}`,
+        rollNo: student.rollNo,
+        admissionNo: student.admissionNo,
+        marks: marksRecord.marks,
+        totalMarks: marksRecord.totalMarks,
+        percentage: marksRecord.percentage,
+        grade: marksRecord.grade,
+        result: marksRecord.result
+      })
     }
-    
-    marksDetails.push({
-      studentId: student._id,
-      name: `${student.firstName} ${student.lastName}`,
-      rollNo: student.rollNo,
-      marks: studentMarks,
-      totalMarks: studentTotalMarks,
-      percentage: studentPercentage,
-      grade: studentGrade,
-      result: studentResult
-    })
-  })
-  
-  // Calculate statistics
-  const markedStudents = marksArray.length
-  const totalStudents = students.length
-  
-  let average = 0
-  let highest = 0
-  let lowest = 100
-  
-  if (marksArray.length > 0) {
-    const sum = marksArray.reduce((a, b) => a + b, 0)
-    average = (sum / marksArray.length).toFixed(2)
-    highest = Math.max(...marksArray)
-    lowest = Math.min(...marksArray)
   }
-  
-  // Calculate class pass percentage
-  const classPassPercentage = markedStudents > 0 ? ((passCount / markedStudents) * 100).toFixed(2) : 0
-  
-  // Determine class overall performance
-  let classPerformance = 'Good'
-  if (classPassPercentage < 35) classPerformance = 'Poor'
-  else if (classPassPercentage < 60) classPerformance = 'Average'
-  else if (classPassPercentage < 80) classPerformance = 'Good'
-  
+
+  const averagePercentage = marksDetails.length > 0 ? 
+    (totalMarksSum / totalPossibleMarks) * 100 : 0
+
+  const gradeDistribution = {
+    'A+': aPlusCount,
+    'A': aCount,
+    'B+': bPlusCount,
+    'B': bCount,
+    'C': cCount,
+    'D': dCount,
+    'E': eCount,
+    'F': fCount
+  }
+
   return {
+    className: mapNumberToClassName(classNum),
+    section: section.toUpperCase(),
     examType,
     subject,
-    className,
-    section,
     academicYear: academicYear || '2024-2025',
+    totalStudents: students.length,
+    markedStudents: marksDetails.length,
     summary: {
-      totalStudents,
-      markedStudents,
-      notMarkedStudents: totalStudents - markedStudents,
-      average,
-      highest,
-      lowest,
+      averagePercentage: averagePercentage.toFixed(2),
       passCount,
       failCount,
-      passPercentage: classPassPercentage,
-      totalMarks: totalMarksValue,
-      classPerformance,
+      passPercentage: (passCount / (passCount + failCount) * 100).toFixed(2),
       gradeDistribution
     },
     marksDetails
   }
 }
 
-// Static method to get class performance report by subject
+// Static method to get class subject performance
 studentSchema.statics.getClassSubjectPerformance = async function(className, section, academicYear) {
+  const classNum = mapClassToNumber(className)
+  if (classNum === null) {
+    throw new Error(`Invalid class: "${className}"`)
+  }
+
+  const students = await this.find({
+    class: classNum,
+    section: section.toUpperCase(),
+    academicYear: academicYear || '2024-2025'
+  })
+
+  // Collect all subjects from all students
+  const allSubjects = new Set()
+  const subjectPerformanceMap = {}
+
+  for (const student of students) {
+    const performance = student.getSubjectPerformance()
+    performance.forEach(subject => {
+      allSubjects.add(subject.subject)
+      
+      if (!subjectPerformanceMap[subject.subject]) {
+        subjectPerformanceMap[subject.subject] = {
+          subject: subject.subject,
+          students: 0,
+          totalAveragePercentage: 0,
+          passCount: 0,
+          failCount: 0,
+          aPlusCount: 0,
+          aCount: 0,
+          bPlusCount: 0,
+          bCount: 0,
+          cCount: 0,
+          dCount: 0,
+          eCount: 0,
+          fCount: 0
+        }
+      }
+      
+      const subj = subjectPerformanceMap[subject.subject]
+      subj.students++
+      subj.totalAveragePercentage += parseFloat(subject.averagePercentage)
+      subj.passCount += subject.passCount
+      subj.failCount += subject.failCount
+      
+      // Add grade counts
+      subj.aPlusCount += subject.grades.filter(g => g === 'A+').length
+      subj.aCount += subject.grades.filter(g => g === 'A').length
+      subj.bPlusCount += subject.grades.filter(g => g === 'B+').length
+      subj.bCount += subject.grades.filter(g => g === 'B').length
+      subj.cCount += subject.grades.filter(g => g === 'C').length
+      subj.dCount += subject.grades.filter(g => g === 'D').length
+      subj.eCount += subject.grades.filter(g => g === 'E').length
+      subj.fCount += subject.grades.filter(g => g === 'F').length
+    })
+  }
+
+  // Calculate averages
+  const subjectPerformance = Array.from(allSubjects).map(subjectName => {
+    const subj = subjectPerformanceMap[subjectName]
+    const avgPercentage = subj.students > 0 ? (subj.totalAveragePercentage / subj.students) : 0
+    const passPercentage = (subj.passCount + subj.failCount) > 0 ? 
+      (subj.passCount / (subj.passCount + subj.failCount) * 100) : 0
+      
+    // Determine overall subject difficulty
+    let difficulty = 'Average'
+    if (avgPercentage >= 80) difficulty = 'Easy'
+    else if (avgPercentage >= 60) difficulty = 'Average'
+    else if (avgPercentage >= 40) difficulty = 'Challenging'
+    else difficulty = 'Difficult'
+
+    return {
+      subject: subjectName,
+      totalStudents: subj.students,
+      averagePercentage: avgPercentage.toFixed(2),
+      passPercentage: passPercentage.toFixed(2),
+      passCount: subj.passCount,
+      failCount: subj.failCount,
+      gradeDistribution: {
+        'A+': subj.aPlusCount,
+        'A': subj.aCount,
+        'B+': subj.bPlusCount,
+        'B': subj.bCount,
+        'C': subj.cCount,
+        'D': subj.dCount,
+        'E': subj.eCount,
+        'F': subj.fCount
+      },
+      difficulty,
+      status: passPercentage >= 70 ? 'Good' : 
+              passPercentage >= 50 ? 'Average' : 'Needs Attention'
+    }
+  })
+
+  return {
+    className: mapNumberToClassName(classNum),
+    section: section.toUpperCase(),
+    academicYear: academicYear || '2024-2025',
+    totalStudents: students.length,
+    subjectPerformance: subjectPerformance.sort((a, b) => b.averagePercentage - a.averagePercentage)
+  }
+}
+
+// Static method to check attendance exists
+studentSchema.statics.checkAttendanceExists = async function(className, section, date, academicYear, session) {
+  const classNum = mapClassToNumber(className)
+  if (classNum === null) {
+    throw new Error(`Invalid class: "${className}"`)
+  }
+
+  const attendanceDate = new Date(date)
+  attendanceDate.setHours(0, 0, 0, 0)
+
+  // Find students in the class
+  const students = await this.find({
+    class: classNum,
+    section: section.toUpperCase(),
+    academicYear: academicYear || '2024-2025'
+  })
+
+  if (students.length === 0) {
+    return {
+      exists: false,
+      totalStudents: 0,
+      totalMarked: 0,
+      message: 'No students found in this class'
+    }
+  }
+
+  // Check each student's attendance
+  let totalMarked = 0
+  const markedStudents = []
+
+  for (const student of students) {
+    const academicYearRecord = student.attendance.find(
+      record => record.academicYear === (academicYear || student.academicYear)
+    )
+    
+    if (academicYearRecord) {
+      const attendanceRecord = academicYearRecord.records.find(
+        record => record.date.getTime() === attendanceDate.getTime()
+      )
+      
+      if (attendanceRecord) {
+        if (session === 'fullday') {
+          if (attendanceRecord.morning !== null && attendanceRecord.afternoon !== null) {
+            totalMarked++
+            markedStudents.push({
+              studentId: student._id,
+              name: `${student.firstName} ${student.lastName}`,
+              rollNo: student.rollNo,
+              morning: attendanceRecord.morning,
+              afternoon: attendanceRecord.afternoon
+            })
+          }
+        } else if (attendanceRecord[session] !== null) {
+          totalMarked++
+          markedStudents.push({
+            studentId: student._id,
+            name: `${student.firstName} ${student.lastName}`,
+            rollNo: student.rollNo,
+            status: attendanceRecord[session]
+          })
+        }
+      }
+    }
+  }
+
+  return {
+    exists: totalMarked > 0,
+    totalStudents: students.length,
+    totalMarked,
+    markedStudents,
+    canOverride: totalMarked > 0
+  }
+}
+
+// Static method to mark class attendance
+studentSchema.statics.markClassAttendance = async function({ date, className, section, academicYear, session, studentAttendance, markedBy }) {
+  const classNum = mapClassToNumber(className)
+  if (classNum === null) {
+    throw new Error(`Invalid class: "${className}"`)
+  }
+
+  const attendanceDate = new Date(date)
+  attendanceDate.setHours(0, 0, 0, 0)
+
+  // Find students in the class
+  const students = await this.find({
+    class: classNum,
+    section: section.toUpperCase(),
+    academicYear: academicYear || '2024-2025'
+  })
+
+  if (students.length === 0) {
+    throw new Error('No students found in this class')
+  }
+
+  // Create a map for quick student lookup
+  const studentMap = {}
+  students.forEach(student => {
+    studentMap[student._id.toString()] = student
+  })
+
+  let markedCount = 0
+  const attendanceResults = []
+
+  // Mark attendance for each student
+  for (const attendanceData of studentAttendance) {
+    const student = studentMap[attendanceData.studentId]
+    
+    if (!student) {
+      console.warn(`Student not found: ${attendanceData.studentId}`)
+      continue
+    }
+
+    try {
+      if (session === 'fullday') {
+        await student.markFullDayAttendance(attendanceDate, attendanceData.status, markedBy)
+      } else {
+        await student.markAttendance(attendanceDate, session, attendanceData.status, markedBy)
+      }
+      
+      markedCount++
+      attendanceResults.push({
+        studentId: student._id,
+        name: `${student.firstName} ${student.lastName}`,
+        rollNo: student.rollNo,
+        status: attendanceData.status
+      })
+    } catch (error) {
+      console.error(`Error marking attendance for ${student.firstName}:`, error)
+    }
+  }
+
+  return {
+    className: mapNumberToClassName(classNum),
+    section: section.toUpperCase(),
+    date: attendanceDate,
+    session,
+    totalStudents: students.length,
+    markedCount,
+    attendanceResults,
+    markedBy
+  }
+}
+
+// Static method to get class attendance
+studentSchema.statics.getClassAttendance = async function(className, section, date, academicYear, session) {
+  const classNum = mapClassToNumber(className)
+  if (classNum === null) {
+    throw new Error(`Invalid class: "${className}"`)
+  }
+
+  const attendanceDate = new Date(date)
+  attendanceDate.setHours(0, 0, 0, 0)
+
+  // Find students in the class
+  const students = await this.find({
+    class: classNum,
+    section: section.toUpperCase(),
+    academicYear: academicYear || '2024-2025'
+  }).sort('rollNo')
+
+  const attendanceData = []
+
+  for (const student of students) {
+    const academicYearRecord = student.attendance.find(
+      record => record.academicYear === (academicYear || student.academicYear)
+    )
+    
+    let attendanceStatus = null
+    let markedBy = null
+    
+    if (academicYearRecord) {
+      const attendanceRecord = academicYearRecord.records.find(
+        record => record.date.getTime() === attendanceDate.getTime()
+      )
+      
+      if (attendanceRecord) {
+        if (session === 'fullday') {
+          if (attendanceRecord.morning === true && attendanceRecord.afternoon === true) {
+            attendanceStatus = 'present'
+          } else if (attendanceRecord.morning === false && attendanceRecord.afternoon === false) {
+            attendanceStatus = 'absent'
+          } else if (attendanceRecord.morning === true || attendanceRecord.afternoon === true) {
+            attendanceStatus = 'halfday'
+          }
+        } else {
+          attendanceStatus = attendanceRecord[session]
+        }
+        markedBy = attendanceRecord.markedBy
+      }
+    }
+
+    attendanceData.push({
+      studentId: student._id,
+      name: `${student.firstName} ${student.lastName}`,
+      rollNo: student.rollNo,
+      admissionNo: student.admissionNo,
+      status: attendanceStatus,
+      markedBy
+    })
+  }
+
+  // Calculate summary
+  const present = attendanceData.filter(a => a.status === true || a.status === 'present').length
+  const absent = attendanceData.filter(a => a.status === false || a.status === 'absent').length
+  const halfday = attendanceData.filter(a => a.status === 'halfday').length
+  const notMarked = attendanceData.filter(a => a.status === null).length
+
+  return {
+    className: mapNumberToClassName(classNum),
+    section: section.toUpperCase(),
+    date: attendanceDate,
+    session: session || 'all',
+    academicYear: academicYear || '2024-2025',
+    totalStudents: students.length,
+    summary: {
+      present,
+      absent,
+      halfday,
+      notMarked
+    },
+    attendanceData
+  }
+}
+
+// Static method to get class attendance summary
+studentSchema.statics.getClassAttendanceSummary = async function(className, section, date, academicYear) {
+  const classNum = mapClassToNumber(className)
+  if (classNum === null) {
+    throw new Error(`Invalid class: "${className}"`)
+  }
+
+  const attendanceDate = new Date(date)
+  attendanceDate.setHours(0, 0, 0, 0)
+
+  // Find students in the class
+  const students = await this.find({
+    class: classNum,
+    section: section.toUpperCase(),
+    academicYear: academicYear || '2024-2025'
+  })
+
+  let morningPresent = 0
+  let morningAbsent = 0
+  let morningNotMarked = 0
+  let afternoonPresent = 0
+  let afternoonAbsent = 0
+  let afternoonNotMarked = 0
+  let fulldayPresent = 0
+  let fulldayAbsent = 0
+  let fulldayHalfday = 0
+  let fulldayNotMarked = 0
+
+  for (const student of students) {
+    const academicYearRecord = student.attendance.find(
+      record => record.academicYear === (academicYear || student.academicYear)
+    )
+    
+    if (academicYearRecord) {
+      const attendanceRecord = academicYearRecord.records.find(
+        record => record.date.getTime() === attendanceDate.getTime()
+      )
+      
+      if (attendanceRecord) {
+        // Morning session
+        if (attendanceRecord.morning === true) morningPresent++
+        else if (attendanceRecord.morning === false) morningAbsent++
+        else morningNotMarked++
+        
+        // Afternoon session
+        if (attendanceRecord.afternoon === true) afternoonPresent++
+        else if (attendanceRecord.afternoon === false) afternoonAbsent++
+        else afternoonNotMarked++
+        
+        // Full day status
+        if (attendanceRecord.morning === true && attendanceRecord.afternoon === true) {
+          fulldayPresent++
+        } else if (attendanceRecord.morning === false && attendanceRecord.afternoon === false) {
+          fulldayAbsent++
+        } else if (attendanceRecord.morning === true || attendanceRecord.afternoon === true) {
+          fulldayHalfday++
+        } else {
+          fulldayNotMarked++
+        }
+      } else {
+        morningNotMarked++
+        afternoonNotMarked++
+        fulldayNotMarked++
+      }
+    } else {
+      morningNotMarked++
+      afternoonNotMarked++
+      fulldayNotMarked++
+    }
+  }
+
+  return {
+    className: mapNumberToClassName(classNum),
+    section: section.toUpperCase(),
+    date: attendanceDate,
+    academicYear: academicYear || '2024-2025',
+    totalStudents: students.length,
+    morning: {
+      present: morningPresent,
+      absent: morningAbsent,
+      notMarked: morningNotMarked,
+      percentage: morningPresent + morningAbsent > 0 ? 
+        (morningPresent / (morningPresent + morningAbsent) * 100).toFixed(2) : 0
+    },
+    afternoon: {
+      present: afternoonPresent,
+      absent: afternoonAbsent,
+      notMarked: afternoonNotMarked,
+      percentage: afternoonPresent + afternoonAbsent > 0 ? 
+        (afternoonPresent / (afternoonPresent + afternoonAbsent) * 100).toFixed(2) : 0
+    },
+    fullday: {
+      present: fulldayPresent,
+      absent: fulldayAbsent,
+      halfday: fulldayHalfday,
+      notMarked: fulldayNotMarked,
+      effectivePresent: fulldayPresent + (fulldayHalfday * 0.5),
+      percentage: students.length > 0 ? 
+        ((fulldayPresent + (fulldayHalfday * 0.5)) / students.length * 100).toFixed(2) : 0
+    }
+  }
+}
+
+// Static method to apply discounts to multiple students
+studentSchema.statics.applyDiscounts = async function(data) {
+  const { 
+    className, 
+    section, 
+    academicYear, 
+    schoolFeeDiscount = 0,
+    transportFeeDiscount = 0,
+    hostelFeeDiscount = 0
+  } = data
+  
   const classNum = mapClassToNumber(className)
   if (classNum === null) {
     throw new Error(`Invalid class: "${className}"`)
@@ -1516,78 +1983,391 @@ studentSchema.statics.getClassSubjectPerformance = async function(className, sec
     class: classNum,
     section: section.toUpperCase(),
     academicYear: academicYear || '2024-2025'
-  }).select('firstName lastName rollNo marks')
+  })
   
-  // Initialize subject-wise tracking
-  const subjectPerformance = {}
+  if (students.length === 0) {
+    throw new Error('No students found in the specified class and section')
+  }
   
-  students.forEach(student => {
-    const academicYearRecord = student.marks.find(
-      record => record.academicYear === (academicYear || '2024-2025')
-    )
-    
-    if (academicYearRecord) {
-      academicYearRecord.records.forEach(record => {
-        const subject = record.subject
-        
-        if (!subjectPerformance[subject]) {
-          subjectPerformance[subject] = {
-            subject,
-            totalStudents: 0,
-            markedStudents: 0,
-            totalMarks: 0,
-            totalPossibleMarks: 0,
-            passCount: 0,
-            failCount: 0,
-            grades: {}
-          }
-        }
-        
-        subjectPerformance[subject].totalStudents++
-        subjectPerformance[subject].markedStudents++
-        subjectPerformance[subject].totalMarks += record.marks
-        subjectPerformance[subject].totalPossibleMarks += record.totalMarks
-        
-        if (record.result === 'Pass') {
-          subjectPerformance[subject].passCount++
-        } else if (record.result === 'Fail') {
-          subjectPerformance[subject].failCount++
-        }
-        
-        // Count grades
-        if (!subjectPerformance[subject].grades[record.grade]) {
-          subjectPerformance[subject].grades[record.grade] = 0
-        }
-        subjectPerformance[subject].grades[record.grade]++
+  const results = []
+  
+  for (const student of students) {
+    try {
+      // Update student-level discounts
+      student.schoolFeeDiscount = schoolFeeDiscount
+      student.transportFeeDiscount = transportFeeDiscount
+      student.hostelFeeDiscount = hostelFeeDiscount
+      
+      // Update fee details with new discounts
+      const feeRecord = student.feeDetails.find(
+        record => record.academicYear === academicYear
+      )
+      
+      if (feeRecord) {
+        feeRecord.schoolFeeDiscountApplied = schoolFeeDiscount
+        feeRecord.transportFeeDiscountApplied = transportFeeDiscount
+        feeRecord.hostelFeeDiscountApplied = hostelFeeDiscount
+        feeRecord.updatedAt = new Date()
+      }
+      
+      await student.save()
+      
+      results.push({
+        studentId: student._id,
+        name: `${student.firstName} ${student.lastName}`,
+        admissionNo: student.admissionNo,
+        studentType: student.studentType,
+        isUsingTransport: student.isUsingSchoolTransport,
+        schoolFeeDiscount,
+        transportFeeDiscount,
+        hostelFeeDiscount,
+        status: 'updated'
+      })
+    } catch (error) {
+      results.push({
+        studentId: student._id,
+        name: `${student.firstName} ${student.lastName}`,
+        admissionNo: student.admissionNo,
+        error: error.message,
+        status: 'failed'
       })
     }
+  }
+  
+  return {
+    className,
+    section,
+    academicYear: academicYear || '2024-2025',
+    discounts: {
+      schoolFeeDiscount,
+      transportFeeDiscount,
+      hostelFeeDiscount
+    },
+    totalStudents: students.length,
+    updatedCount: results.filter(r => r.status === 'updated').length,
+    failedCount: results.filter(r => r.status === 'failed').length,
+    results
+  }
+}
+
+// Static method to set fee details for multiple students with discounts
+studentSchema.statics.setClassFeeDetails = async function(data) {
+  const { 
+    className, 
+    section, 
+    academicYear, 
+    schoolFee, 
+    transportFee, 
+    hostelFee,
+    schoolFeeDiscount = 0,
+    transportFeeDiscount = 0,
+    hostelFeeDiscount = 0
+  } = data
+  
+  const classNum = mapClassToNumber(className)
+  if (classNum === null) {
+    throw new Error(`Invalid class: "${className}"`)
+  }
+  
+  const students = await this.find({
+    class: classNum,
+    section: section.toUpperCase(),
+    academicYear: academicYear || '2024-2025'
   })
   
-  // Calculate averages and percentages for each subject
-  const performanceReport = Object.values(subjectPerformance).map(subject => {
-    const averagePercentage = subject.markedStudents > 0 
-      ? (subject.totalMarks / subject.totalPossibleMarks) * 100 
-      : 0
-    
-    const passPercentage = subject.markedStudents > 0 
-      ? (subject.passCount / subject.markedStudents) * 100 
-      : 0
-    
-    // Determine subject difficulty based on pass percentage
-    let difficulty = 'Medium'
-    if (passPercentage < 30) difficulty = 'Difficult'
-    else if (passPercentage > 80) difficulty = 'Easy'
-    
-    return {
-      ...subject,
-      averagePercentage: averagePercentage.toFixed(2),
-      passPercentage: passPercentage.toFixed(2),
-      overallGrade: calculateGrade(averagePercentage),
-      difficulty
+  if (students.length === 0) {
+    throw new Error('No students found in the specified class and section')
+  }
+  
+  const results = []
+  
+  for (const student of students) {
+    try {
+      // Update student-level discounts
+      student.schoolFeeDiscount = schoolFeeDiscount
+      student.transportFeeDiscount = transportFeeDiscount
+      student.hostelFeeDiscount = hostelFeeDiscount
+      
+      // Set fee details for each student based on their type and transport usage
+      const actualTransportFee = student.isUsingSchoolTransport ? transportFee : 0
+      const actualHostelFee = student.studentType === 'Hosteller' ? hostelFee : 0
+      
+      await student.setFeeDetails(academicYear, schoolFee, actualTransportFee, actualHostelFee, {
+        schoolFeeDiscount,
+        transportFeeDiscount,
+        hostelFeeDiscount
+      })
+      
+      const feeRecord = student.feeDetails.find(
+        record => record.academicYear === academicYear
+      )
+      
+      results.push({
+        studentId: student._id,
+        name: `${student.firstName} ${student.lastName}`,
+        admissionNo: student.admissionNo,
+        studentType: student.studentType,
+        isUsingTransport: student.isUsingSchoolTransport,
+        schoolFee: feeRecord.schoolFee,
+        transportFee: feeRecord.transportFee,
+        hostelFee: feeRecord.hostelFee,
+        totalFee: feeRecord.totalFee,
+        schoolFeeDiscount: feeRecord.schoolFeeDiscountApplied,
+        transportFeeDiscount: feeRecord.transportFeeDiscountApplied,
+        hostelFeeDiscount: feeRecord.hostelFeeDiscountApplied,
+        status: 'updated'
+      })
+    } catch (error) {
+      results.push({
+        studentId: student._id,
+        name: `${student.firstName} ${student.lastName}`,
+        admissionNo: student.admissionNo,
+        studentType: student.studentType,
+        isUsingTransport: student.isUsingSchoolTransport,
+        error: error.message,
+        status: 'failed'
+      })
     }
-  })
+  }
   
-  return performanceReport.sort((a, b) => a.subject.localeCompare(b.subject))
+  return {
+    className,
+    section,
+    academicYear: academicYear || '2024-2025',
+    baseFees: {
+      schoolFee,
+      transportFee,
+      hostelFee
+    },
+    discounts: {
+      schoolFeeDiscount,
+      transportFeeDiscount,
+      hostelFeeDiscount
+    },
+    totalStudents: students.length,
+    updatedCount: results.filter(r => r.status === 'updated').length,
+    failedCount: results.filter(r => r.status === 'failed').length,
+    results
+  }
+}
+
+// ==================== PAYMENT PROCESSING METHODS ====================
+
+// Method to process a payment and update all related records
+studentSchema.methods.processPayment = async function (
+  paymentData,
+  receivedBy,
+) {
+  const {
+    academicYear,
+    schoolFeePaid = 0,
+    transportFeePaid = 0,
+    hostelFeePaid = 0,
+    description = "",
+    paymentMode = "Cash",
+    chequeNo = "",
+    bankName = "",
+    transactionId = "",
+    notes = "",
+    term,
+    customReceiptNo = null,
+    customPaymentId = null,
+  } = paymentData
+
+  // Calculate total amount
+  const totalAmount = schoolFeePaid + transportFeePaid + hostelFeePaid
+
+  if (totalAmount <= 0) {
+    throw new Error("Payment amount must be greater than zero")
+  }
+
+  // Validate payment components don't exceed due amounts
+  const feeRecord = this.feeDetails.find(
+    (fd) => fd.academicYear === academicYear,
+  )
+
+  if (!feeRecord) {
+    throw new Error(`Fee details not found for academic year ${academicYear}`)
+  }
+
+  // Validate individual component payments
+  const schoolFeeDue = Math.max(
+    0,
+    feeRecord.schoolFee - feeRecord.schoolFeePaid,
+  )
+  const transportFeeDue = Math.max(
+    0,
+    feeRecord.transportFee - feeRecord.transportFeePaid,
+  )
+  const hostelFeeDue = Math.max(
+    0,
+    feeRecord.hostelFee - feeRecord.hostelFeePaid,
+  )
+
+  if (schoolFeePaid > schoolFeeDue) {
+    throw new Error(
+      `School fee payment (${schoolFeePaid}) exceeds due amount (${schoolFeeDue})`,
+    )
+  }
+
+  if (transportFeePaid > transportFeeDue) {
+    throw new Error(
+      `Transport fee payment (${transportFeePaid}) exceeds due amount (${transportFeeDue})`,
+    )
+  }
+
+  if (hostelFeePaid > hostelFeeDue) {
+    throw new Error(
+      `Hostel fee payment (${hostelFeePaid}) exceeds due amount (${hostelFeeDue})`,
+    )
+  }
+
+  // Generate payment ID and receipt number
+  const paymentId =
+    customPaymentId ||
+    `PAY-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+  const receiptNo =
+    customReceiptNo ||
+    `RCPT-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-${String(Math.floor(Math.random() * 10000)).padStart(4, "0")}`
+
+  // Create payment record
+  const paymentRecord = {
+    paymentId,
+    academicYear,
+    date: new Date(),
+    schoolFeePaid,
+    transportFeePaid,
+    hostelFeePaid,
+    totalAmount,
+    receiptNo,
+    paymentMode,
+    description: term ? `${description} (Term ${term})` : description,
+    chequeNo,
+    bankName,
+    transactionId,
+    receivedBy,
+    status: "Completed",
+    notes,
+    createdAt: new Date(),
+  }
+
+  // Add to payment history
+  this.paymentHistory.push(paymentRecord)
+
+  // Update fee details
+  feeRecord.schoolFeePaid += schoolFeePaid
+  feeRecord.transportFeePaid += transportFeePaid
+  feeRecord.hostelFeePaid += hostelFeePaid
+  feeRecord.totalPaid += totalAmount
+  feeRecord.totalDue = Math.max(0, feeRecord.totalFee - feeRecord.totalPaid)
+  feeRecord.updatedAt = new Date()
+
+  // Save the student document
+  await this.save()
+
+  return {
+    paymentId,
+    receiptNo,
+    paymentRecord,
+    updatedFeeDetails: feeRecord,
+    remainingDue: feeRecord.totalDue,
+    schoolFeeDue: Math.max(0, feeRecord.schoolFee - feeRecord.schoolFeePaid),
+    transportFeeDue: Math.max(
+      0,
+      feeRecord.transportFee - feeRecord.transportFeePaid,
+    ),
+    hostelFeeDue: Math.max(0, feeRecord.hostelFee - feeRecord.hostelFeePaid),
+  }
+}
+
+// Method to generate fee receipt data
+studentSchema.methods.generateReceiptData = function (paymentId) {
+  const payment = this.paymentHistory.find((p) => p.paymentId === paymentId)
+
+  if (!payment) {
+    throw new Error(`Payment with ID ${paymentId} not found`)
+  }
+
+  const feeRecord = this.feeDetails.find(
+    (fd) => fd.academicYear === payment.academicYear,
+  )
+
+  return {
+    student: {
+      id: this._id,
+      name: `${this.firstName} ${this.lastName}`,
+      admissionNo: this.admissionNo,
+      rollNo: this.rollNo,
+      class: this.class,
+      displayClass: mapNumberToClassName(this.class),
+      section: this.section,
+      academicYear: this.academicYear,
+      parentName: this.parentName,
+      parentPhone: this.parentPhone,
+    },
+    payment: {
+      paymentId: payment.paymentId,
+      receiptNo: payment.receiptNo,
+      date: payment.date,
+      breakdown: {
+        schoolFee: payment.schoolFeePaid,
+        transportFee: payment.transportFeePaid,
+        hostelFee: payment.hostelFeePaid,
+      },
+      totalAmount: payment.totalAmount,
+      paymentMode: payment.paymentMode,
+      description: payment.description,
+      receivedBy: payment.receivedBy,
+      chequeNo: payment.chequeNo,
+      bankName: payment.bankName,
+      transactionId: payment.transactionId,
+      status: payment.status,
+    },
+    feeSummary: feeRecord
+      ? {
+          academicYear: feeRecord.academicYear,
+          totalFee: feeRecord.totalFee,
+          totalPaid: feeRecord.totalPaid,
+          totalDue: feeRecord.totalDue,
+          paymentStatus:
+            feeRecord.totalDue === 0
+              ? "Paid"
+              : feeRecord.totalDue === feeRecord.totalFee
+                ? "Unpaid"
+                : "Partial",
+          components: {
+            schoolFee: {
+              total: feeRecord.schoolFee,
+              paid: feeRecord.schoolFeePaid,
+              due: Math.max(0, feeRecord.schoolFee - feeRecord.schoolFeePaid),
+            },
+            transportFee: {
+              total: feeRecord.transportFee,
+              paid: feeRecord.transportFeePaid,
+              due: Math.max(
+                0,
+                feeRecord.transportFee - feeRecord.transportFeePaid,
+              ),
+            },
+            hostelFee: {
+              total: feeRecord.hostelFee,
+              paid: feeRecord.hostelFeePaid,
+              due: Math.max(0, feeRecord.hostelFee - feeRecord.hostelFeePaid),
+            },
+          },
+        }
+      : null,
+    schoolInfo: {
+      name: "Your School Name", 
+      address: "School Address",
+      phone: "School Phone",
+      email: "school@email.com",
+      principal: "Principal Name",
+    },
+    generatedAt: new Date(),
+    receiptId: `RECEIPT-${payment.receiptNo}`,
+    isPartialPayment: feeRecord && feeRecord.totalDue > 0,
+  }
 }
 
 // Helper functions

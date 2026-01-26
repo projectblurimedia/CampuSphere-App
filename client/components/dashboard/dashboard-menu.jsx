@@ -27,10 +27,11 @@ import Events from '@/pages/menu/events/Events'
 import CreateStudent from '@/pages/menu/createStudent/CreateStudent'
 import CreateStaff from '@/pages/menu/createStaff/CreateStaff'
 import Attendance from '@/pages/menu/attendance/Attendance'
-import CollectFees from '@/pages/menu/collectFees/CollectFees'
 import BulkImportStudents from '@/pages/menu/bulkImportStudents/BulkImportStudents'
 import BulkImportStaff from '@/pages/menu/bulkImportStaff/BulkImportStaff'
 import UploadMarks from '@/pages/menu/uploadMarks/UploadMarks'
+import FeeManagement from '@/pages/menu/feeManagement/FeeManagement'
+import FeeDetails from '@/pages/menu/feeDetails/FeeDetails'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
@@ -43,10 +44,11 @@ export default function DashboardMenu({ visible, onClose }) {
   const [createStudentVisible, setCreateStudentVisible] = useState(false)
   const [createStaffVisible, setCreateStaffVisible] = useState(false)
   const [markAttendanceVisible, setMarkAttendanceVisible] = useState(false)
-  const [collectFeesVisible, setCollectFeesVisible] = useState(false)
   const [bulkImportStudentsVisible, setBulkImportStudentsVisible] = useState(false)
   const [bulkImportStaffVisible, setBulkImportStaffVisible] = useState(false)
-  const [uploadMarksVisible, setUploadMarksVisible] = useState(false) // Add this state
+  const [uploadMarksVisible, setUploadMarksVisible] = useState(false) 
+  const [feeManagementVisible, setFeeManagementVisible] = useState(false)
+  const [feeDetailsVisible, setFeeDetailsVisible] = useState(false)
   const translateX = useRef(new Animated.Value(SCREEN_WIDTH)).current
   const backdropOpacity = useRef(new Animated.Value(0)).current
   
@@ -158,11 +160,19 @@ export default function DashboardMenu({ visible, onClose }) {
     },
     { 
       id: 10, 
-      title: 'Collect Fees', 
-      icon: 'dollar-sign', 
+      title: 'Fee Management', 
+      icon: 'cogs', 
       iconType: 'FontAwesome5', 
       gradient: ['#f97316', '#ea580c'], 
-      action: () => setCollectFeesVisible(true) 
+      action: () => setFeeManagementVisible(true) 
+    },
+    { 
+      id: 11, 
+      title: 'Fee Details', 
+      icon: 'file-invoice-dollar', 
+      iconType: 'FontAwesome5', 
+      gradient: ['#3b82f6', '#2563eb'], 
+      action: () => setFeeDetailsVisible(true) 
     },
   ]
 
@@ -228,12 +238,16 @@ export default function DashboardMenu({ visible, onClose }) {
     setMarkAttendanceVisible(false)
   }
 
-  const handleCollectFeesClose = () => {
-    setCollectFeesVisible(false)
-  }
-
   const handleUploadMarksClose = () => {
     setUploadMarksVisible(false)
+  }
+
+  const handleFeeManagementClose = () => {
+    setFeeManagementVisible(false)
+  }
+
+  const handleFeeDetailsClose = () => {
+    setFeeDetailsVisible(false)
   }
 
   return (
@@ -420,13 +434,17 @@ export default function DashboardMenu({ visible, onClose }) {
         visible={markAttendanceVisible}
         onClose={handleMarkAttendanceClose}
       />
-      <UploadMarks // Add this component
+      <UploadMarks
         visible={uploadMarksVisible}
         onClose={handleUploadMarksClose}
       />
-      <CollectFees
-        visible={collectFeesVisible}
-        onClose={handleCollectFeesClose}
+      <FeeManagement
+        visible={feeManagementVisible}
+        onClose={handleFeeManagementClose}
+      />
+      <FeeDetails
+        visible={feeDetailsVisible}
+        onClose={handleFeeDetailsClose}
       />
     </>
   )

@@ -5,6 +5,16 @@ const multer = require('multer')
 const path = require('path')
 const fs = require('fs')
 
+// Import fee calculation utilities
+const {
+  calculateStudentFees,
+  getDisplayClassName,
+  classMappings,
+  displayClassMappings,
+  getClassNameForFeeLookup,
+  calculateDiscountedFee
+} = require('../utils/feeCalculations')
+
 const tempStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     const tempDir = 'temp/uploads/'
@@ -72,9 +82,13 @@ const mapClassToNumber = (classInput) => {
 
   const classMap = {
     'PRE NURSERY': 0,
+    'PRE-NURSERY': 0,
+    'PRE NURSERY': 0,
     NURSERY: 0.25,
     LKG: 0.5,
+    'L.K.G': 0.5,
     UKG: 0.75,
+    'U.K.G': 0.75,
     '1': 1,
     FIRST: 1,
     ONE: 1,
@@ -165,6 +179,733 @@ const addDisplayClassToStudent = (studentDoc) => {
 const addDisplayClassToStudents = (students) =>
   students.map((s) => addDisplayClassToStudent(s))
 
+// Helper to parse discount values safely
+const parseDiscount = (value) => {
+  if (!value && value !== 0) return 0
+  const num = parseFloat(value)
+  return isNaN(num) ? 0 : Math.min(Math.max(num, 0), 100)
+}
+
+// Helper to format phone number
+const formatPhoneNumber = (phone) => {
+  if (!phone) return ''
+  const cleaned = phone.toString().replace(/\D/g, '')
+  return cleaned.substring(0, 10)
+}
+
+// Create student with automatic fee calculation
+exports.createStudent = [
+  upload.single('profilePic'),
+  async (req, res) => {
+    let uploadedProfilePic = false
+    
+    try {
+      // Destructure with default values
+      const {
+        firstName,
+        lastName,
+        dob,
+        gender = 'Not Specified',
+        academicYear = `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
+        class: className,
+        section = 'A',
+        admissionNo,
+        rollNo,
+        address,
+        village,
+        studentType = 'Day Scholar',
+        isUsingSchoolTransport = false,
+        schoolFeeDiscount = 0,
+        transportFeeDiscount = 0,
+        hostelFeeDiscount = 0,
+        parentName,
+        parentPhone,
+        parentPhone2,
+        parentEmail,
+      } = req.body
+
+      // Validate required fields
+      if (!firstName || !lastName || !admissionNo || !parentPhone || !className) {
+        cleanupTempFiles(req.file)
+        return res.status(400).json({
+          success: false,
+          message: 'Missing required fields: firstName, lastName, admissionNo, parentPhone, class'
+        })
+      }
+
+      // Check for duplicate admission number
+      const existingStudent = await Student.findOne({ admissionNo })
+      if (existingStudent) {
+        cleanupTempFiles(req.file)
+        return res.status(400).json({
+          success: false,
+          message: 'Admission number already exists'
+        })
+      }
+
+      // Map class name to number
+      const classNum = mapClassToNumber(className)
+      if (classNum === null) {
+        cleanupTempFiles(req.file)
+        return res.status(400).json({
+          success: false,
+          message: `Invalid class: "${className}". Valid: Pre-Nursery, Nursery, LKG, UKG, 1-12`
+        })
+      }
+
+      // Validate student type and transport logic
+      if (studentType === 'Day Scholar' && isUsingSchoolTransport && !village) {
+        console.warn('Student is using transport but no village specified. Using default transport fee.')
+      }
+
+      // Upload profile picture if provided
+      let profilePicData = null
+      if (req.file) {
+        try {
+          const uploadResult = await cloudinaryUtils.uploadToCloudinary(
+            req.file.path,
+            {
+              folder: 'school/students/profile-pictures',
+              transformation: {
+                width: 500,
+                height: 500,
+                crop: 'fill',
+                gravity: 'face',
+              },
+            }
+          )
+          
+          profilePicData = {
+            url: uploadResult.url,
+            publicId: uploadResult.publicId,
+          }
+          uploadedProfilePic = true
+          
+        } catch (uploadError) {
+          cleanupTempFiles(req.file)
+          return res.status(500).json({
+            success: false,
+            message: `Failed to upload profile picture: ${uploadError.message}`
+          })
+        }
+      }
+
+      // Calculate fees automatically
+      console.log('Calculating fees for new student...')
+      console.log('Student Data:', {
+        class: classNum,
+        academicYear,
+        village,
+        isUsingSchoolTransport,
+        studentType,
+        schoolFeeDiscount: parseDiscount(schoolFeeDiscount),
+        transportFeeDiscount: parseDiscount(transportFeeDiscount),
+        hostelFeeDiscount: parseDiscount(hostelFeeDiscount)
+      })
+
+      const feeCalculation = await calculateStudentFees({
+        class: classNum,
+        academicYear,
+        village,
+        isUsingSchoolTransport: studentType === 'Day Scholar' ? isUsingSchoolTransport : false,
+        studentType,
+        schoolFeeDiscount: parseDiscount(schoolFeeDiscount),
+        transportFeeDiscount: parseDiscount(transportFeeDiscount),
+        hostelFeeDiscount: parseDiscount(hostelFeeDiscount)
+      })
+
+      console.log('Fee Calculation Result:', {
+        success: feeCalculation.success,
+        schoolFee: feeCalculation.schoolFee,
+        transportFee: feeCalculation.transportFee,
+        hostelFee: feeCalculation.hostelFee,
+        totalFee: feeCalculation.totalFee,
+        totalTerms: feeCalculation.totalTerms
+      })
+
+      if (!feeCalculation.success) {
+        console.error('Fee calculation failed:', feeCalculation.error)
+        // Continue with defaults if fee calculation fails
+      }
+
+      // Prepare student data
+      const studentData = {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        dob: dob ? new Date(dob) : null,
+        gender,
+        academicYear,
+        class: classNum,
+        section: section.toUpperCase(),
+        admissionNo: admissionNo.trim(),
+        rollNo: rollNo ? rollNo.trim() : null,
+        address: address ? address.trim() : null,
+        village: village ? village.trim() : null,
+        studentType,
+        isUsingSchoolTransport: studentType === 'Day Scholar' ? (isUsingSchoolTransport === true || isUsingSchoolTransport === 'true') : false,
+        schoolFeeDiscount: parseDiscount(schoolFeeDiscount),
+        transportFeeDiscount: parseDiscount(transportFeeDiscount),
+        hostelFeeDiscount: parseDiscount(hostelFeeDiscount),
+        parentName: parentName ? parentName.trim() : null,
+        parentPhone: formatPhoneNumber(parentPhone),
+        parentPhone2: parentPhone2 ? formatPhoneNumber(parentPhone2) : null,
+        parentEmail: parentEmail ? parentEmail.trim().toLowerCase() : null,
+        profilePic: profilePicData,
+        originalClassName: className.trim(),
+        feeDetails: [{
+          academicYear,
+          schoolFee: feeCalculation.schoolFee || 0,
+          transportFee: feeCalculation.transportFee || 0,
+          hostelFee: feeCalculation.hostelFee || 0,
+          terms: feeCalculation.totalTerms || 3,
+          totalFee: (feeCalculation.schoolFee || 0) + (feeCalculation.transportFee || 0) + (feeCalculation.hostelFee || 0),
+          schoolFeePaid: 0,
+          transportFeePaid: 0,
+          hostelFeePaid: 0,
+          totalPaid: 0,
+          totalDue: (feeCalculation.schoolFee || 0) + (feeCalculation.transportFee || 0) + (feeCalculation.hostelFee || 0),
+          schoolFeeDiscountApplied: parseDiscount(schoolFeeDiscount),
+          transportFeeDiscountApplied: parseDiscount(transportFeeDiscount),
+          hostelFeeDiscountApplied: parseDiscount(hostelFeeDiscount),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }],
+        feeCalculationDetails: feeCalculation.feeBreakdown || {},
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+
+      // Validate student data consistency
+      if (studentType === 'Day Scholar' && studentData.feeDetails[0].hostelFee > 0) {
+        studentData.feeDetails[0].hostelFee = 0
+        console.warn('Reset hostel fee to 0 for Day Scholar')
+      }
+
+      if (!studentData.isUsingSchoolTransport && studentData.feeDetails[0].transportFee > 0) {
+        studentData.feeDetails[0].transportFee = 0
+        console.warn('Reset transport fee to 0 for non-transport user')
+      }
+
+      // Recalculate totals after adjustments
+      studentData.feeDetails[0].totalFee = studentData.feeDetails[0].schoolFee + 
+                                          studentData.feeDetails[0].transportFee + 
+                                          studentData.feeDetails[0].hostelFee
+      studentData.feeDetails[0].totalDue = studentData.feeDetails[0].totalFee
+
+      // Create and save student
+      const studentRaw = new Student(studentData)
+      await studentRaw.save()
+
+      // Add display class to response
+      const student = addDisplayClassToStudent(studentRaw)
+
+      // Cleanup temp files if uploaded
+      if (req.file) {
+        cleanupTempFiles(req.file)
+      }
+
+      // Prepare response with fee details
+      const response = {
+        success: true,
+        message: 'Student created successfully with automatic fee calculation',
+        data: {
+          ...student,
+          feeSummary: {
+            academicYear,
+            schoolFee: studentRaw.feeDetails[0].schoolFee,
+            transportFee: studentRaw.feeDetails[0].transportFee,
+            hostelFee: studentRaw.feeDetails[0].hostelFee,
+            totalFee: studentRaw.feeDetails[0].totalFee,
+            totalDue: studentRaw.feeDetails[0].totalDue,
+            discountsApplied: {
+              school: studentRaw.feeDetails[0].schoolFeeDiscountApplied,
+              transport: studentRaw.feeDetails[0].transportFeeDiscountApplied,
+              hostel: studentRaw.feeDetails[0].hostelFeeDiscountApplied
+            }
+          },
+          calculationDetails: {
+            studentType,
+            usesTransport: studentRaw.isUsingSchoolTransport,
+            village: studentRaw.village || 'Not specified',
+            note: feeCalculation.success ? 'Fees calculated from fee structures' : 'Fees calculated using defaults'
+          }
+        }
+      }
+
+      res.status(201).json(response)
+
+    } catch (error) {
+      // Cleanup uploaded profile picture if error occurred after upload
+      if (uploadedProfilePic && req.file) {
+        try {
+          await cleanupTempFiles(req.file)
+        } catch (cleanupError) {
+          console.error('Error cleaning up temp files:', cleanupError)
+        }
+      } else if (req.file) {
+        cleanupTempFiles(req.file)
+      }
+
+      // Handle specific error types
+      if (error.name === 'ValidationError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation error',
+          errors: Object.values(error.errors).map((err) => err.message),
+        })
+      }
+
+      if (error.code === 11000) {
+        return res.status(400).json({
+          success: false,
+          message: 'Duplicate admission number or roll number',
+          error: error.keyValue
+        })
+      }
+
+      console.error('Error creating student:', error)
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to create student',
+        errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      })
+    }
+  }
+]
+
+// Update student (with optional fee recalculation if class/village/type changes)
+exports.updateStudent = [
+  upload.single('profilePic'),
+  async (req, res) => {
+    try {
+      const existingStudent = await Student.findById(req.params.id)
+      if (!existingStudent) {
+        cleanupTempFiles(req.file)
+        return res.status(404).json({
+          success: false,
+          message: 'Student not found',
+        })
+      }
+
+      const {
+        firstName,
+        lastName,
+        dob,
+        gender,
+        academicYear,
+        class: className,
+        section,
+        admissionNo,
+        rollNo,
+        address,
+        village,
+        studentType,
+        isUsingSchoolTransport,
+        schoolFeeDiscount,
+        transportFeeDiscount,
+        hostelFeeDiscount,
+        parentName,
+        parentPhone,
+        parentPhone2,
+        parentEmail,
+        removeProfilePic,
+        recalculateFees = false, // New flag to trigger fee recalculation
+      } = req.body
+
+      // Check for duplicate admission number if changed
+      if (admissionNo && admissionNo !== existingStudent.admissionNo) {
+        const duplicate = await Student.findOne({ admissionNo })
+        if (duplicate) {
+          cleanupTempFiles(req.file)
+          return res.status(400).json({
+            success: false,
+            message: 'Admission number already exists',
+          })
+        }
+      }
+
+      // Handle class change
+      let classNum = existingStudent.class
+      if (className !== undefined) {
+        const mappedClass = mapClassToNumber(className)
+        if (mappedClass === null) {
+          cleanupTempFiles(req.file)
+          return res.status(400).json({
+            success: false,
+            message: `Invalid class: "${className}". Valid: Pre-Nursery, Nursery, LKG, UKG, 1-12`,
+          })
+        }
+        classNum = mappedClass
+        // If class changed, auto-trigger fee recalculation
+        if (classNum !== existingStudent.class) {
+          recalculateFees = true
+        }
+      }
+
+      // Handle profile picture
+      let newProfilePicData = existingStudent.profilePic
+      let oldPublicId = null
+
+      if (removeProfilePic === 'true' || removeProfilePic === true) {
+        if (existingStudent.profilePic && existingStudent.profilePic.publicId) {
+          oldPublicId = existingStudent.profilePic.publicId
+        }
+        newProfilePicData = null
+      }
+
+      if (req.file) {
+        if (existingStudent.profilePic && existingStudent.profilePic.publicId) {
+          oldPublicId = existingStudent.profilePic.publicId
+        }
+
+        try {
+          const uploadResult = await cloudinaryUtils.uploadToCloudinary(
+            req.file.path,
+            {
+              folder: 'school/students/profile-pictures',
+              transformation: {
+                width: 500,
+                height: 500,
+                crop: 'fill',
+                gravity: 'face',
+              },
+            }
+          )
+
+          newProfilePicData = {
+            url: uploadResult.url,
+            publicId: uploadResult.publicId,
+          }
+        } catch (uploadError) {
+          cleanupTempFiles(req.file)
+          throw new Error(
+            `Failed to upload new profile picture: ${uploadError.message}`
+          )
+        }
+
+        cleanupTempFiles(req.file)
+      }
+
+      // Calculate new fees if needed
+      let newFeeDetails = existingStudent.feeDetails
+      let feeCalculationDetails = existingStudent.feeCalculationDetails || {}
+      
+      if (recalculateFees === true || recalculateFees === 'true' || 
+          studentType !== undefined || 
+          village !== undefined ||
+          isUsingSchoolTransport !== undefined ||
+          schoolFeeDiscount !== undefined ||
+          transportFeeDiscount !== undefined ||
+          hostelFeeDiscount !== undefined) {
+        
+        const currentAcademicYear = academicYear || existingStudent.academicYear
+        
+        console.log('Recalculating fees for updated student...')
+        const feeCalculation = await calculateStudentFees({
+          class: classNum,
+          academicYear: currentAcademicYear,
+          village: village || existingStudent.village,
+          isUsingSchoolTransport: studentType === 'Day Scholar' ? 
+            (isUsingSchoolTransport !== undefined ? (isUsingSchoolTransport === true || isUsingSchoolTransport === 'true') : existingStudent.isUsingSchoolTransport) : 
+            false,
+          studentType: studentType || existingStudent.studentType,
+          schoolFeeDiscount: parseDiscount(schoolFeeDiscount !== undefined ? schoolFeeDiscount : existingStudent.schoolFeeDiscount),
+          transportFeeDiscount: parseDiscount(transportFeeDiscount !== undefined ? transportFeeDiscount : existingStudent.transportFeeDiscount),
+          hostelFeeDiscount: parseDiscount(hostelFeeDiscount !== undefined ? hostelFeeDiscount : existingStudent.hostelFeeDiscount)
+        })
+
+        if (feeCalculation.success) {
+          // Find or create fee record for current academic year
+          let feeRecord = existingStudent.feeDetails.find(
+            record => record.academicYear === currentAcademicYear
+          )
+          
+          if (!feeRecord) {
+            feeRecord = {
+              academicYear: currentAcademicYear,
+              schoolFee: 0,
+              transportFee: 0,
+              hostelFee: 0,
+              totalFee: 0,
+              terms: feeCalculation.totalTerms || 3,
+              schoolFeePaid: 0,
+              transportFeePaid: 0,
+              hostelFeePaid: 0,
+              totalPaid: 0,
+              totalDue: 0,
+              schoolFeeDiscountApplied: parseDiscount(schoolFeeDiscount !== undefined ? schoolFeeDiscount : existingStudent.schoolFeeDiscount),
+              transportFeeDiscountApplied: parseDiscount(transportFeeDiscount !== undefined ? transportFeeDiscount : existingStudent.transportFeeDiscount),
+              hostelFeeDiscountApplied: parseDiscount(hostelFeeDiscount !== undefined ? hostelFeeDiscount : existingStudent.hostelFeeDiscount),
+              createdAt: new Date(),
+              updatedAt: new Date()
+            }
+            newFeeDetails.push(feeRecord)
+          }
+          
+          // Update fees (keep existing payments)
+          feeRecord.schoolFee = feeCalculation.schoolFee || 0
+          feeRecord.transportFee = feeCalculation.transportFee || 0
+          feeRecord.hostelFee = feeCalculation.hostelFee || 0
+          feeRecord.terms = feeCalculation.totalTerms || 3 
+          feeRecord.totalFee = feeRecord.schoolFee + feeRecord.transportFee + feeRecord.hostelFee
+          feeRecord.totalDue = Math.max(0, feeRecord.totalFee - feeRecord.totalPaid)
+          feeRecord.schoolFeeDiscountApplied = parseDiscount(schoolFeeDiscount !== undefined ? schoolFeeDiscount : existingStudent.schoolFeeDiscount)
+          feeRecord.transportFeeDiscountApplied = parseDiscount(transportFeeDiscount !== undefined ? transportFeeDiscount : existingStudent.transportFeeDiscount)
+          feeRecord.hostelFeeDiscountApplied = parseDiscount(hostelFeeDiscount !== undefined ? hostelFeeDiscount : existingStudent.hostelFeeDiscount)
+          feeRecord.updatedAt = new Date()
+          
+          feeCalculationDetails = feeCalculation.feeBreakdown || {}
+        }
+      }
+
+      // Prepare update data
+      const updateData = {
+        firstName: firstName !== undefined ? firstName.trim() : existingStudent.firstName,
+        lastName: lastName !== undefined ? lastName.trim() : existingStudent.lastName,
+        dob: dob !== undefined ? (dob ? new Date(dob) : null) : existingStudent.dob,
+        gender: gender !== undefined ? gender : existingStudent.gender,
+        academicYear: academicYear || existingStudent.academicYear,
+        class: classNum,
+        section: section ? section.toUpperCase() : existingStudent.section,
+        admissionNo: admissionNo || existingStudent.admissionNo,
+        rollNo: rollNo !== undefined ? rollNo : existingStudent.rollNo,
+        address: address !== undefined ? address : existingStudent.address,
+        village: village !== undefined ? village : existingStudent.village,
+        studentType: studentType !== undefined ? studentType : existingStudent.studentType,
+        isUsingSchoolTransport: isUsingSchoolTransport !== undefined ? 
+          (isUsingSchoolTransport === true || isUsingSchoolTransport === 'true') : 
+          existingStudent.isUsingSchoolTransport,
+        schoolFeeDiscount: parseDiscount(schoolFeeDiscount !== undefined ? schoolFeeDiscount : existingStudent.schoolFeeDiscount),
+        transportFeeDiscount: parseDiscount(transportFeeDiscount !== undefined ? transportFeeDiscount : existingStudent.transportFeeDiscount),
+        hostelFeeDiscount: parseDiscount(hostelFeeDiscount !== undefined ? hostelFeeDiscount : existingStudent.hostelFeeDiscount),
+        parentName: parentName !== undefined ? parentName : existingStudent.parentName,
+        parentPhone: parentPhone ? formatPhoneNumber(parentPhone) : existingStudent.parentPhone,
+        parentPhone2: parentPhone2 !== undefined ? 
+          (parentPhone2 ? formatPhoneNumber(parentPhone2) : null) : 
+          existingStudent.parentPhone2,
+        parentEmail: parentEmail !== undefined ? parentEmail : existingStudent.parentEmail,
+        profilePic: newProfilePicData,
+        originalClassName: className !== undefined ? className : existingStudent.originalClassName,
+        feeDetails: newFeeDetails,
+        feeCalculationDetails: feeCalculationDetails,
+        updatedAt: new Date(),
+      }
+
+      // Validate and adjust fees based on student type
+      if (updateData.studentType === 'Day Scholar') {
+        // Ensure hostel fee is 0 for day scholars
+        updateData.feeDetails.forEach(record => {
+          if (record.hostelFee > 0) {
+            record.hostelFee = 0
+            record.totalFee = record.schoolFee + record.transportFee + record.hostelFee
+            record.totalDue = Math.max(0, record.totalFee - record.totalPaid)
+          }
+        })
+      }
+
+      if (!updateData.isUsingSchoolTransport) {
+        // Ensure transport fee is 0 for non-transport users
+        updateData.feeDetails.forEach(record => {
+          if (record.transportFee > 0) {
+            record.transportFee = 0
+            record.totalFee = record.schoolFee + record.transportFee + record.hostelFee
+            record.totalDue = Math.max(0, record.totalFee - record.totalPaid)
+          }
+        })
+      }
+
+      // Update student
+      const updatedStudentRaw = await Student.findByIdAndUpdate(
+        req.params.id,
+        updateData,
+        { new: true, runValidators: true }
+      ).select('-__v')
+
+      // Cleanup old profile picture from Cloudinary if new one uploaded
+      if (oldPublicId) {
+        try {
+          await cloudinaryUtils.deleteFromCloudinary(oldPublicId)
+        } catch (deleteError) {
+          console.error(
+            'Failed to delete old profile picture from Cloudinary:',
+            deleteError.message
+          )
+        }
+      }
+
+      const updatedStudent = addDisplayClassToStudent(updatedStudentRaw)
+
+      res.status(200).json({
+        success: true,
+        message: 'Student updated successfully' + (recalculateFees ? ' with fee recalculation' : ''),
+        data: updatedStudent,
+        feeRecalculated: recalculateFees === true || recalculateFees === 'true'
+      })
+    } catch (error) {
+      if (req.file) {
+        cleanupTempFiles(req.file)
+      }
+
+      if (error.name === 'ValidationError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Validation error',
+          errors: Object.values(error.errors).map((err) => err.message),
+        })
+      }
+
+      if (error.name === 'CastError') {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid student ID format',
+        })
+      }
+
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to update student',
+        errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      })
+    }
+  }
+]
+
+// Rest of the functions remain the same (getAllStudents, getStudentById, etc.)
+// ... (Keep all other functions as they are, unchanged)
+
+// Add a new endpoint to manually recalculate fees for a student
+exports.recalculateStudentFees = async (req, res) => {
+  try {
+    const student = await Student.findById(req.params.id)
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      })
+    }
+
+    const { academicYear } = req.body
+    const targetAcademicYear = academicYear || student.academicYear
+
+    console.log(`Recalculating fees for student ${student.admissionNo}, academic year ${targetAcademicYear}`)
+
+    const feeCalculation = await calculateStudentFees({
+      class: student.class,
+      academicYear: targetAcademicYear,
+      village: student.village,
+      isUsingSchoolTransport: student.isUsingSchoolTransport,
+      studentType: student.studentType,
+      schoolFeeDiscount: student.schoolFeeDiscount,
+      transportFeeDiscount: student.transportFeeDiscount,
+      hostelFeeDiscount: student.hostelFeeDiscount
+    })
+
+    if (!feeCalculation.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Failed to recalculate fees: ' + (feeCalculation.error || 'Unknown error')
+      })
+    }
+
+    // Find or create fee record for the academic year
+    let feeRecord = student.feeDetails.find(
+      record => record.academicYear === targetAcademicYear
+    )
+    
+    if (!feeRecord) {
+      feeRecord = {
+        academicYear: targetAcademicYear,
+        schoolFee: 0,
+        transportFee: 0,
+        hostelFee: 0,
+        totalFee: 0,
+        terms: feeCalculation.totalTerms || 3,
+        schoolFeePaid: 0,
+        transportFeePaid: 0,
+        hostelFeePaid: 0,
+        totalPaid: 0,
+        totalDue: 0,
+        schoolFeeDiscountApplied: student.schoolFeeDiscount,
+        transportFeeDiscountApplied: student.transportFeeDiscount,
+        hostelFeeDiscountApplied: student.hostelFeeDiscount,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+      student.feeDetails.push(feeRecord)
+    }
+    
+    // Update fees (preserve payments)
+    const previousSchoolFee = feeRecord.schoolFee
+    const previousTransportFee = feeRecord.transportFee
+    const previousHostelFee = feeRecord.hostelFee
+    
+    feeRecord.schoolFee = feeCalculation.schoolFee || 0
+    feeRecord.transportFee = feeCalculation.transportFee || 0
+    feeRecord.hostelFee = feeCalculation.hostelFee || 0
+    feeRecord.totalFee = feeRecord.schoolFee + feeRecord.transportFee + feeRecord.hostelFee
+    
+    // Adjust payments if fees decreased
+    if (feeRecord.schoolFee < previousSchoolFee) {
+      feeRecord.schoolFeePaid = Math.min(feeRecord.schoolFeePaid, feeRecord.schoolFee)
+    }
+    if (feeRecord.transportFee < previousTransportFee) {
+      feeRecord.transportFeePaid = Math.min(feeRecord.transportFeePaid, feeRecord.transportFee)
+    }
+    if (feeRecord.hostelFee < previousHostelFee) {
+      feeRecord.hostelFeePaid = Math.min(feeRecord.hostelFeePaid, feeRecord.hostelFee)
+    }
+    
+    feeRecord.totalPaid = feeRecord.schoolFeePaid + feeRecord.transportFeePaid + feeRecord.hostelFeePaid
+    feeRecord.totalDue = Math.max(0, feeRecord.totalFee - feeRecord.totalPaid)
+    feeRecord.schoolFeeDiscountApplied = student.schoolFeeDiscount
+    feeRecord.transportFeeDiscountApplied = student.transportFeeDiscount
+    feeRecord.hostelFeeDiscountApplied = student.hostelFeeDiscount
+    feeRecord.updatedAt = new Date()
+    
+    student.feeCalculationDetails = feeCalculation.feeBreakdown || {}
+    student.updatedAt = new Date()
+
+    await student.save()
+
+    const updatedStudent = addDisplayClassToStudent(student)
+
+    res.status(200).json({
+      success: true,
+      message: 'Fees recalculated successfully',
+      data: {
+        student: updatedStudent,
+        feeSummary: {
+          academicYear: targetAcademicYear,
+          schoolFee: feeRecord.schoolFee,
+          transportFee: feeRecord.transportFee,
+          hostelFee: feeRecord.hostelFee,
+          totalFee: feeRecord.totalFee,
+          totalPaid: feeRecord.totalPaid,
+          totalDue: feeRecord.totalDue,
+          discountsApplied: {
+            school: feeRecord.schoolFeeDiscountApplied,
+            transport: feeRecord.transportFeeDiscountApplied,
+            hostel: feeRecord.hostelFeeDiscountApplied
+          }
+        },
+        calculationDetails: feeCalculation.feeBreakdown || {}
+      }
+    })
+  } catch (error) {
+    console.error('Recalculate fees error:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to recalculate fees',
+      errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    })
+  }
+}
+
+// Keep all other existing functions exactly as they were...
+// getAllStudents, getStudentById, deleteStudent, promoteStudent, batchPromoteStudents,
+// searchStudents, getStudentStatistics, getClassesSummary, getClassDetails, getStudentsByClassAndSection
+
+// Export all functions
 exports.getAllStudents = async (req, res) => {
   try {
     const {
@@ -279,334 +1020,6 @@ exports.getStudentById = async (req, res) => {
     })
   }
 }
-
-exports.createStudent = [
-  upload.single('profilePic'),
-  async (req, res) => {
-    try {
-      const {
-        firstName,
-        lastName,
-        dob,
-        academicYear,
-        class: className,
-        section,
-        admissionNo,
-        rollNo,
-        address,
-        village,
-        parentName,
-        parentPhone,
-        parentPhone2,
-        parentEmail,
-      } = req.body
-
-      if (!firstName || !lastName || !admissionNo || !parentPhone) {
-        cleanupTempFiles(req.file)
-        return res.status(400).json({
-          success: false,
-          message:
-            'Missing required fields: firstName, lastName, admissionNo, parentPhone',
-        })
-      }
-
-      const existingStudent = await Student.findOne({ admissionNo })
-      if (existingStudent) {
-        cleanupTempFiles(req.file)
-        return res.status(400).json({
-          success: false,
-          message: 'Admission number already exists',
-        })
-      }
-
-      const classNum = mapClassToNumber(className)
-      if (classNum === null) {
-        cleanupTempFiles(req.file)
-        return res.status(400).json({
-          success: false,
-          message: `Invalid class: "${className}". Valid: Nursery, LKG, UKG, 1-12`,
-        })
-      }
-
-      let profilePicData = null
-      if (req.file) {
-        try {
-          const uploadResult = await cloudinaryUtils.uploadToCloudinary(
-            req.file.path,
-            {
-              folder: 'school/students/profile-pictures',
-              transformation: {
-                width: 500,
-                height: 500,
-                crop: 'fill',
-                gravity: 'face',
-              },
-            }
-          )
-
-          profilePicData = {
-            url: uploadResult.url,
-            publicId: uploadResult.publicId,
-          }
-        } catch (uploadError) {
-          cleanupTempFiles(req.file)
-          throw new Error(
-            `Failed to upload profile picture: ${uploadError.message}`
-          )
-        }
-
-        cleanupTempFiles(req.file)
-      }
-
-      const studentData = {
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        dob: dob ? new Date(dob) : null,
-        academicYear:
-          academicYear ||
-          `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
-        class: classNum,
-        section: section ? section.toUpperCase() : 'A',
-        admissionNo: admissionNo.trim(),
-        rollNo: rollNo || null,
-        address: address || null,
-        village: village || null,
-        parentName: parentName || null,
-        parentPhone: parentPhone
-          .toString()
-          .replace(/\D/g, '')
-          .substring(0, 10),
-        parentPhone2: parentPhone2
-          ? parentPhone2.toString().replace(/\D/g, '').substring(0, 10)
-          : null,
-        parentEmail: parentEmail || null,
-        profilePic: profilePicData,
-        originalClassName: className || '',
-      }
-
-      const studentRaw = new Student(studentData)
-      await studentRaw.save()
-
-      const student = addDisplayClassToStudent(studentRaw)
-
-      res.status(201).json({
-        success: true,
-        message: 'Student created successfully',
-        data: student,
-      })
-    } catch (error) {
-      if (req.file) {
-        cleanupTempFiles(req.file)
-      }
-
-      if (error.name === 'ValidationError') {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation error',
-          errors: Object.values(error.errors).map((err) => err.message),
-        })
-      }
-
-      res.status(500).json({
-        success: false,
-        message: error.message || 'Failed to create student',
-        errorDetails:
-          process.env.NODE_ENV === 'development' ? error.stack : undefined,
-      })
-    }
-  },
-]
-
-exports.updateStudent = [
-  upload.single('profilePic'),
-  async (req, res) => {
-    try {
-      const existingStudent = await Student.findById(req.params.id)
-      if (!existingStudent) {
-        cleanupTempFiles(req.file)
-        return res.status(404).json({
-          success: false,
-          message: 'Student not found',
-        })
-      }
-
-      const {
-        firstName,
-        lastName,
-        dob,
-        academicYear,
-        class: className,
-        section,
-        admissionNo,
-        rollNo,
-        address,
-        village,
-        parentName,
-        parentPhone,
-        parentPhone2,
-        parentEmail,
-        removeProfilePic,
-      } = req.body
-
-      if (admissionNo && admissionNo !== existingStudent.admissionNo) {
-        const duplicate = await Student.findOne({ admissionNo })
-        if (duplicate) {
-          cleanupTempFiles(req.file)
-          return res.status(400).json({
-            success: false,
-            message: 'Admission number already exists',
-          })
-        }
-      }
-
-      let classNum = existingStudent.class
-      if (className !== undefined) {
-        const mappedClass = mapClassToNumber(className)
-        if (mappedClass === null) {
-          cleanupTempFiles(req.file)
-          return res.status(400).json({
-            success: false,
-            message: `Invalid class: "${className}". Valid: Nursery, LKG, UKG, 1-12`,
-          })
-        }
-        classNum = mappedClass
-      }
-
-      let newProfilePicData = existingStudent.profilePic
-      let oldPublicId = null
-
-      if (removeProfilePic === 'true' || removeProfilePic === true) {
-        if (existingStudent.profilePic && existingStudent.profilePic.publicId) {
-          oldPublicId = existingStudent.profilePic.publicId
-        }
-        newProfilePicData = null
-      }
-
-      if (req.file) {
-        if (existingStudent.profilePic && existingStudent.profilePic.publicId) {
-          oldPublicId = existingStudent.profilePic.publicId
-        }
-
-        try {
-          const uploadResult = await cloudinaryUtils.uploadToCloudinary(
-            req.file.path,
-            {
-              folder: 'school/students/profile-pictures',
-              transformation: {
-                width: 500,
-                height: 500,
-                crop: 'fill',
-                gravity: 'face',
-              },
-            }
-          )
-
-          newProfilePicData = {
-            url: uploadResult.url,
-            publicId: uploadResult.publicId,
-          }
-        } catch (uploadError) {
-          cleanupTempFiles(req.file)
-          throw new Error(
-            `Failed to upload new profile picture: ${uploadError.message}`
-          )
-        }
-
-        cleanupTempFiles(req.file)
-      }
-
-      if (oldPublicId) {
-        try {
-          await cloudinaryUtils.deleteFromCloudinary(oldPublicId)
-        } catch (deleteError) {
-          console.error(
-            'Failed to delete old profile picture from Cloudinary:',
-            deleteError.message
-          )
-        }
-      }
-
-      const updateData = {
-        firstName:
-          firstName !== undefined
-            ? firstName.trim()
-            : existingStudent.firstName,
-        lastName:
-          lastName !== undefined ? lastName.trim() : existingStudent.lastName,
-        dob:
-          dob !== undefined
-            ? dob
-              ? new Date(dob)
-              : null
-            : existingStudent.dob,
-        academicYear: academicYear || existingStudent.academicYear,
-        class: classNum,
-        section: section ? section.toUpperCase() : existingStudent.section,
-        admissionNo: admissionNo || existingStudent.admissionNo,
-        rollNo: rollNo !== undefined ? rollNo : existingStudent.rollNo,
-        address: address !== undefined ? address : existingStudent.address,
-        village: village !== undefined ? village : existingStudent.village,
-        parentName:
-          parentName !== undefined ? parentName : existingStudent.parentName,
-        parentPhone: parentPhone
-          ? parentPhone.toString().replace(/\D/g, '').substring(0, 10)
-          : existingStudent.parentPhone,
-        parentPhone2:
-          parentPhone2 !== undefined
-            ? parentPhone2
-              ? parentPhone2.toString().replace(/\D/g, '').substring(0, 10)
-              : null
-            : existingStudent.parentPhone2,
-        parentEmail:
-          parentEmail !== undefined ? parentEmail : existingStudent.parentEmail,
-        profilePic: newProfilePicData,
-        originalClassName:
-          className !== undefined ? className : existingStudent.originalClassName,
-        updatedAt: Date.now(),
-      }
-
-      const updatedStudentRaw = await Student.findByIdAndUpdate(
-        req.params.id,
-        updateData,
-        { new: true, runValidators: true }
-      ).select('-__v')
-
-      const updatedStudent = addDisplayClassToStudent(updatedStudentRaw)
-
-      res.status(200).json({
-        success: true,
-        message: 'Student updated successfully',
-        data: updatedStudent,
-      })
-    } catch (error) {
-      if (req.file) {
-        cleanupTempFiles(req.file)
-      }
-
-      if (error.name === 'ValidationError') {
-        return res.status(400).json({
-          success: false,
-          message: 'Validation error',
-          errors: Object.values(error.errors).map((err) => err.message),
-        })
-      }
-
-      if (error.name === 'CastError') {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid student ID format',
-        })
-      }
-
-      res.status(500).json({
-        success: false,
-        message: error.message || 'Failed to update student',
-        errorDetails:
-          process.env.NODE_ENV === 'development' ? error.stack : undefined,
-      })
-    }
-  },
-]
 
 exports.deleteStudent = async (req, res) => {
   try {

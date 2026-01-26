@@ -68,7 +68,7 @@ const generateAcademicYears = () => {
 const ACADEMIC_YEARS = generateAcademicYears()
 const CURRENT_ACADEMIC_YEAR = ACADEMIC_YEARS[1] // Current academic year is at index 1
 
-const ClassFeeSettings = ({ 
+const ClassFeeManagement = ({ 
   visible, 
   onClose, 
   onSave,
@@ -1271,4 +1271,4 @@ const ClassFeeSettings = ({
   )
 }  
 
-export default ClassFeeSettings
+export default ClassFeeManagement

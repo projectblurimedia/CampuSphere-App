@@ -1,466 +1,247 @@
 const mongoose = require('mongoose')
-const Fee = require('../models/Fee')
 const Student = require('../models/Student')
-const ClassFeeStructure = require('../models/ClassFeeStructure')
-const BusFeeStructure = require('../models/BusFeeStructure')
 
-// Helper function to generate receipt number
-const generateReceiptNumber = async () => {
-  const prefix = 'FEE'
-  const year = new Date().getFullYear().toString().slice(-2)
-  const month = String(new Date().getMonth() + 1).padStart(2, '0')
+// Helper function to add display class to student
+const mapNumberToClassName = (classNum) => {
+  if (classNum === null || classNum === undefined) return null
+  const num = Number(classNum)
   
-  const lastReceipt = await Fee.findOne({
-    receiptNumber: new RegExp(`^${prefix}${year}${month}`)
-  }).sort({ receiptNumber: -1 })
+  if (num === 0) return 'Pre Nursery'
+  if (num === 0.25) return 'Nursery'
+  if (num === 0.5) return 'LKG'
+  if (num === 0.75) return 'UKG'
+  if (num >= 1 && num <= 12) return `Class ${num}`
   
-  let sequence = 1
-  if (lastReceipt && lastReceipt.receiptNumber) {
-    const lastSeq = parseInt(lastReceipt.receiptNumber.slice(-6))
-    sequence = lastSeq + 1
-  }
-  
-  return `${prefix}${year}${month}${String(sequence).padStart(6, '0')}`
+  return `Class ${num}`
 }
 
-// Helper function to get current user ID
-const getCurrentUserId = (req) => {
-  return req.user ? req.user.id : req.userId || 'system'
+const addDisplayClassToStudent = (studentDoc) => {
+  if (!studentDoc) return studentDoc
+  const obj = studentDoc.toObject ? studentDoc.toObject() : studentDoc
+  obj.displayClass = mapNumberToClassName(obj.class)
+  return obj
 }
 
-// Helper function to get class fee structure
-const getClassFeeStructure = async (className, academicYear) => {
+exports.searchStudentsForFee = async (req, res) => {
   try {
-    const feeStructure = await ClassFeeStructure.findOne({
-      className,
-      academicYear,
-      isActive: true
-    })
-    
-    if (!feeStructure) {
-      // Create default fee structure if not exists
-      const defaultFees = {
-        '1': 10000,
-        '2': 11000,
-        '3': 12000,
-        '4': 13000,
-        '5': 14000,
-        '6': 15000,
-        '7': 16000,
-        '8': 17000,
-        '9': 18000,
-        '10': 19000,
-        '11': 20000,
-        '12': 21000
-      }
+    const { 
+      search, 
+      page = 1,
+      limit = 20
+    } = req.query
+
+    const query = {}
+
+    // Search filter - only by name
+    if (search) {
+      const searchRegex = new RegExp(search, 'i')
       
-      const totalAnnualFee = defaultFees[className] || 10000
-      
-      // Return default structure
-      return {
-        className,
-        academicYear,
-        totalAnnualFee,
-        totalTerms: 3,
-        termAmount: totalAnnualFee / 3
-      }
-    }
-    
-    return feeStructure
-  } catch (error) {
-    console.error('Error getting class fee structure:', error)
-    
-    // Return default structure on error
-    const defaultFees = {
-      '1': 10000,
-      '2': 11000,
-      '3': 12000,
-      '4': 13000,
-      '5': 14000,
-      '6': 15000,
-      '7': 16000,
-      '8': 17000,
-      '9': 18000,
-      '10': 19000,
-      '11': 20000,
-      '12': 21000
-    }
-    
-    const totalAnnualFee = defaultFees[className] || 10000
-    
-    return {
-      className,
-      academicYear,
-      totalAnnualFee,
-      totalTerms: 3,
-      termAmount: totalAnnualFee / 3
-    }
-  }
-}
-
-// Helper function to calculate bus fee
-const calculateBusFee = async (villageName, busRoute, academicYear) => {
-  try {
-    if (!villageName || !busRoute) {
-      return 0
-    }
-    
-    // Find bus fee structure
-    const busFee = await BusFeeStructure.findOne({
-      villageName: { $regex: new RegExp(villageName, 'i') },
-      busRoute: { $regex: new RegExp(busRoute, 'i') },
-      academicYear,
-      isActive: true
-    })
-    
-    return busFee ? busFee.feeAmount : 0
-  } catch (error) {
-    console.error('Error calculating bus fee:', error)
-    return 0
-  }
-}
-
-// 1. Create a new fee record
-exports.createFeeRecord = async (req, res) => {
-  try {
-    const {
-      studentId,
-      academicYear,
-      termType,
-      termNumber,
-      customTermName,
-      className,
-      villageName,
-      busRoute,
-      busStop,
-      hasTransport,
-      otherCharges = 0,
-      previousBalance = 0,
-      discountType = 'none',
-      discountValue = 0,
-      discountReason = '',
-      dueDate,
-      remarks = ''
-    } = req.body
-
-    // Validate student
-    const student = await Student.findById(studentId)
-    if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: 'Student not found'
-      })
-    }
-
-    // Get class fee structure
-    const classFeeStructure = await getClassFeeStructure(
-      className || student.class, 
-      academicYear || student.academicYear
-    )
-
-    // Calculate base amount based on term
-    let baseAmount = 0
-    const totalAnnualFee = classFeeStructure.totalAnnualFee
-    const totalTerms = classFeeStructure.totalTerms
-    
-    if (termType === 'annual') {
-      baseAmount = totalAnnualFee
-    } else if (termNumber && termNumber <= totalTerms) {
-      baseAmount = totalAnnualFee / totalTerms
-    } else if (termType === 'custom') {
-      baseAmount = totalAnnualFee // Custom term - use full amount
-    } else {
-      return res.status(400).json({
-        success: false,
-        message: `Invalid term number. Maximum ${totalTerms} terms allowed.`
-      })
-    }
-
-    // Calculate bus fee if applicable
-    let busAmount = 0
-    if (hasTransport && villageName && busRoute) {
-      busAmount = await calculateBusFee(villageName, busRoute, academicYear || student.academicYear)
-    }
-
-    // Generate receipt number
-    const receiptNumber = await generateReceiptNumber()
-
-    // Get current user ID
-    const currentUserId = getCurrentUserId(req)
-
-    // Create fee record
-    const feeRecord = new Fee({
-      studentId,
-      academicYear: academicYear || student.academicYear || '2024-2025',
-      termType,
-      termNumber: (termType === 'annual' || termType === 'custom') ? null : termNumber,
-      customTermName: termType === 'custom' ? customTermName : undefined,
-      baseAmount,
-      busAmount,
-      otherCharges,
-      previousBalance,
-      discountType,
-      discountValue,
-      discountReason,
-      dueDate: new Date(dueDate),
-      hasTransport: !!hasTransport,
-      busRoute: hasTransport ? busRoute : undefined,
-      villageName: hasTransport ? villageName : undefined,
-      busStop: hasTransport ? busStop : undefined,
-      className: className || student.class,
-      receiptNumber,
-      remarks,
-      createdBy: currentUserId,
-      updatedBy: currentUserId
-    })
-
-    await feeRecord.save()
-
-    res.status(201).json({
-      success: true,
-      message: 'Fee record created successfully',
-      data: feeRecord
-    })
-  } catch (error) {
-    console.error('Error creating fee record:', error)
-    res.status(500).json({
-      success: false,
-      message: 'Error creating fee record',
-      error: error.message
-    })
-  }
-}
-
-// 2. Generate all term fees for a student
-exports.generateAllTermFees = async (req, res) => {
-  try {
-    const { studentId } = req.params
-    const { academicYear } = req.body
-
-    // Validate student
-    const student = await Student.findById(studentId)
-    if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: 'Student not found'
-      })
-    }
-
-    // Get class fee structure
-    const classFeeStructure = await getClassFeeStructure(
-      student.class,
-      academicYear || student.academicYear
-    )
-
-    const totalAnnualFee = classFeeStructure.totalAnnualFee
-    const totalTerms = classFeeStructure.totalTerms
-    const termAmount = totalAnnualFee / totalTerms
-
-    // Check existing fees for this academic year
-    const existingFees = await Fee.find({
-      studentId,
-      academicYear: academicYear || student.academicYear || '2024-2025',
-      termType: { $in: ['term-1', 'term-2', 'term-3', 'term-4'] }
-    })
-
-    const existingTermNumbers = existingFees.map(fee => fee.termNumber)
-    const feesToCreate = []
-
-    // Get current user ID
-    const currentUserId = getCurrentUserId(req)
-
-    // Generate fees for each term
-    for (let termNum = 1; termNum <= totalTerms; termNum++) {
-      if (!existingTermNumbers.includes(termNum)) {
-        // Calculate bus fee if applicable
-        let busAmount = 0
-        if (student.hasTransport && student.villageName && student.busRoute) {
-          busAmount = await calculateBusFee(
-            student.villageName, 
-            student.busRoute, 
-            academicYear || student.academicYear
-          )
+      // We'll use aggregation to prioritize results
+      const aggregationPipeline = [
+        {
+          $match: {
+            $or: [
+              { firstName: searchRegex },
+              { lastName: searchRegex },
+              {
+                $expr: {
+                  $regexMatch: {
+                    input: { $concat: ["$firstName", " ", "$lastName"] },
+                    regex: search,
+                    options: "i"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          $addFields: {
+            // Add a score for sorting priority
+            searchScore: {
+              $cond: [
+                { $regexMatch: { input: "$firstName", regex: `^${search}`, options: "i" } },
+                3, // Highest priority: firstName starts with search
+                {
+                  $cond: [
+                    { $regexMatch: { input: "$lastName", regex: `^${search}`, options: "i" } },
+                    2, // Second priority: lastName starts with search
+                    1 // Lowest priority: contains anywhere
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        { $sort: { searchScore: -1, firstName: 1, lastName: 1 } }, // Sort by priority score first
+        { $skip: (parseInt(page) - 1) * parseInt(limit) },
+        { $limit: parseInt(limit) },
+        {
+          $project: {
+            _id: 1,
+            firstName: 1,
+            lastName: 1,
+            admissionNo: 1,
+            rollNo: 1,
+            class: 1,
+            section: 1,
+            academicYear: 1,
+            studentType: 1,
+            village: 1,
+            parentPhone: 1,
+            feeDetails: 1
+          }
         }
+      ]
 
-        // Set due dates based on term number
-        const dueDate = new Date()
-        if (classFeeStructure[`term${termNum}DueDate`]) {
-          dueDate = new Date(classFeeStructure[`term${termNum}DueDate`])
-        } else {
-          // Default due dates: Apr 10, Aug 10, Dec 10, Mar 10
-          const month = termNum === 1 ? 3 : termNum === 2 ? 7 : termNum === 3 ? 11 : 2
-          dueDate.setMonth(month)
-          dueDate.setDate(10)
-        }
-
-        const feeRecord = new Fee({
-          studentId,
-          academicYear: academicYear || student.academicYear || '2024-2025',
-          termType: `term-${termNum}`,
-          termNumber: termNum,
-          baseAmount: termAmount,
-          busAmount,
-          otherCharges: 0,
-          hasTransport: student.hasTransport,
-          busRoute: student.hasTransport ? student.busRoute : undefined,
-          villageName: student.hasTransport ? student.villageName : undefined,
-          busStop: student.hasTransport ? student.busStop : undefined,
-          className: student.class,
-          dueDate,
-          receiptNumber: await generateReceiptNumber(),
-          createdBy: currentUserId,
-          updatedBy: currentUserId
-        })
-
-        feesToCreate.push(feeRecord)
+      // Get total count for pagination
+      const totalQuery = {
+        $or: [
+          { firstName: searchRegex },
+          { lastName: searchRegex },
+          {
+            $expr: {
+              $regexMatch: {
+                input: { $concat: ["$firstName", " ", "$lastName"] },
+                regex: search,
+                options: "i"
+              }
+            }
+          }
+        ]
       }
-    }
 
-    if (feesToCreate.length === 0) {
+      const [students, total] = await Promise.all([
+        Student.aggregate(aggregationPipeline),
+        Student.countDocuments(totalQuery)
+      ])
+
+      const pageNum = parseInt(page)
+      const limitNum = parseInt(limit)
+
+      // Process students to add fee summary
+      const processedStudents = students.map(student => {
+        const currentAcademicYear = student.academicYear
+        const feeRecord = student.feeDetails?.find(fd => fd.academicYear === currentAcademicYear)
+        
+        return {
+          _id: student._id,
+          name: `${student.firstName} ${student.lastName}`,
+          admissionNo: student.admissionNo,
+          rollNo: student.rollNo,
+          class: student.class,
+          displayClass: mapNumberToClassName(student.class),
+          section: student.section,
+          academicYear: currentAcademicYear,
+          studentType: student.studentType,
+          village: student.village,
+          parentPhone: student.parentPhone,
+          feeSummary: feeRecord ? {
+            totalFee: feeRecord.totalFee,
+            totalPaid: feeRecord.totalPaid,
+            totalDue: feeRecord.totalDue,
+            paymentStatus: feeRecord.totalDue === 0 ? 'Paid' : 
+                         feeRecord.totalDue === feeRecord.totalFee ? 'Unpaid' : 'Partial'
+          } : {
+            totalFee: 0,
+            totalPaid: 0,
+            totalDue: 0,
+            paymentStatus: 'Not Set'
+          }
+        }
+      })
+
       return res.status(200).json({
         success: true,
-        message: 'All term fees already generated',
-        data: existingFees
+        count: processedStudents.length,
+        total,
+        pagination: {
+          current: pageNum,
+          totalPages: Math.ceil(total / limitNum),
+          hasNext: pageNum * limitNum < total,
+          hasPrev: pageNum > 1
+        },
+        data: processedStudents
+      })
+    } else {
+      // If no search term provided, return all students with normal sorting
+      const pageNum = parseInt(page)
+      const limitNum = parseInt(limit)
+      const skip = (pageNum - 1) * limitNum
+
+      const students = await Student.find({})
+        .select('_id firstName lastName admissionNo rollNo class section academicYear studentType village parentPhone feeDetails')
+        .sort({ firstName: 1, lastName: 1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean()
+
+      const total = await Student.countDocuments({})
+
+      const processedStudents = students.map(student => {
+        const currentAcademicYear = student.academicYear
+        const feeRecord = student.feeDetails?.find(fd => fd.academicYear === currentAcademicYear)
+        
+        return {
+          _id: student._id,
+          name: `${student.firstName} ${student.lastName}`,
+          admissionNo: student.admissionNo,
+          rollNo: student.rollNo,
+          class: student.class,
+          displayClass: mapNumberToClassName(student.class),
+          section: student.section,
+          academicYear: currentAcademicYear,
+          studentType: student.studentType,
+          village: student.village,
+          parentPhone: student.parentPhone,
+          feeSummary: feeRecord ? {
+            totalFee: feeRecord.totalFee,
+            totalPaid: feeRecord.totalPaid,
+            totalDue: feeRecord.totalDue,
+            paymentStatus: feeRecord.totalDue === 0 ? 'Paid' : 
+                         feeRecord.totalDue === feeRecord.totalFee ? 'Unpaid' : 'Partial'
+          } : {
+            totalFee: 0,
+            totalPaid: 0,
+            totalDue: 0,
+            paymentStatus: 'Not Set'
+          }
+        }
+      })
+
+      return res.status(200).json({
+        success: true,
+        count: processedStudents.length,
+        total,
+        pagination: {
+          current: pageNum,
+          totalPages: Math.ceil(total / limitNum),
+          hasNext: pageNum * limitNum < total,
+          hasPrev: pageNum > 1
+        },
+        data: processedStudents
       })
     }
 
-    // Save all new fee records
-    const createdFees = await Fee.insertMany(feesToCreate)
-
-    res.status(201).json({
-      success: true,
-      message: `${feesToCreate.length} term fees generated successfully`,
-      data: {
-        generated: createdFees,
-        existing: existingFees
-      }
-    })
   } catch (error) {
-    console.error('Error generating term fees:', error)
+    console.error('Search students for fee error:', error)
     res.status(500).json({
       success: false,
-      message: 'Error generating term fees',
-      error: error.message
+      message: error.message || 'Failed to search students',
+      errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined
     })
   }
 }
 
-// 3. Apply discount to fee
-exports.applyDiscount = async (req, res) => {
+exports.getStudentFeeDetails = async (req, res) => {
   try {
-    const { feeId } = req.params
-    const { discountType, discountValue, discountReason } = req.body
+    const { id } = req.params
+    const { academicYear: queryAcademicYear } = req.query
 
-    const feeRecord = await Fee.findById(feeId)
-    if (!feeRecord) {
-      return res.status(404).json({
-        success: false,
-        message: 'Fee record not found'
-      })
-    }
+    const student = await Student.findById(id)
+      .select('-__v -createdAt -updatedAt -attendance -marks -profilePic')
+      .lean()
 
-    if (feeRecord.status === 'paid' || feeRecord.status === 'cancelled') {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot apply discount to ${feeRecord.status} fee`
-      })
-    }
-
-    const currentUserId = getCurrentUserId(req)
-
-    await feeRecord.applyDiscount({
-      type: discountType,
-      value: discountValue,
-      reason: discountReason,
-      updatedBy: currentUserId
-    })
-
-    res.status(200).json({
-      success: true,
-      message: 'Discount applied successfully',
-      data: feeRecord
-    })
-  } catch (error) {
-    console.error('Error applying discount:', error)
-    res.status(500).json({
-      success: false,
-      message: 'Error applying discount',
-      error: error.message
-    })
-  }
-}
-
-// 4. Make payment for fee
-exports.makePayment = async (req, res) => {
-  try {
-    const { feeId } = req.params
-    const {
-      amount,
-      paymentMode = 'cash',
-      transactionId = '',
-      chequeNumber = '',
-      bankName = '',
-      paymentDate,
-      remarks = ''
-    } = req.body
-
-    const feeRecord = await Fee.findById(feeId)
-    if (!feeRecord) {
-      return res.status(404).json({
-        success: false,
-        message: 'Fee record not found'
-      })
-    }
-
-    if (feeRecord.status === 'paid') {
-      return res.status(400).json({
-        success: false,
-        message: 'Fee is already paid in full'
-      })
-    }
-
-    if (feeRecord.status === 'cancelled') {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot make payment for cancelled fee'
-      })
-    }
-
-    const currentUserId = getCurrentUserId(req)
-
-    await feeRecord.applyPayment({
-      amount,
-      paymentMode,
-      transactionId,
-      chequeNumber,
-      bankName,
-      paymentDate,
-      remarks,
-      updatedBy: currentUserId
-    })
-
-    res.status(200).json({
-      success: true,
-      message: 'Payment recorded successfully',
-      data: feeRecord
-    })
-  } catch (error) {
-    console.error('Error making payment:', error)
-    res.status(500).json({
-      success: false,
-      message: 'Error recording payment',
-      error: error.message
-    })
-  }
-}
-
-// 5. Get student fee summary
-exports.getStudentFeeSummary = async (req, res) => {
-  try {
-    const { studentId } = req.params
-    const { academicYear } = req.query
-
-    const student = await Student.findById(studentId)
     if (!student) {
       return res.status(404).json({
         success: false,
@@ -468,67 +249,867 @@ exports.getStudentFeeSummary = async (req, res) => {
       })
     }
 
-    // Get all fees for the student
-    const fees = await Fee.find({
-      studentId,
-      academicYear: academicYear || student.academicYear || '2024-2025'
-    })
-    .sort({ termNumber: 1, createdAt: -1 })
-
-    // Calculate summary
-    let summary = {
-      totalBaseAmount: 0,
-      totalBusAmount: 0,
-      totalDiscount: 0,
-      totalLateFee: 0,
-      totalOtherCharges: 0,
-      totalPreviousBalance: 0,
-      totalAmount: 0,
-      totalPaid: 0,
-      totalOutstanding: 0,
-      termWise: {}
+    // Determine which academic year to show
+    const academicYear = queryAcademicYear || student.academicYear
+    
+    // Find fee details for the requested academic year
+    const feeRecord = student.feeDetails?.find(fd => fd.academicYear === academicYear)
+    
+    if (!feeRecord) {
+      return res.status(404).json({
+        success: false,
+        message: `Fee details not found for academic year ${academicYear}`
+      })
     }
 
-    fees.forEach(fee => {
-      const termKey = fee.termType === 'custom' ? 'custom' : `term-${fee.termNumber}`
-      
-      if (!summary.termWise[termKey]) {
-        summary.termWise[termKey] = {
-          baseAmount: 0,
-          busAmount: 0,
-          discount: 0,
-          lateFee: 0,
-          otherCharges: 0,
-          previousBalance: 0,
-          totalAmount: 0,
-          paidAmount: 0,
-          outstandingAmount: 0,
-          status: fee.status
+    // Get payment history for the academic year
+    const paymentHistory = student.paymentHistory?.filter(
+      payment => payment.academicYear === academicYear
+    ) || []
+
+    // Calculate payment statistics
+    const paymentStats = {
+      totalPayments: paymentHistory.length,
+      totalAmountPaid: paymentHistory.reduce((sum, payment) => sum + payment.totalAmount, 0),
+      firstPaymentDate: paymentHistory.length > 0 ? 
+        new Date(Math.min(...paymentHistory.map(p => new Date(p.date)))) : null,
+      lastPaymentDate: paymentHistory.length > 0 ? 
+        new Date(Math.max(...paymentHistory.map(p => new Date(p.date)))) : null,
+      paymentMethods: paymentHistory.reduce((acc, payment) => {
+        acc[payment.paymentMode] = (acc[payment.paymentMode] || 0) + 1
+        return acc
+      }, {})
+    }
+
+    // Prepare detailed fee breakdown WITH TERMS
+    const feeBreakdown = {
+      academicYear,
+      terms: feeRecord.terms || 3, 
+      components: {
+        schoolFee: {
+          total: feeRecord.schoolFee,
+          paid: feeRecord.schoolFeePaid,
+          due: Math.max(0, feeRecord.schoolFee - feeRecord.schoolFeePaid),
+          discount: feeRecord.schoolFeeDiscountApplied,
+          percentagePaid: feeRecord.schoolFee > 0 ? 
+            (feeRecord.schoolFeePaid / feeRecord.schoolFee * 100).toFixed(2) : 100,
+          termAmount: feeRecord.schoolFee > 0 && feeRecord.terms > 0 ? 
+            Math.round(feeRecord.schoolFee / feeRecord.terms) : 0 // Add term amount calculation
+        },
+        transportFee: {
+          total: feeRecord.transportFee,
+          paid: feeRecord.transportFeePaid,
+          due: Math.max(0, feeRecord.transportFee - feeRecord.transportFeePaid),
+          discount: feeRecord.transportFeeDiscountApplied,
+          percentagePaid: feeRecord.transportFee > 0 ? 
+            (feeRecord.transportFeePaid / feeRecord.transportFee * 100).toFixed(2) : 100,
+          termAmount: feeRecord.transportFee > 0 && feeRecord.terms > 0 ? 
+            Math.round(feeRecord.transportFee / feeRecord.terms) : 0 // Add term amount calculation
+        },
+        hostelFee: {
+          total: feeRecord.hostelFee,
+          paid: feeRecord.hostelFeePaid,
+          due: Math.max(0, feeRecord.hostelFee - feeRecord.hostelFeePaid),
+          discount: feeRecord.hostelFeeDiscountApplied,
+          percentagePaid: feeRecord.hostelFee > 0 ? 
+            (feeRecord.hostelFeePaid / feeRecord.hostelFee * 100).toFixed(2) : 100,
+          termAmount: feeRecord.hostelFee > 0 && feeRecord.terms > 0 ? 
+            Math.round(feeRecord.hostelFee / feeRecord.terms) : 0 // Add term amount calculation
+        }
+      },
+      summary: {
+        totalFee: feeRecord.totalFee,
+        totalPaid: feeRecord.totalPaid,
+        totalDue: feeRecord.totalDue,
+        overallPercentagePaid: feeRecord.totalFee > 0 ? 
+          (feeRecord.totalPaid / feeRecord.totalFee * 100).toFixed(2) : 100,
+        paymentStatus: feeRecord.totalDue === 0 ? 'Paid' : 
+                      feeRecord.totalDue === feeRecord.totalFee ? 'Unpaid' : 'Partial',
+        totalTermAmount: feeRecord.totalFee > 0 && feeRecord.terms > 0 ? 
+          Math.round(feeRecord.totalFee / feeRecord.terms) : 0 // Add total term amount
+      }
+    }
+
+    // Format payment history for response
+    const formattedPaymentHistory = paymentHistory.map(payment => ({
+      paymentId: payment.paymentId,
+      date: payment.date,
+      receiptNo: payment.receiptNo,
+      paymentMode: payment.paymentMode,
+      breakdown: {
+        schoolFeePaid: payment.schoolFeePaid,
+        transportFeePaid: payment.transportFeePaid,
+        hostelFeePaid: payment.hostelFeePaid
+      },
+      totalAmount: payment.totalAmount,
+      description: payment.description,
+      receivedBy: payment.receivedBy,
+      status: payment.status,
+      chequeNo: payment.chequeNo,
+      bankName: payment.bankName,
+      transactionId: payment.transactionId,
+      createdAt: payment.createdAt
+    })).sort((a, b) => new Date(b.date) - new Date(a.date))
+
+    // Get all academic years with fee details
+    const allAcademicYears = student.feeDetails?.map(fd => fd.academicYear) || []
+
+    // Calculate installment due dates based on terms
+    const installmentDueDates = []
+    if (feeRecord.terms > 0 && feeRecord.createdAt) {
+      const startDate = new Date(feeRecord.createdAt)
+      for (let i = 1; i <= feeRecord.terms; i++) {
+        const dueDate = new Date(startDate)
+        dueDate.setMonth(startDate.getMonth() + i)
+        installmentDueDates.push({
+          term: i,
+          dueDate: dueDate.toISOString().split('T')[0],
+          amount: Math.round(feeRecord.totalFee / feeRecord.terms)
+        })
+      }
+    }
+
+    // Get next due date (if any due exists)
+    let nextDueDate = null
+    let nextTermNumber = null
+    if (feeRecord.totalDue > 0) {
+      const today = new Date()
+      // Find the next installment due date
+      for (const installment of installmentDueDates) {
+        const dueDate = new Date(installment.dueDate)
+        if (dueDate > today) {
+          nextDueDate = dueDate
+          nextTermNumber = installment.term
+          break
         }
       }
+      
+      // If no future installment found, use end of current month
+      if (!nextDueDate) {
+        nextDueDate = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+      }
+    }
 
-      // Update term-wise totals
-      summary.termWise[termKey].baseAmount += fee.baseAmount
-      summary.termWise[termKey].busAmount += fee.hasTransport ? fee.busAmount : 0
-      summary.termWise[termKey].discount += fee.discountedAmount
-      summary.termWise[termKey].lateFee += fee.lateFeeAmount
-      summary.termWise[termKey].otherCharges += fee.otherCharges
-      summary.termWise[termKey].previousBalance += fee.previousBalance
-      summary.termWise[termKey].totalAmount += fee.totalAmount
-      summary.termWise[termKey].paidAmount += fee.paidAmount
-      summary.termWise[termKey].outstandingAmount += fee.outstandingAmount
+    const response = {
+      success: true,
+      data: {
+        studentInfo: {
+          id: student._id,
+          name: `${student.firstName} ${student.lastName}`,
+          admissionNo: student.admissionNo,
+          rollNo: student.rollNo,
+          class: student.class,
+          displayClass: mapNumberToClassName(student.class),
+          section: student.section,
+          studentType: student.studentType,
+          usesTransport: student.isUsingSchoolTransport,
+          village: student.village,
+          parentName: student.parentName,
+          parentPhone: student.parentPhone
+        },
+        feeBreakdown,
+        installmentDueDates, // Add installment due dates
+        nextTermNumber, // Add next term number
+        paymentStats,
+        paymentHistory: formattedPaymentHistory,
+        discounts: {
+          schoolFee: student.schoolFeeDiscount,
+          transportFee: student.transportFeeDiscount,
+          hostelFee: student.hostelFeeDiscount
+        },
+        academicYears: allAcademicYears,
+        currentAcademicYear: academicYear,
+        nextDueDate,
+        feeRecordCreatedAt: feeRecord.createdAt,
+        feeRecordUpdatedAt: feeRecord.updatedAt,
+        feeTerms: { // Add detailed fee terms section
+          totalTerms: feeRecord.terms || 3,
+          termDetails: Array.from({ length: feeRecord.terms || 3 }, (_, i) => {
+            const termNumber = i + 1
+            const termDueAmount = Math.round(feeRecord.totalFee / (feeRecord.terms || 3))
+            const termPaidAmount = paymentHistory
+              .filter(p => p.description && p.description.includes(`Term ${termNumber}`))
+              .reduce((sum, p) => sum + p.totalAmount, 0)
+            
+            return {
+              term: termNumber,
+              dueAmount: termDueAmount,
+              paidAmount: termPaidAmount,
+              remainingAmount: Math.max(0, termDueAmount - termPaidAmount),
+              status: termPaidAmount >= termDueAmount ? 'Paid' : 
+                     termPaidAmount > 0 ? 'Partial' : 'Unpaid'
+            }
+          })
+        }
+      }
+    }
 
-      // Update overall totals
-      summary.totalBaseAmount += fee.baseAmount
-      summary.totalBusAmount += fee.hasTransport ? fee.busAmount : 0
-      summary.totalDiscount += fee.discountedAmount
-      summary.totalLateFee += fee.lateFeeAmount
-      summary.totalOtherCharges += fee.otherCharges
-      summary.totalPreviousBalance += fee.previousBalance
-      summary.totalAmount += fee.totalAmount
-      summary.totalPaid += fee.paidAmount
-      summary.totalOutstanding += fee.outstandingAmount
+    res.status(200).json(response)
+
+  } catch (error) {
+    console.error('Get student fee details error:', error)
+    
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid student ID format'
+      })
+    }
+
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get student fee details',
+      errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined
     })
+  }
+}
+
+// ==================== GET TOTAL STUDENT FEE STATISTICS ====================
+exports.getTotalFeeStatistics = async (req, res) => {
+  try {
+    const { 
+      academicYear,
+      class: classFilter,
+      section,
+      startDate,
+      endDate,
+      groupBy = 'overall' // overall, class, section, month
+    } = req.query
+
+    const matchStage = {}
+    
+    // Academic year filter
+    if (academicYear) {
+      matchStage.academicYear = academicYear
+    }
+
+    // Class filter
+    if (classFilter) {
+      matchStage.class = parseInt(classFilter)
+    }
+
+    // Section filter
+    if (section) {
+      matchStage.section = section.toUpperCase()
+    }
+
+    // Date filter for payment history
+    let dateFilter = {}
+    if (startDate || endDate) {
+      dateFilter.date = {}
+      if (startDate) dateFilter.date.$gte = new Date(startDate)
+      if (endDate) dateFilter.date.$lte = new Date(endDate)
+    }
+
+    // Main aggregation pipeline
+    let pipeline = []
+
+    // Stage 1: Match students based on filters
+    if (Object.keys(matchStage).length > 0) {
+      pipeline.push({ $match: matchStage })
+    }
+
+    // Stage 2: Unwind fee details to work with them
+    pipeline.push({ $unwind: '$feeDetails' })
+
+    // Stage 3: Match fee details by academic year if specified
+    if (academicYear) {
+      pipeline.push({ 
+        $match: { 
+          'feeDetails.academicYear': academicYear 
+        } 
+      })
+    }
+
+    // Stage 4: Group based on requested grouping
+    let groupStage = {}
+
+    switch (groupBy) {
+      case 'class':
+        groupStage = {
+          _id: {
+            class: '$class',
+            academicYear: '$feeDetails.academicYear'
+          },
+          className: { $first: '$class' },
+          academicYear: { $first: '$feeDetails.academicYear' },
+          totalStudents: { $sum: 1 },
+          totalSchoolFee: { $sum: '$feeDetails.schoolFee' },
+          totalTransportFee: { $sum: '$feeDetails.transportFee' },
+          totalHostelFee: { $sum: '$feeDetails.hostelFee' },
+          totalFee: { $sum: '$feeDetails.totalFee' },
+          totalPaid: { $sum: '$feeDetails.totalPaid' },
+          totalDue: { $sum: '$feeDetails.totalDue' }
+        }
+        break
+
+      case 'section':
+        groupStage = {
+          _id: {
+            class: '$class',
+            section: '$section',
+            academicYear: '$feeDetails.academicYear'
+          },
+          className: { $first: '$class' },
+          section: { $first: '$section' },
+          academicYear: { $first: '$feeDetails.academicYear' },
+          totalStudents: { $sum: 1 },
+          totalSchoolFee: { $sum: '$feeDetails.schoolFee' },
+          totalTransportFee: { $sum: '$feeDetails.transportFee' },
+          totalHostelFee: { $sum: '$feeDetails.hostelFee' },
+          totalFee: { $sum: '$feeDetails.totalFee' },
+          totalPaid: { $sum: '$feeDetails.totalPaid' },
+          totalDue: { $sum: '$feeDetails.totalDue' }
+        }
+        break
+
+      case 'month':
+        // For monthly statistics, we need to look at payment history
+        pipeline = []
+        if (Object.keys(matchStage).length > 0) {
+          pipeline.push({ $match: matchStage })
+        }
+        pipeline.push({ $unwind: '$paymentHistory' })
+        
+        if (academicYear) {
+          pipeline.push({ 
+            $match: { 
+              'paymentHistory.academicYear': academicYear 
+            } 
+          })
+        }
+        
+        if (Object.keys(dateFilter).length > 0) {
+          pipeline.push({ $match: { 'paymentHistory': dateFilter } })
+        }
+        
+        groupStage = {
+          _id: {
+            year: { $year: '$paymentHistory.date' },
+            month: { $month: '$paymentHistory.date' }
+          },
+          year: { $first: { $year: '$paymentHistory.date' } },
+          month: { $first: { $month: '$paymentHistory.date' } },
+          totalPayments: { $sum: 1 },
+          totalAmount: { $sum: '$paymentHistory.totalAmount' },
+          totalSchoolFeePaid: { $sum: '$paymentHistory.schoolFeePaid' },
+          totalTransportFeePaid: { $sum: '$paymentHistory.transportFeePaid' },
+          totalHostelFeePaid: { $sum: '$paymentHistory.hostelFeePaid' }
+        }
+        break
+
+      default: // overall
+        groupStage = {
+          _id: null,
+          totalStudents: { $sum: 1 },
+          totalSchoolFee: { $sum: '$feeDetails.schoolFee' },
+          totalTransportFee: { $sum: '$feeDetails.transportFee' },
+          totalHostelFee: { $sum: '$feeDetails.hostelFee' },
+          totalFee: { $sum: '$feeDetails.totalFee' },
+          totalPaid: { $sum: '$feeDetails.totalPaid' },
+          totalDue: { $sum: '$feeDetails.totalDue' }
+        }
+    }
+
+    pipeline.push({ $group: groupStage })
+
+    // Stage 5: Sort
+    if (groupBy === 'class') {
+      pipeline.push({ $sort: { '_id.class': 1, '_id.academicYear': 1 } })
+    } else if (groupBy === 'section') {
+      pipeline.push({ $sort: { '_id.class': 1, '_id.section': 1, '_id.academicYear': 1 } })
+    } else if (groupBy === 'month') {
+      pipeline.push({ $sort: { '_id.year': 1, '_id.month': 1 } })
+    }
+
+    // Stage 6: Project final results
+    const projectStage = {}
+    if (groupBy === 'class') {
+      projectStage.$project = {
+        _id: 0,
+        class: '$_id.class',
+        displayClass: { $function: { body: mapNumberToClassName.toString(), args: ['$_id.class'], lang: 'js' } },
+        academicYear: '$_id.academicYear',
+        totalStudents: 1,
+        totalSchoolFee: 1,
+        totalTransportFee: 1,
+        totalHostelFee: 1,
+        totalFee: 1,
+        totalPaid: 1,
+        totalDue: 1,
+        collectionRate: {
+          $cond: [
+            { $eq: ['$totalFee', 0] },
+            100,
+            { $multiply: [{ $divide: ['$totalPaid', '$totalFee'] }, 100] }
+          ]
+        }
+      }
+    } else if (groupBy === 'section') {
+      projectStage.$project = {
+        _id: 0,
+        class: '$_id.class',
+        displayClass: { $function: { body: mapNumberToClassName.toString(), args: ['$_id.class'], lang: 'js' } },
+        section: '$_id.section',
+        academicYear: '$_id.academicYear',
+        totalStudents: 1,
+        totalSchoolFee: 1,
+        totalTransportFee: 1,
+        totalHostelFee: 1,
+        totalFee: 1,
+        totalPaid: 1,
+        totalDue: 1,
+        collectionRate: {
+          $cond: [
+            { $eq: ['$totalFee', 0] },
+            100,
+            { $multiply: [{ $divide: ['$totalPaid', '$totalFee'] }, 100] }
+          ]
+        }
+      }
+    } else if (groupBy === 'month') {
+      projectStage.$project = {
+        _id: 0,
+        year: 1,
+        month: 1,
+        monthName: {
+          $switch: {
+            branches: [
+              { case: { $eq: ['$month', 1] }, then: 'January' },
+              { case: { $eq: ['$month', 2] }, then: 'February' },
+              { case: { $eq: ['$month', 3] }, then: 'March' },
+              { case: { $eq: ['$month', 4] }, then: 'April' },
+              { case: { $eq: ['$month', 5] }, then: 'May' },
+              { case: { $eq: ['$month', 6] }, then: 'June' },
+              { case: { $eq: ['$month', 7] }, then: 'July' },
+              { case: { $eq: ['$month', 8] }, then: 'August' },
+              { case: { $eq: ['$month', 9] }, then: 'September' },
+              { case: { $eq: ['$month', 10] }, then: 'October' },
+              { case: { $eq: ['$month', 11] }, then: 'November' },
+              { case: { $eq: ['$month', 12] }, then: 'December' }
+            ],
+            default: 'Unknown'
+          }
+        },
+        totalPayments: 1,
+        totalAmount: 1,
+        totalSchoolFeePaid: 1,
+        totalTransportFeePaid: 1,
+        totalHostelFeePaid: 1,
+        averagePayment: { $divide: ['$totalAmount', '$totalPayments'] }
+      }
+    } else {
+      projectStage.$project = {
+        _id: 0,
+        totalStudents: 1,
+        totalSchoolFee: 1,
+        totalTransportFee: 1,
+        totalHostelFee: 1,
+        totalFee: 1,
+        totalPaid: 1,
+        totalDue: 1,
+        collectionRate: {
+          $cond: [
+            { $eq: ['$totalFee', 0] },
+            100,
+            { $multiply: [{ $divide: ['$totalPaid', '$totalFee'] }, 100] }
+          ]
+        },
+        averageFeePerStudent: { $divide: ['$totalFee', '$totalStudents'] },
+        averagePaidPerStudent: { $divide: ['$totalPaid', '$totalStudents'] }
+      }
+    }
+
+    pipeline.push(projectStage)
+
+    // Execute aggregation
+    const statistics = await Student.aggregate(pipeline)
+
+    // For overall statistics, get additional details
+    let additionalStats = {}
+    if (groupBy === 'overall') {
+      // Get payment method distribution
+      const paymentMethodStats = await Student.aggregate([
+        { $unwind: '$paymentHistory' },
+        academicYear ? { $match: { 'paymentHistory.academicYear': academicYear } } : { $match: {} },
+        { $group: {
+          _id: '$paymentHistory.paymentMode',
+          count: { $sum: 1 },
+          totalAmount: { $sum: '$paymentHistory.totalAmount' }
+        }},
+        { $sort: { totalAmount: -1 } }
+      ])
+
+      // Get top paying students
+      const topPayingStudents = await Student.aggregate([
+        { $unwind: '$feeDetails' },
+        academicYear ? { $match: { 'feeDetails.academicYear': academicYear } } : { $match: {} },
+        { $project: {
+          name: { $concat: ['$firstName', ' ', '$lastName'] },
+          admissionNo: 1,
+          class: 1,
+          section: 1,
+          totalPaid: '$feeDetails.totalPaid',
+          totalFee: '$feeDetails.totalFee'
+        }},
+        { $sort: { totalPaid: -1 } },
+        { $limit: 10 }
+      ])
+
+      // Get defaulters (high due)
+      const defaulters = await Student.aggregate([
+        { $unwind: '$feeDetails' },
+        academicYear ? { $match: { 'feeDetails.academicYear': academicYear } } : { $match: {} },
+        { $match: { 'feeDetails.totalDue': { $gt: 0 } } },
+        { $project: {
+          name: { $concat: ['$firstName', ' ', '$lastName'] },
+          admissionNo: 1,
+          class: 1,
+          section: 1,
+          totalDue: '$feeDetails.totalDue',
+          totalFee: '$feeDetails.totalFee'
+        }},
+        { $sort: { totalDue: -1 } },
+        { $limit: 10 }
+      ])
+
+      additionalStats = {
+        paymentMethodDistribution: paymentMethodStats,
+        topPayingStudents: topPayingStudents.map(s => ({
+          ...s,
+          displayClass: mapNumberToClassName(s.class)
+        })),
+        topDefaulters: defaulters.map(s => ({
+          ...s,
+          displayClass: mapNumberToClassName(s.class)
+        }))
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        statistics: statistics[0] || {},
+        ...additionalStats,
+        filters: {
+          academicYear,
+          class: classFilter,
+          section,
+          groupBy,
+          dateRange: startDate || endDate ? { startDate, endDate } : null
+        }
+      }
+    })
+
+  } catch (error) {
+    console.error('Get total fee statistics error:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get fee statistics',
+      errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    })
+  }
+}
+
+// ==================== GET CLASS-WISE FEE PAYMENTS (TERM-WISE) ====================
+exports.getClassWiseFeePayments = async (req, res) => {
+  try {
+    const { 
+      academicYear,
+      class: classFilter,
+      term,
+      month,
+      startDate,
+      endDate
+    } = req.query
+
+    // Base match stage
+    const matchStage = {}
+
+    if (academicYear) {
+      matchStage.academicYear = academicYear
+    }
+
+    if (classFilter) {
+      matchStage.class = parseInt(classFilter)
+    }
+
+    // For term-wise filtering
+    let termFilter = {}
+    if (term) {
+      // Assuming terms: term1 (Apr-Jun), term2 (Jul-Sep), term3 (Oct-Dec), term4 (Jan-Mar)
+      const currentYear = new Date().getFullYear()
+      switch (term.toLowerCase()) {
+        case 'term1':
+          termFilter.date = {
+            $gte: new Date(`${currentYear}-04-01`),
+            $lte: new Date(`${currentYear}-06-30`)
+          }
+          break
+        case 'term2':
+          termFilter.date = {
+            $gte: new Date(`${currentYear}-07-01`),
+            $lte: new Date(`${currentYear}-09-30`)
+          }
+          break
+        case 'term3':
+          termFilter.date = {
+            $gte: new Date(`${currentYear}-10-01`),
+            $lte: new Date(`${currentYear}-12-31`)
+          }
+          break
+        case 'term4':
+          termFilter.date = {
+            $gte: new Date(`${currentYear}-01-01`),
+            $lte: new Date(`${currentYear}-03-31`)
+          }
+          break
+      }
+    }
+
+    // For month-wise filtering
+    if (month) {
+      const currentYear = new Date().getFullYear()
+      const monthNum = parseInt(month)
+      if (monthNum >= 1 && monthNum <= 12) {
+        const start = new Date(currentYear, monthNum - 1, 1)
+        const end = new Date(currentYear, monthNum, 0)
+        termFilter.date = { $gte: start, $lte: end }
+      }
+    }
+
+    // Custom date range
+    if (startDate || endDate) {
+      termFilter.date = {}
+      if (startDate) termFilter.date.$gte = new Date(startDate)
+      if (endDate) termFilter.date.$lte = new Date(endDate)
+    }
+
+    // Aggregation pipeline
+    const pipeline = []
+
+    // Match students
+    if (Object.keys(matchStage).length > 0) {
+      pipeline.push({ $match: matchStage })
+    }
+
+    // Unwind payment history
+    pipeline.push({ $unwind: '$paymentHistory' })
+
+    // Apply payment filters
+    const paymentMatch = { 'paymentHistory.status': 'Completed' }
+    if (academicYear) {
+      paymentMatch['paymentHistory.academicYear'] = academicYear
+    }
+    if (Object.keys(termFilter).length > 0) {
+      if (termFilter.date) {
+        paymentMatch['paymentHistory.date'] = termFilter.date
+      }
+    }
+    pipeline.push({ $match: paymentMatch })
+
+    // Group by class and section
+    pipeline.push({
+      $group: {
+        _id: {
+          class: '$class',
+          section: '$section',
+          academicYear: '$paymentHistory.academicYear'
+        },
+        className: { $first: '$class' },
+        section: { $first: '$section' },
+        academicYear: { $first: '$paymentHistory.academicYear' },
+        totalStudents: { $addToSet: '$_id' },
+        totalPayments: { $sum: 1 },
+        totalAmount: { $sum: '$paymentHistory.totalAmount' },
+        totalSchoolFeePaid: { $sum: '$paymentHistory.schoolFeePaid' },
+        totalTransportFeePaid: { $sum: '$paymentHistory.transportFeePaid' },
+        totalHostelFeePaid: { $sum: '$paymentHistory.hostelFeePaid' },
+        paymentMethods: {
+          $push: {
+            mode: '$paymentHistory.paymentMode',
+            amount: '$paymentHistory.totalAmount'
+          }
+        }
+      }
+    })
+
+    // Project final results
+    pipeline.push({
+      $project: {
+        _id: 0,
+        class: '$_id.class',
+        displayClass: { $function: { body: mapNumberToClassName.toString(), args: ['$_id.class'], lang: 'js' } },
+        section: '$_id.section',
+        academicYear: '$_id.academicYear',
+        totalStudents: { $size: '$totalStudents' },
+        totalPayments: 1,
+        totalAmount: 1,
+        breakdown: {
+          schoolFee: '$totalSchoolFeePaid',
+          transportFee: '$totalTransportFeePaid',
+          hostelFee: '$totalHostelFeePaid'
+        },
+        averagePaymentPerStudent: {
+          $cond: [
+            { $eq: [{ $size: '$totalStudents' }, 0] },
+            0,
+            { $divide: ['$totalAmount', { $size: '$totalStudents' }] }
+          ]
+        },
+        paymentMethodSummary: {
+          $reduce: {
+            input: '$paymentMethods',
+            initialValue: {},
+            in: {
+              $mergeObjects: [
+                '$$value',
+                {
+                  $let: {
+                    vars: { method: '$$this.mode' },
+                    in: {
+                      $cond: [
+                        { $eq: [{ $type: '$$value.$$method' }, 'missing'] },
+                        { $arrayToObject: [[['$$method', { count: 1, amount: '$$this.amount' }]]] },
+                        {
+                          $arrayToObject: [[[
+                            '$$method',
+                            {
+                              count: { $add: ['$$value.$$method.count', 1] },
+                              amount: { $add: ['$$value.$$method.amount', '$$this.amount'] }
+                            }
+                          ]]]
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    })
+
+    // Sort results
+    pipeline.push({ $sort: { class: 1, section: 1 } })
+
+    // Execute aggregation
+    const classWisePayments = await Student.aggregate(pipeline)
+
+    // Calculate overall totals
+    const overallTotals = {
+      totalStudents: classWisePayments.reduce((sum, item) => sum + item.totalStudents, 0),
+      totalPayments: classWisePayments.reduce((sum, item) => sum + item.totalPayments, 0),
+      totalAmount: classWisePayments.reduce((sum, item) => sum + item.totalAmount, 0),
+      totalSchoolFee: classWisePayments.reduce((sum, item) => sum + item.breakdown.schoolFee, 0),
+      totalTransportFee: classWisePayments.reduce((sum, item) => sum + item.breakdown.transportFee, 0),
+      totalHostelFee: classWisePayments.reduce((sum, item) => sum + item.breakdown.hostelFee, 0)
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        classWisePayments,
+        overallTotals,
+        filters: {
+          academicYear,
+          class: classFilter,
+          term,
+          month,
+          dateRange: startDate || endDate ? { startDate, endDate } : null
+        },
+        summary: {
+          totalClasses: [...new Set(classWisePayments.map(item => item.class))].length,
+          totalSections: [...new Set(classWisePayments.map(item => `${item.class}-${item.section}`))].length,
+          averageCollectionPerClass: classWisePayments.length > 0 ? 
+            overallTotals.totalAmount / classWisePayments.length : 0
+        }
+      }
+    })
+
+  } catch (error) {
+    console.error('Get class-wise fee payments error:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get class-wise fee payments',
+      errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    })
+  }
+}
+
+// ==================== GET STUDENT PAYMENT DETAILED HISTORY ====================
+exports.getStudentPaymentHistory = async (req, res) => {
+  try {
+    const { id } = req.params
+    const { 
+      academicYear,
+      startDate,
+      endDate,
+      paymentMode,
+      status = 'Completed'
+    } = req.query
+
+    const student = await Student.findById(id)
+      .select('_id firstName lastName admissionNo rollNo class section paymentHistory')
+      .lean()
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      })
+    }
+
+    // Filter payment history
+    let payments = student.paymentHistory || []
+
+    if (academicYear) {
+      payments = payments.filter(p => p.academicYear === academicYear)
+    }
+
+    if (paymentMode) {
+      payments = payments.filter(p => p.paymentMode === paymentMode)
+    }
+
+    if (status) {
+      payments = payments.filter(p => p.status === status)
+    }
+
+    if (startDate) {
+      const start = new Date(startDate)
+      payments = payments.filter(p => new Date(p.date) >= start)
+    }
+
+    if (endDate) {
+      const end = new Date(endDate)
+      end.setHours(23, 59, 59, 999)
+      payments = payments.filter(p => new Date(p.date) <= end)
+    }
+
+    // Sort by date (newest first)
+    payments.sort((a, b) => new Date(b.date) - new Date(a.date))
+
+    // Calculate statistics
+    const stats = {
+      totalPayments: payments.length,
+      totalAmount: payments.reduce((sum, p) => sum + p.totalAmount, 0),
+      totalSchoolFeePaid: payments.reduce((sum, p) => sum + p.schoolFeePaid, 0),
+      totalTransportFeePaid: payments.reduce((sum, p) => sum + p.transportFeePaid, 0),
+      totalHostelFeePaid: payments.reduce((sum, p) => sum + p.hostelFeePaid, 0),
+      byPaymentMode: payments.reduce((acc, p) => {
+        acc[p.paymentMode] = (acc[p.paymentMode] || 0) + p.totalAmount
+        return acc
+      }, {}),
+      byAcademicYear: payments.reduce((acc, p) => {
+        if (!acc[p.academicYear]) {
+          acc[p.academicYear] = { count: 0, amount: 0 }
+        }
+        acc[p.academicYear].count++
+        acc[p.academicYear].amount += p.totalAmount
+        return acc
+      }, {})
+    }
 
     res.status(200).json({
       success: true,
@@ -537,829 +1118,450 @@ exports.getStudentFeeSummary = async (req, res) => {
           id: student._id,
           name: `${student.firstName} ${student.lastName}`,
           admissionNo: student.admissionNo,
+          rollNo: student.rollNo,
           class: student.class,
-          section: student.section,
-          academicYear: student.academicYear,
-          hasTransport: student.hasTransport,
-          villageName: student.villageName,
-          busRoute: student.busRoute
+          displayClass: mapNumberToClassName(student.class),
+          section: student.section
         },
-        summary: summary,
-        fees: fees,
-        count: fees.length
-      }
-    })
-  } catch (error) {
-    console.error('Error fetching student fee summary:', error)
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching student fee summary',
-      error: error.message
-    })
-  }
-}
-
-// 6. Get class outstanding fees
-exports.getClassOutstandingFees = async (req, res) => {
-  try {
-    const { className, section } = req.params
-    const { academicYear } = req.query
-
-    // Get all students in the class
-    const students = await Student.find({
-      class: className,
-      section: section,
-      academicYear: academicYear || '2024-2025'
-    }).select('_id firstName lastName admissionNo rollNo hasTransport villageName busRoute')
-
-    const studentIds = students.map(student => student._id)
-
-    // Get outstanding fees
-    const outstandingFees = await Fee.find({
-      studentId: { $in: studentIds },
-      academicYear: academicYear || '2024-2025',
-      status: { $in: ['pending', 'partial', 'overdue'] }
-    })
-    .populate('studentId', 'firstName lastName admissionNo rollNo class section hasTransport villageName busRoute')
-    .sort({ dueDate: 1 })
-
-    // Group by student
-    const studentFeeMap = {}
-    let classTotalOutstanding = 0
-    let classTotalOverdue = 0
-
-    outstandingFees.forEach(fee => {
-      const studentId = fee.studentId._id.toString()
-      if (!studentFeeMap[studentId]) {
-        studentFeeMap[studentId] = {
-          student: fee.studentId,
-          fees: [],
-          totalOutstanding: 0,
-          totalOverdue: 0,
-          hasTransport: fee.studentId.hasTransport,
-          villageName: fee.studentId.villageName,
-          busRoute: fee.studentId.busRoute
-        }
-      }
-
-      const outstanding = fee.outstandingAmount
-      studentFeeMap[studentId].fees.push({
-        feeId: fee._id,
-        term: fee.termType === 'custom' ? fee.customTermName : `Term ${fee.termNumber}`,
-        dueDate: fee.dueDate,
-        totalAmount: fee.totalAmount,
-        paidAmount: fee.paidAmount,
-        outstandingAmount: outstanding,
-        status: fee.status,
-        isOverdue: fee.isOverdue
-      })
-
-      studentFeeMap[studentId].totalOutstanding += outstanding
-      classTotalOutstanding += outstanding
-
-      if (fee.isOverdue) {
-        studentFeeMap[studentId].totalOverdue += outstanding
-        classTotalOverdue += outstanding
-      }
-    })
-
-    // Convert to array and sort by roll number
-    const studentFees = Object.values(studentFeeMap).sort((a, b) => 
-      (a.student.rollNo || 0) - (b.student.rollNo || 0)
-    )
-
-    res.status(200).json({
-      success: true,
-      data: {
-        className,
-        section,
-        academicYear: academicYear || '2024-2025',
-        totalStudents: students.length,
-        studentsWithOutstanding: studentFees.length,
-        classTotalOutstanding,
-        classTotalOverdue,
-        studentFees
-      }
-    })
-  } catch (error) {
-    console.error('Error fetching class outstanding fees:', error)
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching class outstanding fees',
-      error: error.message
-    })
-  }
-}
-
-// 7. Get fee receipt
-exports.getFeeReceipt = async (req, res) => {
-  try {
-    const { feeId } = req.params
-
-    const fee = await Fee.findById(feeId)
-      .populate('studentId', 'firstName lastName admissionNo class section parentName parentPhone')
-
-    if (!fee) {
-      return res.status(404).json({
-        success: false,
-        message: 'Fee record not found'
-      })
-    }
-
-    const receipt = {
-      receiptNumber: fee.receiptNumber,
-      date: fee.paymentDate || new Date(),
-      student: {
-        name: `${fee.studentId.firstName} ${fee.studentId.lastName}`,
-        admissionNo: fee.studentId.admissionNo,
-        class: fee.studentId.class,
-        section: fee.studentId.section,
-        parent: fee.studentId.parentName,
-        parentPhone: fee.studentId.parentPhone
-      },
-      feeDetails: {
-        academicYear: fee.academicYear,
-        term: fee.termType === 'custom' ? fee.customTermName : `Term ${fee.termNumber}`,
-        hasTransport: fee.hasTransport,
-        busDetails: fee.hasTransport ? {
-          route: fee.busRoute,
-          village: fee.villageName,
-          stop: fee.busStop
-        } : null
-      },
-      amountBreakdown: {
-        baseAmount: fee.baseAmount,
-        busAmount: fee.hasTransport ? fee.busAmount : 0,
-        otherCharges: fee.otherCharges,
-        previousBalance: fee.previousBalance,
-        lateFee: fee.lateFeeAmount,
-        discount: fee.discountedAmount,
-        subtotal: fee.baseAmount + 
-                 (fee.hasTransport ? fee.busAmount : 0) + 
-                 fee.otherCharges + 
-                 fee.previousBalance,
-        totalAmount: fee.totalAmount
-      },
-      paymentDetails: {
-        paidAmount: fee.paidAmount,
-        outstandingAmount: fee.outstandingAmount,
-        mode: fee.paymentMode,
-        transactionId: fee.transactionId,
-        chequeNumber: fee.chequeNumber,
-        bankName: fee.bankName
-      },
-      dates: {
-        issueDate: fee.issueDate,
-        dueDate: fee.dueDate,
-        paymentDate: fee.paymentDate
-      },
-      discount: fee.discountType !== 'none' ? {
-        type: fee.discountType,
-        value: fee.discountValue,
-        reason: fee.discountReason,
-        amount: fee.discountedAmount
-      } : null,
-      status: fee.status,
-      remarks: fee.remarks
-    }
-
-    res.status(200).json({
-      success: true,
-      data: receipt
-    })
-  } catch (error) {
-    console.error('Error generating fee receipt:', error)
-    res.status(500).json({
-      success: false,
-      message: 'Error generating fee receipt',
-      error: error.message
-    })
-  }
-}
-
-// 8. Get bus fee collection report
-exports.getBusFeeReport = async (req, res) => {
-  try {
-    const { academicYear, villageName, busRoute } = req.query
-
-    const query = {
-      academicYear: academicYear || '2024-2025',
-      hasTransport: true,
-      status: { $in: ['paid', 'partial'] }
-    }
-
-    if (villageName) {
-      query.villageName = { $regex: new RegExp(villageName, 'i') }
-    }
-
-    if (busRoute) {
-      query.busRoute = { $regex: new RegExp(busRoute, 'i') }
-    }
-
-    const fees = await Fee.find(query)
-      .populate('studentId', 'firstName lastName admissionNo class section')
-      .sort({ villageName: 1, busRoute: 1 })
-
-    // Group by village and route
-    const report = {}
-    let totalBusCollection = 0
-    let totalStudents = 0
-
-    fees.forEach(fee => {
-      const village = fee.villageName || 'Unknown'
-      const route = fee.busRoute || 'Unknown'
-      
-      if (!report[village]) {
-        report[village] = {}
-      }
-      
-      if (!report[village][route]) {
-        report[village][route] = {
-          students: [],
-          totalBusAmount: 0,
-          totalPaid: 0,
-          totalOutstanding: 0
-        }
-      }
-
-      report[village][route].students.push({
-        studentId: fee.studentId._id,
-        name: `${fee.studentId.firstName} ${fee.studentId.lastName}`,
-        admissionNo: fee.studentId.admissionNo,
-        class: fee.studentId.class,
-        section: fee.studentId.section,
-        busAmount: fee.busAmount,
-        paidAmount: fee.paidAmount,
-        outstandingAmount: fee.outstandingAmount,
-        status: fee.status
-      })
-
-      report[village][route].totalBusAmount += fee.busAmount
-      report[village][route].totalPaid += fee.paidAmount
-      report[village][route].totalOutstanding += fee.outstandingAmount
-      
-      totalBusCollection += fee.paidAmount
-      totalStudents++
-    })
-
-    // Convert to array format
-    const villageReports = Object.entries(report).map(([village, routes]) => ({
-      village,
-      routes: Object.entries(routes).map(([route, data]) => ({
-        route,
-        ...data,
-        studentCount: data.students.length
-      })),
-      totalVillageCollection: Object.values(routes).reduce((sum, route) => sum + route.totalPaid, 0)
-    }))
-
-    res.status(200).json({
-      success: true,
-      data: {
-        academicYear: academicYear || '2024-2025',
-        totalStudents,
-        totalBusCollection,
-        villageReports,
-        summary: {
-          totalVillages: villageReports.length,
-          totalRoutes: villageReports.reduce((sum, village) => sum + village.routes.length, 0)
+        payments: payments.map(p => ({
+          ...p,
+          yearMonth: `${new Date(p.date).getFullYear()}-${String(new Date(p.date).getMonth() + 1).padStart(2, '0')}`
+        })),
+        statistics: stats,
+        filters: {
+          academicYear,
+          paymentMode,
+          status,
+          dateRange: startDate || endDate ? { startDate, endDate } : null
         }
       }
     })
+
   } catch (error) {
-    console.error('Error generating bus fee report:', error)
-    res.status(500).json({
-      success: false,
-      message: 'Error generating bus fee report',
-      error: error.message
-    })
-  }
-}
-
-// 9. Update fee record
-exports.updateFeeRecord = async (req, res) => {
-  try {
-    const { feeId } = req.params
-    const updateData = req.body
-
-    const feeRecord = await Fee.findById(feeId)
-    if (!feeRecord) {
-      return res.status(404).json({
-        success: false,
-        message: 'Fee record not found'
-      })
-    }
-
-    // Cannot update if payment has been made
-    if (feeRecord.paidAmount > 0) {
+    console.error('Get student payment history error:', error)
+    
+    if (error.name === 'CastError') {
       return res.status(400).json({
         success: false,
-        message: 'Cannot update fee record with payments. Consider cancelling and creating a new one.'
+        message: 'Invalid student ID format'
       })
     }
 
-    // Update allowed fields
-    const allowedUpdates = [
-      'dueDate', 'otherCharges', 'previousBalance', 
-      'remarks', 'busRoute', 'villageName', 'busStop'
-    ]
-
-    allowedUpdates.forEach(field => {
-      if (updateData[field] !== undefined) {
-        feeRecord[field] = updateData[field]
-      }
-    })
-
-    const currentUserId = getCurrentUserId(req)
-    feeRecord.updatedBy = currentUserId
-    await feeRecord.save()
-
-    res.status(200).json({
-      success: true,
-      message: 'Fee record updated successfully',
-      data: feeRecord
-    })
-  } catch (error) {
-    console.error('Error updating fee record:', error)
     res.status(500).json({
       success: false,
-      message: 'Error updating fee record',
-      error: error.message
+      message: error.message || 'Failed to get payment history',
+      errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined
     })
   }
 }
 
-// 10. Cancel fee record
-exports.cancelFeeRecord = async (req, res) => {
-  try {
-    const { feeId } = req.params
-    const { reason } = req.body
-
-    const feeRecord = await Fee.findById(feeId)
-    if (!feeRecord) {
-      return res.status(404).json({
-        success: false,
-        message: 'Fee record not found'
-      })
-    }
-
-    // Cannot cancel if payment has been made
-    if (feeRecord.paidAmount > 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot cancel fee record with payments. Consider refund instead.'
-      })
-    }
-
-    const currentUserId = getCurrentUserId(req)
-    
-    feeRecord.status = 'cancelled'
-    feeRecord.remarks = feeRecord.remarks 
-      ? `${feeRecord.remarks} Cancelled: ${reason}`
-      : `Cancelled: ${reason}`
-    feeRecord.updatedBy = currentUserId
-    feeRecord.updatedAt = new Date()
-
-    await feeRecord.save()
-
-    res.status(200).json({
-      success: true,
-      message: 'Fee record cancelled successfully',
-      data: feeRecord
-    })
-  } catch (error) {
-    console.error('Error cancelling fee record:', error)
-    res.status(500).json({
-      success: false,
-      message: 'Error cancelling fee record',
-      error: error.message
-    })
-  }
-}
-
-// 11. Add late fee to fee record
-exports.addLateFee = async (req, res) => {
-  try {
-    const { feeId } = req.params
-    const { amount, reason } = req.body
-
-    const feeRecord = await Fee.findById(feeId)
-    if (!feeRecord) {
-      return res.status(404).json({
-        success: false,
-        message: 'Fee record not found'
-      })
-    }
-
-    if (feeRecord.status === 'paid' || feeRecord.status === 'cancelled') {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot add late fee to ${feeRecord.status} fee`
-      })
-    }
-
-    const currentUserId = getCurrentUserId(req)
-
-    await feeRecord.addLateFee({
-      amount,
-      reason,
-      updatedBy: currentUserId
-    })
-
-    res.status(200).json({
-      success: true,
-      message: 'Late fee added successfully',
-      data: feeRecord
-    })
-  } catch (error) {
-    console.error('Error adding late fee:', error)
-    res.status(500).json({
-      success: false,
-      message: 'Error adding late fee',
-      error: error.message
-    })
-  }
-}
-
-// 12. Search fees with filters
-exports.searchFees = async (req, res) => {
-  try {
-    const {
-      studentId,
-      academicYear,
-      status,
-      termType,
-      className,
-      section,
-      hasTransport,
-      villageName,
-      page = 1,
-      limit = 50
-    } = req.query
-
-    const query = {}
-    
-    if (studentId) query.studentId = studentId
-    if (academicYear) query.academicYear = academicYear
-    if (status) query.status = status
-    if (termType) query.termType = termType
-    if (hasTransport !== undefined) query.hasTransport = hasTransport === 'true'
-    if (villageName) query.villageName = { $regex: new RegExp(villageName, 'i') }
-    if (className) query.className = className
-
-    // If section filter is provided, get students first
-    if (section && !studentId) {
-      const students = await Student.find({
-        section: section,
-        academicYear: academicYear || '2024-2025'
-      }).select('_id')
-      
-      const studentIds = students.map(student => student._id)
-      
-      if (studentIds.length === 0) {
-        return res.status(200).json({
-          success: true,
-          data: {
-            fees: [],
-            pagination: {
-              page: parseInt(page),
-              limit: parseInt(limit),
-              total: 0,
-              pages: 0
-            }
-          }
-        })
-      }
-      
-      query.studentId = { $in: studentIds }
-    }
-
-    const skip = (page - 1) * limit
-    
-    const fees = await Fee.find(query)
-      .populate('studentId', 'firstName lastName admissionNo class section')
-      .sort({ dueDate: -1 })
-      .skip(skip)
-      .limit(parseInt(limit))
-
-    const total = await Fee.countDocuments(query)
-
-    res.status(200).json({
-      success: true,
-      data: {
-        fees,
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total,
-          pages: Math.ceil(total / limit)
-        }
-      }
-    })
-  } catch (error) {
-    console.error('Error searching fees:', error)
-    res.status(500).json({
-      success: false,
-      message: 'Error searching fees',
-      error: error.message
-    })
-  }
-}
-
-// 13. Get fee collection report
+// ==================== GET FEE COLLECTION REPORT ====================
 exports.getFeeCollectionReport = async (req, res) => {
   try {
-    const { startDate, endDate, academicYear, paymentMode } = req.query
+    const {
+      reportType = 'daily', // daily, weekly, monthly, yearly
+      academicYear,
+      class: classFilter,
+      startDate,
+      endDate
+    } = req.query
 
-    if (!startDate || !endDate) {
-      return res.status(400).json({
-        success: false,
-        message: 'Start date and end date are required'
-      })
+    // Set default date range if not provided
+    const now = new Date()
+    let defaultStartDate, defaultEndDate
+
+    switch (reportType) {
+      case 'daily':
+        defaultStartDate = new Date(now.setHours(0, 0, 0, 0))
+        defaultEndDate = new Date(now.setHours(23, 59, 59, 999))
+        break
+      case 'weekly':
+        const weekStart = new Date(now)
+        weekStart.setDate(now.getDate() - now.getDay())
+        weekStart.setHours(0, 0, 0, 0)
+        defaultStartDate = weekStart
+        defaultEndDate = new Date(now.setHours(23, 59, 59, 999))
+        break
+      case 'monthly':
+        defaultStartDate = new Date(now.getFullYear(), now.getMonth(), 1)
+        defaultEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+        break
+      case 'yearly':
+        defaultStartDate = new Date(now.getFullYear(), 0, 1)
+        defaultEndDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999)
+        break
     }
 
-    const start = new Date(startDate)
-    start.setHours(0, 0, 0, 0)
-    
-    const end = new Date(endDate)
-    end.setHours(23, 59, 59, 999)
+    const start = startDate ? new Date(startDate) : defaultStartDate
+    const end = endDate ? new Date(endDate) : defaultEndDate
 
-    const query = {
-      paymentDate: { $gte: start, $lte: end },
-      academicYear: academicYear || '2024-2025',
-      status: { $in: ['paid', 'partial'] }
-    }
+    // Build aggregation pipeline
+    const pipeline = []
 
-    if (paymentMode) {
-      query.paymentMode = paymentMode
-    }
-
-    const fees = await Fee.find(query)
-      .populate('studentId', 'firstName lastName class section')
-      .sort({ paymentDate: -1 })
-
-    let totalCollection = 0
-    let cashCollection = 0
-    let onlineCollection = 0
-    let chequeCollection = 0
-    let otherCollection = 0
-    let classWiseCollection = {}
-    let dailyCollections = {}
-
-    fees.forEach(fee => {
-      const paidAmount = fee.paidAmount
-      totalCollection += paidAmount
-
-      // Categorize by payment mode
-      switch (fee.paymentMode) {
-        case 'cash':
-          cashCollection += paidAmount
-          break
-        case 'online':
-        case 'card':
-        case 'upi':
-        case 'bank-transfer':
-          onlineCollection += paidAmount
-          break
-        case 'cheque':
-          chequeCollection += paidAmount
-          break
-        default:
-          otherCollection += paidAmount
+    // Match payments within date range
+    pipeline.push({ $unwind: '$paymentHistory' })
+    pipeline.push({
+      $match: {
+        'paymentHistory.date': { $gte: start, $lte: end },
+        'paymentHistory.status': 'Completed'
       }
-
-      // Group by class
-      const className = fee.className
-      if (!classWiseCollection[className]) {
-        classWiseCollection[className] = 0
-      }
-      classWiseCollection[className] += paidAmount
-
-      // Group by date
-      const dateStr = fee.paymentDate.toISOString().split('T')[0]
-      if (!dailyCollections[dateStr]) {
-        dailyCollections[dateStr] = 0
-      }
-      dailyCollections[dateStr] += paidAmount
     })
 
-    // Convert to arrays
-    const classWiseArray = Object.entries(classWiseCollection)
-      .map(([className, amount]) => ({ className, amount }))
-      .sort((a, b) => b.amount - a.amount)
+    if (academicYear) {
+      pipeline.push({ $match: { 'paymentHistory.academicYear': academicYear } })
+    }
 
-    const dailyCollectionArray = Object.entries(dailyCollections)
-      .map(([date, amount]) => ({ date, amount }))
-      .sort((a, b) => new Date(a.date) - new Date(b.date))
+    if (classFilter) {
+      pipeline.push({ $match: { class: parseInt(classFilter) } })
+    }
+
+    // Group based on report type
+    let groupStage = {}
+    let projectStage = {}
+
+    switch (reportType) {
+      case 'daily':
+        groupStage = {
+          _id: {
+            year: { $year: '$paymentHistory.date' },
+            month: { $month: '$paymentHistory.date' },
+            day: { $dayOfMonth: '$paymentHistory.date' }
+          },
+          date: { $first: '$paymentHistory.date' },
+          totalPayments: { $sum: 1 },
+          totalAmount: { $sum: '$paymentHistory.totalAmount' },
+          totalStudents: { $addToSet: '$_id' },
+          paymentMethods: {
+            $push: {
+              mode: '$paymentHistory.paymentMode',
+              amount: '$paymentHistory.totalAmount'
+            }
+          }
+        }
+        break
+
+      case 'weekly':
+        groupStage = {
+          _id: {
+            year: { $year: '$paymentHistory.date' },
+            week: { $week: '$paymentHistory.date' }
+          },
+          year: { $first: { $year: '$paymentHistory.date' } },
+          week: { $first: { $week: '$paymentHistory.date' } },
+          totalPayments: { $sum: 1 },
+          totalAmount: { $sum: '$paymentHistory.totalAmount' },
+          totalStudents: { $addToSet: '$_id' }
+        }
+        break
+
+      case 'monthly':
+        groupStage = {
+          _id: {
+            year: { $year: '$paymentHistory.date' },
+            month: { $month: '$paymentHistory.date' }
+          },
+          year: { $first: { $year: '$paymentHistory.date' } },
+          month: { $first: { $month: '$paymentHistory.date' } },
+          totalPayments: { $sum: 1 },
+          totalAmount: { $sum: '$paymentHistory.totalAmount' },
+          totalStudents: { $addToSet: '$_id' }
+        }
+        break
+
+      case 'yearly':
+        groupStage = {
+          _id: { year: { $year: '$paymentHistory.date' } },
+          year: { $first: { $year: '$paymentHistory.date' } },
+          totalPayments: { $sum: 1 },
+          totalAmount: { $sum: '$paymentHistory.totalAmount' },
+          totalStudents: { $addToSet: '$_id' }
+        }
+        break
+    }
+
+    pipeline.push({ $group: groupStage })
+
+    // Add class-wise breakdown if requested
+    if (classFilter) {
+      pipeline.push({
+        $lookup: {
+          from: 'students',
+          localField: 'totalStudents',
+          foreignField: '_id',
+          as: 'studentDetails'
+        }
+      })
+      pipeline.push({
+        $project: {
+          _id: 0,
+          period: '$_id',
+          date: 1,
+          totalPayments: 1,
+          totalAmount: 1,
+          totalStudents: { $size: '$totalStudents' },
+          paymentMethods: 1,
+          classBreakdown: {
+            $reduce: {
+              input: '$studentDetails',
+              initialValue: {},
+              in: {
+                $mergeObjects: [
+                  '$$value',
+                  {
+                    $let: {
+                      vars: { class: '$$this.class' },
+                      in: {
+                        $cond: [
+                          { $eq: [{ $type: '$$value.$$class' }, 'missing'] },
+                          { $arrayToObject: [[['$$class', { count: 1, amount: 0 }]]] },
+                          {
+                            $arrayToObject: [[[
+                              '$$class',
+                              {
+                                count: { $add: ['$$value.$$class.count', 1] },
+                                amount: '$$value.$$class.amount'
+                              }
+                            ]]]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      })
+    } else {
+      projectStage.$project = {
+        _id: 0,
+        period: '$_id',
+        date: 1,
+        totalPayments: 1,
+        totalAmount: 1,
+        totalStudents: { $size: '$totalStudents' },
+        averagePayment: { $divide: ['$totalAmount', '$totalPayments'] },
+        paymentMethods: {
+          $reduce: {
+            input: '$paymentMethods',
+            initialValue: {},
+            in: {
+              $mergeObjects: [
+                '$$value',
+                {
+                  $let: {
+                    vars: { method: '$$this.mode' },
+                    in: {
+                      $cond: [
+                        { $eq: [{ $type: '$$value.$$method' }, 'missing'] },
+                        { $arrayToObject: [[['$$method', { count: 1, amount: '$$this.amount' }]]] },
+                        {
+                          $arrayToObject: [[[
+                            '$$method',
+                            {
+                              count: { $add: ['$$value.$$method.count', 1] },
+                              amount: { $add: ['$$value.$$method.amount', '$$this.amount'] }
+                            }
+                          ]]]
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+      pipeline.push(projectStage)
+    }
+
+    // Sort by period
+    switch (reportType) {
+      case 'daily':
+        pipeline.push({ $sort: { '_id.year': -1, '_id.month': -1, '_id.day': -1 } })
+        break
+      case 'weekly':
+        pipeline.push({ $sort: { '_id.year': -1, '_id.week': -1 } })
+        break
+      case 'monthly':
+        pipeline.push({ $sort: { '_id.year': -1, '_id.month': -1 } })
+        break
+      case 'yearly':
+        pipeline.push({ $sort: { '_id.year': -1 } })
+        break
+    }
+
+    const reportData = await Student.aggregate(pipeline)
+
+    // Calculate summary statistics
+    const summary = {
+      totalCollections: reportData.reduce((sum, item) => sum + item.totalAmount, 0),
+      totalTransactions: reportData.reduce((sum, item) => sum + item.totalPayments, 0),
+      averageTransactionValue: reportData.reduce((sum, item) => sum + item.totalAmount, 0) / 
+                               reportData.reduce((sum, item) => sum + item.totalPayments, 1),
+      periodCount: reportData.length
+    }
 
     res.status(200).json({
       success: true,
       data: {
-        period: { start, end },
-        academicYear: academicYear || '2024-2025',
-        summary: {
-          totalFees: fees.length,
-          totalCollection,
-          cashCollection,
-          onlineCollection,
-          chequeCollection,
-          otherCollection,
-          averageCollection: fees.length > 0 ? (totalCollection / fees.length).toFixed(2) : 0
-        },
-        classWiseCollection: classWiseArray,
-        dailyCollections: dailyCollectionArray,
-        modeWisePercentage: {
-          cash: totalCollection > 0 ? ((cashCollection / totalCollection) * 100).toFixed(2) : 0,
-          online: totalCollection > 0 ? ((onlineCollection / totalCollection) * 100).toFixed(2) : 0,
-          cheque: totalCollection > 0 ? ((chequeCollection / totalCollection) * 100).toFixed(2) : 0,
-          other: totalCollection > 0 ? ((otherCollection / totalCollection) * 100).toFixed(2) : 0
+        reportType,
+        dateRange: { start, end },
+        reportData,
+        summary,
+        filters: {
+          academicYear,
+          class: classFilter
         }
       }
     })
+
   } catch (error) {
-    console.error('Error generating fee collection report:', error)
+    console.error('Get fee collection report error:', error)
     res.status(500).json({
       success: false,
-      message: 'Error generating fee collection report',
-      error: error.message
+      message: error.message || 'Failed to generate fee collection report',
+      errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined
     })
   }
 }
 
-// 14. Apply bulk discount to students
-exports.applyBulkDiscount = async (req, res) => {
+// ==================== GET FEE DEFAULTERS LIST ====================
+exports.getFeeDefaulters = async (req, res) => {
   try {
-    const { studentIds, discountType, discountValue, discountReason, academicYear } = req.body
-
-    if (!Array.isArray(studentIds) || studentIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Student IDs array is required'
-      })
-    }
-
-    if (discountType === 'percentage' && (discountValue < 0 || discountValue > 100)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Discount percentage must be between 0 and 100'
-      })
-    }
-
-    if (discountType === 'fixed' && discountValue <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Fixed discount must be greater than 0'
-      })
-    }
-
-    // Get all pending fees for these students
-    const fees = await Fee.find({
-      studentId: { $in: studentIds },
-      academicYear: academicYear || '2024-2025',
-      status: { $in: ['pending', 'partial', 'overdue'] }
-    })
-
-    const results = []
-    const currentUserId = getCurrentUserId(req)
-    
-    for (const fee of fees) {
-      try {
-        await fee.applyDiscount({
-          type: discountType,
-          value: discountValue,
-          reason: discountReason,
-          updatedBy: currentUserId
-        })
-        
-        results.push({
-          feeId: fee._id,
-          studentId: fee.studentId,
-          success: true,
-          newTotal: fee.totalAmount,
-          discountApplied: fee.discountedAmount
-        })
-      } catch (error) {
-        results.push({
-          feeId: fee._id,
-          studentId: fee.studentId,
-          success: false,
-          error: error.message
-        })
-      }
-    }
-
-    const successful = results.filter(r => r.success).length
-    const failed = results.filter(r => !r.success).length
-
-    res.status(200).json({
-      success: true,
-      message: `Discount applied to ${successful} fees. ${failed} failed.`,
-      data: {
-        discountType,
-        discountValue,
-        discountReason,
-        academicYear: academicYear || '2024-2025',
-        results,
-        summary: {
-          totalFees: fees.length,
-          successful,
-          failed
-        }
-      }
-    })
-  } catch (error) {
-    console.error('Error applying bulk discount:', error)
-    res.status(500).json({
-      success: false,
-      message: 'Error applying bulk discount',
-      error: error.message
-    })
-  }
-}
-
-// 15. Get all fees (for listing)
-exports.getAllFees = async (req, res) => {
-  try {
-    const { 
-      academicYear, 
-      status, 
-      paymentMode, 
-      startDate, 
-      endDate,
-      className,
+    const {
+      academicYear,
+      class: classFilter,
+      section,
+      minDueAmount = 0,
       page = 1,
       limit = 50
     } = req.query
 
-    const query = {}
-    
-    if (academicYear) query.academicYear = academicYear
-    if (status) query.status = status
-    if (paymentMode) query.paymentMode = paymentMode
-    if (className) query.className = className
-    
-    // Date range filter
-    if (startDate || endDate) {
-      query.paymentDate = {}
-      if (startDate) query.paymentDate.$gte = new Date(startDate)
-      if (endDate) query.paymentDate.$lte = new Date(endDate)
+    const matchStage = {}
+
+    if (academicYear) {
+      matchStage.academicYear = academicYear
     }
 
-    const skip = (page - 1) * limit
-    
-    const fees = await Fee.find(query)
-      .populate('studentId', 'firstName lastName admissionNo class section')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit))
+    if (classFilter) {
+      matchStage.class = parseInt(classFilter)
+    }
 
-    const total = await Fee.countDocuments(query)
+    if (section) {
+      matchStage.section = section.toUpperCase()
+    }
 
-    res.status(200).json({
-      success: true,
-      data: {
-        fees,
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total,
-          pages: Math.ceil(total / limit)
+    // Find students with due amount
+    const query = {
+      ...matchStage,
+      'feeDetails': {
+        $elemMatch: {
+          academicYear: academicYear || { $exists: true },
+          totalDue: { $gt: parseFloat(minDueAmount) }
         }
       }
-    })
-  } catch (error) {
-    console.error('Error fetching all fees:', error)
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching fees',
-      error: error.message
-    })
-  }
-}
+    }
 
-// 16. Get fee by ID
-exports.getFeeById = async (req, res) => {
-  try {
-    const fee = await Fee.findById(req.params.feeId)
-      .populate('studentId', 'firstName lastName admissionNo class section parentName parentPhone')
+    const pageNum = parseInt(page)
+    const limitNum = parseInt(limit)
+    const skip = (pageNum - 1) * limitNum
 
-    if (!fee) {
-      return res.status(404).json({
-        success: false,
-        message: 'Fee record not found'
-      })
+    const students = await Student.find(query)
+      .select('_id firstName lastName admissionNo rollNo class section academicYear studentType village parentPhone feeDetails')
+      .sort({ 'feeDetails.totalDue': -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .lean()
+
+    // Process defaulters with due details
+    const defaulters = students.map(student => {
+      const feeRecord = student.feeDetails.find(fd => 
+        academicYear ? fd.academicYear === academicYear : true
+      )
+      
+      return {
+        _id: student._id,
+        name: `${student.firstName} ${student.lastName}`,
+        admissionNo: student.admissionNo,
+        rollNo: student.rollNo,
+        class: student.class,
+        displayClass: mapNumberToClassName(student.class),
+        section: student.section,
+        academicYear: feeRecord?.academicYear,
+        studentType: student.studentType,
+        village: student.village,
+        parentPhone: student.parentPhone,
+        dueDetails: feeRecord ? {
+          totalFee: feeRecord.totalFee,
+          totalPaid: feeRecord.totalPaid,
+          totalDue: feeRecord.totalDue,
+          schoolFeeDue: Math.max(0, feeRecord.schoolFee - feeRecord.schoolFeePaid),
+          transportFeeDue: Math.max(0, feeRecord.transportFee - feeRecord.transportFeePaid),
+          hostelFeeDue: Math.max(0, feeRecord.hostelFee - feeRecord.hostelFeePaid),
+          percentagePaid: feeRecord.totalFee > 0 ? 
+            (feeRecord.totalPaid / feeRecord.totalFee * 100).toFixed(2) : 0,
+          lastPaymentDate: null // Could be enhanced to get from payment history
+        } : null
+      }
+    }).filter(defaulter => defaulter.dueDetails) // Remove any without due details
+
+    const total = await Student.countDocuments(query)
+
+    // Calculate summary statistics
+    const summary = {
+      totalDefaulters: total,
+      totalDueAmount: defaulters.reduce((sum, defaulter) => sum + defaulter.dueDetails.totalDue, 0),
+      averageDueAmount: defaulters.length > 0 ? 
+        defaulters.reduce((sum, defaulter) => sum + defaulter.dueDetails.totalDue, 0) / defaulters.length : 0,
+      byClass: defaulters.reduce((acc, defaulter) => {
+        const className = defaulter.displayClass
+        if (!acc[className]) {
+          acc[className] = { count: 0, totalDue: 0 }
+        }
+        acc[className].count++
+        acc[className].totalDue += defaulter.dueDetails.totalDue
+        return acc
+      }, {}),
+      byStudentType: defaulters.reduce((acc, defaulter) => {
+        const type = defaulter.studentType
+        if (!acc[type]) {
+          acc[type] = { count: 0, totalDue: 0 }
+        }
+        acc[type].count++
+        acc[type].totalDue += defaulter.dueDetails.totalDue
+        return acc
+      }, {})
     }
 
     res.status(200).json({
       success: true,
-      data: fee
+      count: defaulters.length,
+      total,
+      pagination: {
+        current: pageNum,
+        totalPages: Math.ceil(total / limitNum),
+        hasNext: pageNum * limitNum < total,
+        hasPrev: pageNum > 1
+      },
+      data: defaulters,
+      summary,
+      filters: {
+        academicYear,
+        class: classFilter,
+        section,
+        minDueAmount
+      }
     })
+
   } catch (error) {
-    console.error('Error fetching fee by ID:', error)
+    console.error('Get fee defaulters error:', error)
     res.status(500).json({
       success: false,
-      message: 'Error fetching fee record',
-      error: error.message
+      message: error.message || 'Failed to get fee defaulters',
+      errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined
     })
   }
 }

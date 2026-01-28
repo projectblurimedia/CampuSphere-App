@@ -54,7 +54,7 @@ app.use('/server/class-fees', classFeeRoute)
 app.use('/server/bus-fees', busFeeRoute)
 app.use('/server/hostel-fees', hostelFeeRoute)
 app.use('/server/payments', paymentRoute)
-app.use('/server/cashFlows', cashFlowRoute)
+app.use('/server/cashFlow', cashFlowRoute)
 
 app.use((error, req, res, next) => {
   const errorStatus = error.status || 500

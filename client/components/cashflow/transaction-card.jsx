@@ -3,7 +3,7 @@ import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons, MaterialIcons, FontAwesome5 } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 
-export default function TransactionCard({ transaction, dashboardColors }) {
+export default function TransactionCard({ transaction }) {
   const { colors } = useTheme()
   
   const getTransactionIcon = (category, type) => {
@@ -33,7 +33,7 @@ export default function TransactionCard({ transaction, dashboardColors }) {
   }
   
   const getCategoryColor = (type) => {
-    return type === 'income' ? dashboardColors.success : dashboardColors.danger
+    return type === 'income' ? colors.success : colors.danger
   }
 
   const isIncome = transaction.type === 'income'
@@ -41,9 +41,9 @@ export default function TransactionCard({ transaction, dashboardColors }) {
 
   return (
     <View style={[styles.transactionCard, { 
-      backgroundColor: dashboardColors.cardBg, 
-      borderColor: dashboardColors.border,
-      shadowColor: '#00000040'
+      backgroundColor: colors.cardBackground, 
+      borderColor: colors.border,
+      shadowColor: colors.text
     }]}>
       <View style={styles.transactionHeader}>
         <View style={[styles.iconContainer, { backgroundColor: categoryColor }]}>
@@ -59,7 +59,7 @@ export default function TransactionCard({ transaction, dashboardColors }) {
         </View>
         <ThemedText style={[
           styles.amountText,
-          { color: isIncome ? dashboardColors.success : dashboardColors.danger }
+          { color: isIncome ? colors.success : colors.danger }
         ]}>
           {isIncome ? '+' : '-'}₹{transaction.amount?.toLocaleString('en-IN') || '0'}
         </ThemedText>
@@ -75,15 +75,15 @@ export default function TransactionCard({ transaction, dashboardColors }) {
         </View>
         <View style={[styles.statusBadge, { 
           backgroundColor: transaction.status === 'Completed' ? 
-            dashboardColors.success + '20' : 
-            dashboardColors.warning + '20' 
+            colors.success + '20' : 
+            colors.warning + '20' 
         }]}>
           <ThemedText style={{ 
             fontSize: 11, 
             fontWeight: '600',
             color: transaction.status === 'Completed' ? 
-              dashboardColors.success : 
-              dashboardColors.warning
+              colors.success : 
+              colors.warning
           }}>
             {transaction.status}
           </ThemedText>
@@ -101,8 +101,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 4,
-    marginBottom: 12,
+    elevation: .5,
+    marginBottom: 8,
   },
   transactionHeader: {
     flexDirection: 'row',

@@ -1,3 +1,4 @@
+// models/CashFlow.js
 const mongoose = require("mongoose")
 
 const cashFlowSchema = mongoose.Schema(
@@ -29,10 +30,6 @@ const cashFlowSchema = mongoose.Schema(
       type: Number,
       default: 1,
       min: 1
-    },
-    totalAmount: {
-      type: Number,
-      default: 0
     },
     person: {
       type: String,
@@ -66,12 +63,6 @@ cashFlowSchema.index({ type: 1, date: -1 })
 cashFlowSchema.index({ category: 1, date: -1 })
 cashFlowSchema.index({ item: 1, date: -1 })
 cashFlowSchema.index({ person: 1, date: -1 })
-
-// Pre-save middleware to calculate total amount
-cashFlowSchema.pre("save", function (next) {
-  this.totalAmount = this.quantity * this.amount
-  next()
-})
 
 // Get cash flows by type and date range
 cashFlowSchema.statics.getByDateRange = function (type, startDate, endDate) {
@@ -132,9 +123,9 @@ cashFlowSchema.statics.getTotal = function (type, startDate, endDate) {
     {
       $group: {
         _id: null,
-        total: { $sum: "$totalAmount" },
+        total: { $sum: "$amount" },
         count: { $sum: 1 },
-        avgAmount: { $avg: "$totalAmount" }
+        avgAmount: { $avg: "$amount" }
       },
     },
   ])
@@ -169,7 +160,7 @@ cashFlowSchema.statics.getCategoryBreakdown = function (type, startDate, endDate
           categoryId: "$category",
           categoryName: "$categoryDetails.name"
         },
-        total: { $sum: "$totalAmount" },
+        total: { $sum: "$amount" },
         count: { $sum: 1 }
       }
     },

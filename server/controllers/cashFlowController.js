@@ -105,7 +105,7 @@ const getCategoryBreakdown = async (req, res) => {
   }
 }
 
-// Get filtered cash flows
+// Get filtered cash flows (for reports)
 const getFilteredCashFlows = async (req, res) => {
   try {
     const { type, categoryId, itemId, period, startDate, endDate } = req.query
@@ -197,21 +197,218 @@ const getMonthlyCashFlowsByYear = async (req, res) => {
         {
           $group: {
             _id: null,
-            total: { $sum: "$totalAmount" },
+            total: { $sum: "$amount" },
             count: { $sum: 1 }
           }
         }
       ])
 
-      monthlyData.push({
-        month,
-        year: selectedYear,
-        total: result.length > 0 ? result[0].total : 0,
-        count: result.length > 0 ? result[0].count : 0
-      })
+      // For Net calculation (Income - Expense)
+      if (type === "All") {
+        const incomeMatch = { ...match, type: "Income" }
+        const expenseMatch = { ...match, type: "Expense" }
+        
+        const [incomeResult, expenseResult] = await Promise.all([
+          CashFlow.aggregate([
+            { $match: incomeMatch },
+            { $group: { _id: null, total: { $sum: "$amount" } } }
+          ]),
+          CashFlow.aggregate([
+            { $match: expenseMatch },
+            { $group: { _id: null, total: { $sum: "$amount" } } }
+          ])
+        ])
+
+        const incomeTotal = incomeResult.length > 0 ? incomeResult[0].total : 0
+        const expenseTotal = expenseResult.length > 0 ? expenseResult[0].total : 0
+        const netTotal = incomeTotal - expenseTotal
+        
+        monthlyData.push({
+          month,
+          year: selectedYear,
+          total: netTotal,
+          count: (incomeResult.length > 0 ? incomeResult[0].count || 0 : 0) + 
+                 (expenseResult.length > 0 ? expenseResult[0].count || 0 : 0)
+        })
+      } else {
+        monthlyData.push({
+          month,
+          year: selectedYear,
+          total: result.length > 0 ? result[0].total : 0,
+          count: result.length > 0 ? result[0].count : 0
+        })
+      }
     }
 
     res.json(monthlyData)
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+}
+
+// Get yearly cash flows in range
+const getYearlyCashFlowsInRange = async (req, res) => {
+  try {
+    let { type, startYear, endYear } = req.query
+
+    const currentYear = new Date().getFullYear()
+
+    // If no range provided, default to last 3 years
+    if (!startYear || !endYear) {
+      startYear = currentYear - 2
+      endYear = currentYear
+    }
+
+    startYear = parseInt(startYear)
+    endYear = parseInt(endYear)
+
+    if (startYear > endYear) {
+      return res.status(400).json({ message: "startYear cannot be greater than endYear" })
+    }
+
+    let yearlyData = []
+
+    for (let year = endYear; year >= startYear; year--) {
+      const startDate = new Date(Date.UTC(year, 0, 1, 0, 0, 0, 0))
+      const endDate = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999))
+
+      // For net calculation (Income - Expense)
+      if (type === "All") {
+        const [incomeResult, expenseResult] = await Promise.all([
+          CashFlow.aggregate([
+            {
+              $match: {
+                date: { $gte: startDate, $lte: endDate },
+                type: "Income"
+              }
+            },
+            {
+              $group: {
+                _id: null,
+                total: { $sum: "$amount" },
+                count: { $sum: 1 }
+              }
+            }
+          ]),
+          CashFlow.aggregate([
+            {
+              $match: {
+                date: { $gte: startDate, $lte: endDate },
+                type: "Expense"
+              }
+            },
+            {
+              $group: {
+                _id: null,
+                total: { $sum: "$amount" },
+                count: { $sum: 1 }
+              }
+            }
+          ])
+        ])
+
+        const incomeTotal = incomeResult.length > 0 ? incomeResult[0].total : 0
+        const expenseTotal = expenseResult.length > 0 ? expenseResult[0].total : 0
+        const netTotal = incomeTotal - expenseTotal
+
+        yearlyData.push({
+          year,
+          startDate,
+          endDate,
+          total: netTotal,
+          count: (incomeResult.length > 0 ? incomeResult[0].count || 0 : 0) +
+                (expenseResult.length > 0 ? expenseResult[0].count || 0 : 0)
+        })
+      } else {
+        const match = {
+          date: { $gte: startDate, $lte: endDate }
+        }
+        
+        if (type && type !== "All") {
+          match.type = type
+        }
+
+        const result = await CashFlow.aggregate([
+          {
+            $match: match
+          },
+          {
+            $group: {
+              _id: null,
+              total: { $sum: "$amount" },
+              count: { $sum: 1 }
+            }
+          }
+        ])
+
+        yearlyData.push({
+          year,
+          startDate,
+          endDate,
+          total: result.length > 0 ? result[0].total : 0,
+          count: result.length > 0 ? result[0].count : 0
+        })
+      }
+    }
+
+    res.json(yearlyData)
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+}
+
+// Get categories for dropdown
+const getCategoriesForDropdown = async (req, res) => {
+  try {
+    const { type } = req.query
+    let categories
+    
+    // If type is provided and not 'All', filter by type
+    if (type && type !== "All") {
+      categories = await Category.find({ type: type }).sort({ name: 1 })
+    } else {
+      // Otherwise get all categories
+      categories = await Category.find().sort({ type: 1, name: 1 })
+    }
+    
+    // Format for dropdown
+    const dropdownCategories = [
+      { _id: null, name: 'All Categories', type: 'All' },
+      ...categories.map(cat => ({
+        _id: cat._id,
+        name: cat.name,
+        type: cat.type
+      }))
+    ]
+    
+    res.json(dropdownCategories)
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+}
+
+// Get items for dropdown by category (using query parameter)
+const getItemsForDropdown = async (req, res) => {
+  try {
+    const { categoryId } = req.query // Changed from params to query
+    
+    let items
+    if (categoryId === "All" || !categoryId) {
+      items = await Item.find().sort({ name: 1 })
+    } else {
+      items = await Item.getByCategory(categoryId)
+    }
+    
+    // Format for dropdown
+    const dropdownItems = [
+      { _id: null, name: 'All Items' },
+      ...items.map(item => ({
+        _id: item._id,
+        name: item.name
+      }))
+    ]
+    
+    res.json(dropdownItems)
   } catch (error) {
     res.status(500).json({ message: error.message })
   }
@@ -357,8 +554,13 @@ module.exports = {
   getCategoryBreakdown,
   getFilteredCashFlows,
   getMonthlyCashFlowsByYear,
+  getYearlyCashFlowsInRange,
   updateCashFlow,
   deleteCashFlow,
+  
+  // Dropdown operations
+  getCategoriesForDropdown,
+  getItemsForDropdown,
   
   // Category operations
   createCategory,

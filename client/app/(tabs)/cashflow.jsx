@@ -9,10 +9,7 @@ import { ThemedText } from '@/components/ui/themed-text'
 import { useTheme } from '@/hooks/useTheme'
 import FinancialStats from '@/components/cashflow/financial-stats'
 import TransactionCard from '@/components/cashflow/transaction-card'
-import TimeFilter from '@/components/cashflow/time-filter'
-import CategoryFilter from '@/components/cashflow/category-filter'
 import IncomeExpenseChart from '@/components/cashflow/income-expense-chart'
-import QuickActions from '@/components/cashflow/quick-actions'
 
 const transactionsData = [
   {
@@ -136,32 +133,9 @@ const chartData = [
   { month: 'Dec', income: 585000, expenses: 485000 },
 ]
 
-const timeFilters = [
-  { id: 'today', label: 'Today' },
-  { id: 'week', label: 'This Week' },
-  { id: 'month', label: 'This Month' },
-  { id: 'quarter', label: 'This Quarter' },
-  { id: 'year', label: 'This Year' },
-  { id: 'all', label: 'All Time' },
-]
-
-const categories = ['All', 'Income', 'Expenses', 'Tuition', 'Salaries', 'Infrastructure', 'Utilities']
-
 export default function Cashflow() {
-  const { colors, isDark } = useTheme()
-  const [selectedTimeFilter, setSelectedTimeFilter] = useState('month')
+  const { colors } = useTheme()
   const [selectedCategory, setSelectedCategory] = useState('All')
-
-  const dashboardColors = {
-    cardBg: isDark ? '#1e293b' : '#ffffff',
-    border: isDark ? '#334155' : '#e9ecef',
-    success: isDark ? '#34d399' : '#10b981',
-    warning: isDark ? '#fbbf24' : '#f59e0b',
-    info: isDark ? '#60a5fa' : '#3b82f6',
-    danger: isDark ? '#f87171' : '#ef4444',
-    purple: isDark ? '#a78bfa' : '#8b5cf6',
-    cyan: isDark ? '#22d3ee' : '#06b6d4',
-  }
 
   const totalIncome = transactionsData
     .filter(t => t.type === 'income')
@@ -194,30 +168,10 @@ export default function Cashflow() {
           totalIncome={totalIncome}
           totalExpenses={totalExpenses}
           netBalance={netBalance}
-          dashboardColors={dashboardColors}
-        />
-
-        <QuickActions 
-          dashboardColors={dashboardColors}
         />
 
         <IncomeExpenseChart 
           data={chartData}
-          dashboardColors={dashboardColors}
-        />
-
-        <TimeFilter 
-          timeFilters={timeFilters}
-          selectedFilter={selectedTimeFilter}
-          setSelectedFilter={setSelectedTimeFilter}
-          dashboardColors={dashboardColors}
-        />
-
-        <CategoryFilter 
-          categories={categories}
-          selectedCategory={selectedCategory}
-          setSelectedCategory={setSelectedCategory}
-          dashboardColors={dashboardColors}
         />
 
         <View style={styles.resultsHeader}>
@@ -234,7 +188,6 @@ export default function Cashflow() {
           renderItem={({ item }) => (
             <TransactionCard 
               transaction={item} 
-              dashboardColors={dashboardColors} 
             />
           )}
           keyExtractor={item => item.id}

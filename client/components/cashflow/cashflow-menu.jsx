@@ -1,61 +1,172 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { View, StyleSheet, TouchableOpacity, Modal } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons, MaterialIcons } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
+import CashflowForm from '@/pages/cashflow/CashflowForm'
+import Analytics from '@/pages/cashflow/Analytics'
+import Reports from '@/pages/cashflow/Reports'
 
 export default function CashflowMenu({ visible, onClose }) {
   const { colors } = useTheme()
+  const [showIncomeModal, setShowIncomeModal] = useState(false)
+  const [showExpenseModal, setShowExpenseModal] = useState(false)
+  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false)
+  const [showReportsModal, setShowReportsModal] = useState(false)
 
   const menuItems = [
-    { icon: 'add-circle', title: 'Add Transaction', color: '#10b981' },
-    { icon: 'receipt', title: 'View Transactions', color: '#3b82f6' },
-    { icon: 'trending-up', title: 'Revenue Report', color: '#f59e0b' },
-    { icon: 'trending-down', title: 'Expense Report', color: '#ef4444' },
-    { icon: 'pie-chart', title: 'Financial Analytics', color: '#8b5cf6' },
-    { icon: 'download', title: 'Export Financials', color: '#06b6d4' },
+    { 
+      icon: 'add-circle', 
+      title: 'Add Income', 
+      color: '#10b981', 
+      subtitle: 'Record new income entries',
+      action: () => setShowIncomeModal(true)
+    },
+    { 
+      icon: 'remove-circle', 
+      title: 'Add Expense', 
+      color: '#ef4444', 
+      subtitle: 'Record new expense entries',
+      action: () => setShowExpenseModal(true)
+    },
+    { 
+      icon: 'analytics', 
+      title: 'Analytics', 
+      color: '#8b5cf6', 
+      subtitle: 'Financial statistics and insights',
+      action: () => setShowAnalyticsModal(true)
+    },
+    { 
+      icon: 'description', 
+      title: 'Reports', 
+      color: '#f59e0b', 
+      subtitle: 'Detailed transaction reports',
+      action: () => setShowReportsModal(true)
+    },
   ]
 
-  return (
-    <Modal
-      animationType="fade"
-      transparent={true}
-      statusBarTranslucent
-      visible={visible}
-      onRequestClose={onClose}
-    >
-      <View style={styles.modalContainer}>
-        <View style={[styles.menuContainer, { backgroundColor: colors.cardBackground }]}>
-          <View style={styles.menuHeader}>
-            <ThemedText type="title" style={styles.menuTitle}>Cashflow Menu</ThemedText>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-          </View>
+  const handleItemPress = (item) => {
+    item.action()
+  }
 
-          <View style={styles.menuItems}>
-            {menuItems.map((item, index) => (
+  const handleIncomeClose = () => {
+    setShowIncomeModal(false)
+  }
+
+  const handleExpenseClose = () => {
+    setShowExpenseModal(false)
+  }
+
+  const handleAnalyticsClose = () => {
+    setShowAnalyticsModal(false)
+    onClose()
+  }
+
+  const handleReportsClose = () => {
+    setShowReportsModal(false)
+    onClose()
+  }
+
+  return (
+    <>
+      <Modal
+        animationType="fade"
+        transparent={true}
+        statusBarTranslucent
+        visible={visible}
+        onRequestClose={onClose}
+      >
+        <View style={styles.modalContainer}>
+          <View style={[styles.menuContainer, { backgroundColor: colors.cardBackground }]}>
+            <View style={[styles.menuHeader, { borderBottomColor: colors.border }]}>
+              <View style={styles.headerIconContainer}>
+                <Ionicons name="cash-outline" size={22} color={colors.primary} />
+              </View>
+              <ThemedText type="subtitle" style={[styles.menuTitle, { color: colors.text }]}>
+                Cashflow Menu
+              </ThemedText>
               <TouchableOpacity 
-                key={index} 
-                style={[styles.menuItem, { borderBottomColor: colors.border }]}
-                onPress={() => {
-                  console.log(`Selected: ${item.title}`)
-                  onClose()
-                }}
+                activeOpacity={0.8} 
+                onPress={onClose} 
+                style={[styles.closeButton, { backgroundColor: colors.danger + '10' }]}
               >
-                <View style={[styles.menuIcon, { backgroundColor: `${item.color}20` }]}>
-                  <MaterialIcons name={item.icon} size={20} color={item.color} />
-                </View>
-                <ThemedText style={[styles.menuItemText, { color: colors.text }]}>
-                  {item.title}
-                </ThemedText>
-                <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                <Ionicons name="close" size={24} color={colors.danger} />
               </TouchableOpacity>
-            ))}
+            </View>
+
+            <View style={styles.menuItems}>
+              {menuItems.map((item, index) => (
+                <TouchableOpacity 
+                  key={index} 
+                  style={[
+                    styles.menuItem, 
+                    { 
+                      borderBottomColor: colors.border,
+                      backgroundColor: index % 2 === 0 ? colors.surface : 'transparent'
+                    }
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={() => handleItemPress(item)}
+                >
+                  <View style={[styles.menuIcon, { backgroundColor: `${item.color}15` }]}>
+                    <MaterialIcons name={item.icon} size={22} color={item.color} />
+                  </View>
+                  <View style={styles.menuItemContent}>
+                    <ThemedText type="subtitle" style={[styles.menuItemText, { color: colors.text }]}>
+                      {item.title}
+                    </ThemedText>
+                    <ThemedText style={styles.menuItemSubtitle}>
+                      {item.subtitle}
+                    </ThemedText>
+                  </View>
+                  <View style={styles.menuItemArrow}>
+                    <Ionicons 
+                      name="chevron-forward-outline" 
+                      size={20} 
+                      color={colors.textSecondary} 
+                    />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
+
+      <CashflowForm
+        visible={showIncomeModal}
+        onClose={handleIncomeClose}
+        onSave={(data) => {
+          console.log('Income saved:', data)
+          handleIncomeClose()
+        }}
+        type="Income"
+        title="Add Income"
+        subtitle="Record new income transaction"
+      />
+
+      <CashflowForm
+        visible={showExpenseModal}
+        onClose={handleExpenseClose}
+        onSave={(data) => {
+          console.log('Expense saved:', data)
+          handleExpenseClose()
+        }}
+        type="Expense"
+        title="Add Expense"
+        subtitle="Record new expense transaction"
+      />
+
+      <Analytics
+        visible={showAnalyticsModal}
+        onClose={handleAnalyticsClose}
+      />
+
+      <Reports
+        visible={showReportsModal}
+        onClose={handleReportsClose}
+      />
+    </>
   )
 }
 
@@ -63,56 +174,84 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   menuContainer: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 20,
-    paddingBottom: 40,
-    maxHeight: '80%',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingTop: 5,
+    paddingBottom: 20,
+    maxHeight: '85%',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -4,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
   },
   menuHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    marginBottom: 8,
   },
-  menuTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-  },
-  closeButton: {
+  headerIconContainer: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f3f4f6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  menuItems: {
-    paddingHorizontal: 16,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-  },
-  menuIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    borderRadius: 22,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  menuItemText: {
+  menuTitle: {
+    fontSize: 20,
     flex: 1,
-    fontSize: 16,
-    fontWeight: '500',
+  },
+  closeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuItems: {
+    paddingHorizontal: 15,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 6,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderBottomWidth: 1,
+  },
+  menuIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  menuItemContent: {
+    flex: 1,
+  },
+  menuItemText: {
+    fontSize: 17,
+  },
+  menuItemSubtitle: {
+    fontSize: 14,
+    opacity: 0.7,
+  },
+  menuItemArrow: {
+    paddingLeft: 8,
+    opacity: 0.6,
   },
 })

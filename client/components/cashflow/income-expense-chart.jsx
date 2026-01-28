@@ -4,7 +4,7 @@ import { useTheme } from '@/hooks/useTheme'
 
 const { width } = Dimensions.get('window')
 
-export default function IncomeExpenseChart({ data = [], dashboardColors }) {
+export default function IncomeExpenseChart({ data = [] }) {
   const { colors } = useTheme()
   
   const safeData = Array.isArray(data) ? data : []
@@ -15,8 +15,8 @@ export default function IncomeExpenseChart({ data = [], dashboardColors }) {
   
   return (
     <View style={[styles.chartContainer, { 
-      backgroundColor: dashboardColors.cardBg,
-      borderColor: dashboardColors.border
+      backgroundColor: colors.cardBackground,
+      borderColor: colors.border
     }]}>
       <View style={styles.chartHeader}>
         <ThemedText style={[styles.chartTitle, { color: colors.text }]}>
@@ -39,11 +39,11 @@ export default function IncomeExpenseChart({ data = [], dashboardColors }) {
               <View style={styles.barContainer}>
                 <View style={[styles.incomeBar, { 
                   height: incomeHeight, 
-                  backgroundColor: dashboardColors.success 
+                  backgroundColor: colors.success 
                 }]} />
                 <View style={[styles.expenseBar, { 
                   height: expensesHeight, 
-                  backgroundColor: dashboardColors.danger 
+                  backgroundColor: colors.danger 
                 }]} />
               </View>
               <ThemedText style={[styles.monthLabel, { color: colors.text }]}>
@@ -56,13 +56,13 @@ export default function IncomeExpenseChart({ data = [], dashboardColors }) {
       
       <View style={styles.legend}>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: dashboardColors.success }]} />
+          <View style={[styles.legendDot, { backgroundColor: colors.success }]} />
           <ThemedText style={[styles.legendText, { color: colors.text }]}>
             Income
           </ThemedText>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: dashboardColors.danger }]} />
+          <View style={[styles.legendDot, { backgroundColor: colors.danger }]} />
           <ThemedText style={[styles.legendText, { color: colors.text }]}>
             Expenses
           </ThemedText>

@@ -1,5 +1,4 @@
 const { 
-  // Cash flow operations
   createCashFlow,
   getAllCashFlows,
   getCashFlowsByDateRange,
@@ -7,14 +6,16 @@ const {
   getCategoryBreakdown,
   getFilteredCashFlows,
   getMonthlyCashFlowsByYear,
+  getYearlyCashFlowsInRange,
   updateCashFlow,
   deleteCashFlow,
   
-  // Category operations
+  getCategoriesForDropdown,
+  getItemsForDropdown,
+  
   createCategory,
   getCategories,
   
-  // Item operations
   createItem,
   getItems,
   getItemsByType
@@ -30,8 +31,15 @@ router.get('/total', getTotal)
 router.get('/breakdown/category', getCategoryBreakdown)
 router.get('/filtered', getFilteredCashFlows)
 router.get('/monthly', getMonthlyCashFlowsByYear)
+router.get('/yearly', getYearlyCashFlowsInRange)
 router.put('/:id', updateCashFlow)
 router.delete('/:id', deleteCashFlow)
+
+// Dropdown routes
+router.get('/dropdown/categories', getCategoriesForDropdown)
+router.get('/dropdown/items', getItemsForDropdown)
+
+router.get('/dropdown/items/:categoryId', getItemsForDropdown)
 
 // Category routes
 router.post('/categories', createCategory)

@@ -5,7 +5,6 @@ import {
   ScrollView, 
   ActivityIndicator,
 } from 'react-native'
-import { ThemedText } from '@/components/ui/themed-text'
 import { useTheme } from '@/hooks/useTheme'
 import SearchBar from '@/components/students/search-bar'
 import ClassGroup from '@/components/students/class-group'

@@ -49,43 +49,10 @@ app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
     database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
   })
 })
 
-// Warm-up endpoint to prevent cold starts
-app.get('/warmup', async (req, res) => {
-  try {
-    console.log('🔥 Warming up server...')
-    
-    // Check database connection
-    if (mongoose.connection.readyState === 1) {
-      await mongoose.connection.db.admin().ping()
-    }
-    
-    res.status(200).json({
-      success: true,
-      message: 'Server warmed up successfully',
-      timestamp: new Date().toISOString()
-    })
-  } catch (error) {
-    console.error('Warm-up error:', error.message)
-    res.status(200).json({
-      success: false,
-      message: 'Warm-up attempted',
-      error: error.message
-    })
-  }
-})
-
-// Simple ping endpoint
-app.get('/ping', (req, res) => {
-  res.status(200).json({
-    pong: new Date().toISOString(),
-    message: 'Server is alive'
-  })
-})
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -94,8 +61,6 @@ app.get('/', (req, res) => {
     status: 'running',
     keepAliveEndpoints: [
       '/health - for uptime monitoring',
-      '/warmup - to pre-load server',
-      '/ping - simple alive check'
     ]
   })
 })

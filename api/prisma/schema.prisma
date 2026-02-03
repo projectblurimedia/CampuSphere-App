@@ -1,0 +1,342 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ================= ENUMS =================
+
+enum Gender {
+  MALE
+  FEMALE
+  NOT_SPECIFIED
+}
+
+enum Class {
+  PRE_NURSERY  @map("Pre-Nursery")
+  NURSERY      @map("Nursery")
+  LKG          @map("LKG")
+  UKG          @map("UKG")
+  CLASS_1      @map("1")
+  CLASS_2      @map("2")
+  CLASS_3      @map("3")
+  CLASS_4      @map("4")
+  CLASS_5      @map("5")
+  CLASS_6      @map("6")
+  CLASS_7      @map("7")
+  CLASS_8      @map("8")
+  CLASS_9      @map("9")
+  CLASS_10     @map("10")
+  CLASS_11     @map("11")
+  CLASS_12     @map("12")
+}
+
+enum Section {
+  A
+  B
+  C
+  D
+  E
+}
+
+enum StudentType {
+  DAY_SCHOLAR
+  HOSTELLER
+}
+
+enum Session {
+  MORNING
+  AFTERNOON
+}
+
+enum ExamType {
+  FORMATIVE_1
+  FORMATIVE_2
+  FORMATIVE_3
+  SUMMATIVE_1
+  SUMMATIVE_2
+  CUSTOM
+}
+
+enum Subject {
+  MATHEMATICS
+  SCIENCE
+  ENGLISH
+  HINDI
+  SOCIAL_STUDIES
+  COMPUTER_SCIENCE
+  PHYSICS
+  CHEMISTRY
+  BIOLOGY
+}
+
+enum Grade {
+  A_PLUS
+  A
+  B_PLUS
+  B
+  C
+  D
+  E
+  F
+  NA
+}
+
+enum ResultStatus {
+  PASS
+  FAIL
+  NA
+}
+
+enum PaymentMode {
+  CASH
+  CHEQUE
+  BANK_TRANSFER
+  ONLINE_PAYMENT
+  CARD
+  OTHER
+}
+
+model Student {
+  id                      String          @id @default(uuid())
+  firstName               String?         @db.VarChar(50)
+  lastName                String?         @db.VarChar(50)
+  dob                     DateTime
+  gender                  Gender
+  class                   Class
+  section                 Section
+  admissionNo             String           @unique @db.VarChar(20)
+  rollNo                  String?          @db.VarChar(10)
+
+  // Contact & Address
+  address                 String?          @db.Text
+  village                 String?          @db.VarChar(50)
+  parentName              String           @db.VarChar(50)
+  parentPhone             String           @db.VarChar(10)
+  parentPhone2            String?          @db.VarChar(10)
+  parentEmail             String?          @db.VarChar(50)
+
+  studentType             StudentType      @default(DAY_SCHOLAR)
+  isUsingSchoolTransport  Boolean          @default(false)
+  isUsingSchoolHostel     Boolean          @default(false)
+
+  schoolFeeDiscount       Int              @default(0)
+  transportFeeDiscount    Int              @default(0)
+  hostelFeeDiscount       Int              @default(0)
+
+  profilePicUrl           String?          @db.Text
+  profilePicPublicId      String?          @db.VarChar(500)
+
+  isActive                Boolean          @default(true)
+
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+
+  attendance              Attendance[]
+  marks                   Marks[]
+  feeDetails              FeeDetails[]
+  paymentHistory          PaymentHistory[]
+
+  @@index([class, section])
+  @@index([admissionNo])
+  @@index([rollNo])
+  @@index([parentPhone])
+  @@index([parentEmail])
+  @@index([createdAt])
+  @@index([isActive])
+  @@index([firstName])
+  @@index([lastName])
+  @@index([firstName, lastName])
+  @@index([parentName])
+  @@index([class, section, isActive])
+}
+
+
+model Attendance {
+  id              String       @id @default(uuid())
+  studentId       String 
+  student         Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date            DateTime
+  session         Session
+  isPresent       Boolean?
+  markedBy        String?      @db.VarChar(100)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([studentId])
+  @@index([date])
+  @@unique([studentId, date, session])
+  @@index([date, session])
+  @@index([studentId, date])
+}
+
+model Marks {
+  id                  String        @id @default(uuid())
+  studentId           String  
+  student             Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  examType            ExamType
+  customExamName      String?       @db.VarChar(100)
+  
+  subject             Subject
+  marks               Int           
+  totalMarks          Int           
+  percentage          Float?
+  grade               Grade         @default(NA)
+  result              ResultStatus  @default(NA)
+  passingPercentage   Int           @default(35)  
+  uploadedBy          String?       @db.VarChar(50)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  @@index([studentId])
+  @@index([examType])
+  @@index([subject])
+  @@index([grade])
+  @@index([result])
+  @@index([studentId, examType])
+  @@index([studentId, subject])
+  @@index([examType, subject])
+  
+  // For marks analysis
+  @@index([studentId, examType, subject])
+  @@unique([studentId, examType, subject])
+}
+
+model FeeDetails {
+  id                          String        @id @default(uuid())
+  studentId                   String
+  student                     Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  schoolFee                   Int           @default(0)
+  transportFee                Int           @default(0)
+  hostelFee                   Int           @default(0)
+  totalFee                    Int           @default(0)
+
+  terms                       Int           @default(3)  
+  schoolFeePaid               Int           @default(0)
+  transportFeePaid            Int           @default(0)
+  hostelFeePaid               Int           @default(0)
+  totalPaid                   Int           @default(0)
+  totalDue                    Int           @default(0)
+
+  term1Due                    Int           @default(0)
+  term2Due                    Int           @default(0)
+  term3Due                    Int           @default(0)
+  term4Due                    Int           @default(0)
+  
+  term1Paid                   Int           @default(0)
+  term2Paid                   Int           @default(0)
+  term3Paid                   Int           @default(0)
+  term4Paid                   Int           @default(0)
+
+  schoolFeeDiscountApplied    Int           @default(0)
+  transportFeeDiscountApplied Int           @default(0)
+  hostelFeeDiscountApplied    Int           @default(0)
+
+  // Due dates
+  term1DueDate                DateTime?
+  term2DueDate                DateTime?
+  term3DueDate                DateTime?
+  term4DueDate                DateTime?
+
+  isFullyPaid                 Boolean       @default(false)
+  createdAt                   DateTime      @default(now())
+  updatedBy                   String        @db.VarChar(50)
+  updatedAt                   DateTime      @updatedAt
+
+  @@index([studentId])
+  @@index([isFullyPaid])
+  @@index([totalDue])
+  
+  // For tracking pending fees
+  @@index([totalDue, isFullyPaid])
+}
+
+
+model PaymentHistory {
+  id                  String        @id @default(uuid())
+  studentId           String  
+  student             Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date                DateTime      @default(now())  
+  schoolFeePaid       Int           @default(0)
+  transportFeePaid    Int           @default(0)
+  hostelFeePaid       Int           @default(0)
+  totalAmount         Int
+  
+  termNumber          Int?
+  
+  receiptNo           String        @db.VarChar(50)
+  paymentMode         PaymentMode
+  description         String?       @db.Text
+  
+  // Payment method details
+  chequeNo            String?       @db.VarChar(50)
+  bankName            String?       @db.VarChar(100)
+  transactionId       String?       @db.VarChar(100)
+  referenceNo         String?       @db.VarChar(100)
+  
+  receivedBy          String        @db.VarChar(100)  
+  createdAt           DateTime      @default(now())
+
+  @@index([studentId])
+  @@index([receiptNo])
+  @@index([date])
+  @@index([paymentMode])
+  @@index([studentId, date])
+  
+  // For payment reports
+  @@index([date, paymentMode])
+  @@index([receivedBy, date])
+  
+  // For receipt tracking
+  @@index([receiptNo, date])
+  
+  // For term-wise payments
+  @@index([studentId, termNumber])
+}
+
+enum Designation {
+  Chairperson
+  Principal
+  Vice_Principal
+  Accountant
+  Teacher
+  Other
+}
+
+model Employee {
+  id              String   @id @default(uuid())
+  firstName       String   @db.VarChar(50)
+  lastName        String   @db.VarChar(50)
+  gender          Gender
+  dob             DateTime
+  email           String   @unique @db.VarChar(50)
+  phone           String   @unique @db.VarChar(10)
+  address         String   @db.Text
+  village         String   @db.VarChar(50)  
+  designation     Designation
+  joiningDate     DateTime @default(now())
+  
+  qualification   String?   @db.VarChar(50)
+  aadharNumber    String?   @unique @db.VarChar(12)
+  panNumber       String?  @db.VarChar(10)
+  
+  profilePicUrl      String? @db.Text
+  profilePicPublicId String? @db.VarChar(500)
+  
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+
+  @@index([email])
+  @@index([phone])
+  @@index([aadharNumber])
+  @@index([designation])
+  @@index([isActive])
+  @@index([joiningDate])
+  @@index([firstName, lastName])
+  @@index([createdAt])
+}

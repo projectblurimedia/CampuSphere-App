@@ -21,34 +21,14 @@ import {
 } from '@expo/vector-icons'
 import ThemeModal from '@/components/theme/ThemeModal'
 import { useTheme } from '@/hooks/useTheme'
-import SchoolProfile from '@/pages/menu/schoolProfile/SchoolProfile'
-import SchoolStats from '@/pages/menu/schoolStats/SchoolStats'
-import Events from '@/pages/menu/events/Events'
-import CreateStudent from '@/pages/menu/createStudent/CreateStudent'
-import CreateStaff from '@/pages/menu/createStaff/CreateStaff'
-import Attendance from '@/pages/menu/attendance/Attendance'
-import BulkImportStudents from '@/pages/menu/bulkImportStudents/BulkImportStudents'
-import BulkImportStaff from '@/pages/menu/bulkImportStaff/BulkImportStaff'
-import UploadMarks from '@/pages/menu/uploadMarks/UploadMarks'
-import FeeManagement from '@/pages/menu/feeManagement/FeeManagement'
-import FeeDetails from '@/pages/menu/feeDetails/FeeDetails'
+import Dashboard from '@/components/dynamicModals/Dashboard'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
 export default function DashboardMenu({ visible, onClose }) {
   const { theme, colors } = useTheme()
   const [themeModalVisible, setThemeModalVisible] = useState(false)
-  const [schoolProfileVisible, setSchoolProfileVisible] = useState(false)
-  const [schoolStatsVisible, setSchoolStatsVisible] = useState(false)
-  const [eventsVisible, setEventsVisible] = useState(false)
-  const [createStudentVisible, setCreateStudentVisible] = useState(false)
-  const [createStaffVisible, setCreateStaffVisible] = useState(false)
-  const [markAttendanceVisible, setMarkAttendanceVisible] = useState(false)
-  const [bulkImportStudentsVisible, setBulkImportStudentsVisible] = useState(false)
-  const [bulkImportStaffVisible, setBulkImportStaffVisible] = useState(false)
-  const [uploadMarksVisible, setUploadMarksVisible] = useState(false) 
-  const [feeManagementVisible, setFeeManagementVisible] = useState(false)
-  const [feeDetailsVisible, setFeeDetailsVisible] = useState(false)
+  const [activeModal, setActiveModal] = useState(null)
   const translateX = useRef(new Animated.Value(SCREEN_WIDTH)).current
   const backdropOpacity = useRef(new Animated.Value(0)).current
   
@@ -85,6 +65,7 @@ export default function DashboardMenu({ visible, onClose }) {
     }
   }, [visible])
 
+  // Map menu items to component names
   const menuItems = [
     { 
       id: 1, 
@@ -92,7 +73,7 @@ export default function DashboardMenu({ visible, onClose }) {
       icon: 'school', 
       iconType: 'Ionicons', 
       gradient: ['#3b82f6', '#2563eb'], 
-      action: () => setSchoolProfileVisible(true) 
+      componentName: 'schoolProfile'
     },
     { 
       id: 2, 
@@ -100,7 +81,7 @@ export default function DashboardMenu({ visible, onClose }) {
       icon: 'calendar-star',
       iconType: 'MaterialCommunityIcons', 
       gradient: ['#10b981', '#059669'], 
-      action: () => setEventsVisible(true)
+      componentName: 'events'
     },
     { 
       id: 3, 
@@ -108,7 +89,7 @@ export default function DashboardMenu({ visible, onClose }) {
       icon: 'chart-bar', 
       iconType: 'FontAwesome5', 
       gradient: ['#8b5cf6', '#7c3aed'], 
-      action: () => setSchoolStatsVisible(true) 
+      componentName: 'schoolStats'
     },
     { 
       id: 4, 
@@ -116,7 +97,7 @@ export default function DashboardMenu({ visible, onClose }) {
       icon: 'user-plus', 
       iconType: 'Feather', 
       gradient: ['#06b6d4', '#0891b2'], 
-      action: () => setCreateStudentVisible(true) 
+      componentName: 'createStudent'
     },
     { 
       id: 5,
@@ -124,23 +105,23 @@ export default function DashboardMenu({ visible, onClose }) {
       icon: 'file-import', 
       iconType: 'FontAwesome5', 
       gradient: ['#10b981', '#059669'], 
-      action: () => setBulkImportStudentsVisible(true) 
+      componentName: 'bulkImportStudents'
     },
     { 
       id: 6, 
-      title: 'New Staff', 
+      title: 'New Employee', 
       icon: 'user-tie', 
       iconType: 'FontAwesome5', 
       gradient: ['#8b5cf6', '#7c3aed'], 
-      action: () => setCreateStaffVisible(true) 
+      componentName: 'createEmployee'
     },
     { 
       id: 7,
-      title: 'Bulk Import Staff', 
+      title: 'Bulk Import Employees', 
       icon: 'users', 
       iconType: 'FontAwesome5', 
       gradient: ['#f59e0b', '#d97706'], 
-      action: () => setBulkImportStaffVisible(true) 
+      componentName: 'bulkImportEmployees'
     },
     { 
       id: 8, 
@@ -148,15 +129,15 @@ export default function DashboardMenu({ visible, onClose }) {
       icon: 'clipboard-check', 
       iconType: 'MaterialCommunityIcons', 
       gradient: ['#84cc16', '#65a30d'], 
-      action: () => setMarkAttendanceVisible(true) 
+      componentName: 'attendance'
     },
     { 
       id: 9, 
-      title: 'Upload Marks', // New menu item
+      title: 'Upload Marks',
       icon: 'upload', 
       iconType: 'Feather', 
       gradient: ['#8b5cf6', '#7c3aed'], 
-      action: () => setUploadMarksVisible(true) 
+      componentName: 'uploadMarks'
     },
     { 
       id: 10, 
@@ -164,7 +145,7 @@ export default function DashboardMenu({ visible, onClose }) {
       icon: 'cogs', 
       iconType: 'FontAwesome5', 
       gradient: ['#f97316', '#ea580c'], 
-      action: () => setFeeManagementVisible(true) 
+      componentName: 'feeManagement'
     },
     { 
       id: 11, 
@@ -172,7 +153,30 @@ export default function DashboardMenu({ visible, onClose }) {
       icon: 'file-invoice-dollar', 
       iconType: 'FontAwesome5', 
       gradient: ['#3b82f6', '#2563eb'], 
-      action: () => setFeeDetailsVisible(true) 
+      componentName: 'feeDetails'
+    },
+  ]
+
+  const sections = [
+    {
+      title: 'School',
+      data: menuItems.filter(item => [1,2,3].includes(item.id)),
+    },
+    {
+      title: 'Add New',
+      data: menuItems.filter(item => [4,6].includes(item.id)),
+    },
+    {
+      title: 'Bulk Imports',
+      data: menuItems.filter(item => [5,7].includes(item.id)),
+    },
+    {
+      title: 'Uploads',
+      data: menuItems.filter(item => [8,9].includes(item.id)),
+    },
+    {
+      title: 'Fees',
+      data: menuItems.filter(item => [10,11].includes(item.id)),
     },
   ]
 
@@ -198,56 +202,16 @@ export default function DashboardMenu({ visible, onClose }) {
   }
 
   const handleMenuItemPress = (item) => {
-    item.action()
+    setActiveModal(item.componentName)
+  }
+
+  const handleModalClose = () => {
+    setActiveModal(null)
   }
 
   const handleLogout = () => {
     console.log('Logout pressed')
     onClose()
-  }
-
-  const handleSchoolProfileClose = () => {
-    setSchoolProfileVisible(false)
-  }
-
-  const handleSchoolStatsClose = () => {
-    setSchoolStatsVisible(false)
-  }
-
-  const handleEventsClose = () => {
-    setEventsVisible(false)
-  }
-
-  const handleCreateStudentClose = () => {
-    setCreateStudentVisible(false)
-  }
-
-  const handleCreateStaffClose = () => {
-    setCreateStaffVisible(false)
-  }
-
-  const handleBulkImportStudentsClose = () => {
-    setBulkImportStudentsVisible(false)
-  }
-
-  const handleBulkImportStaffClose = () => {
-    setBulkImportStaffVisible(false)
-  }
-
-  const handleMarkAttendanceClose = () => {
-    setMarkAttendanceVisible(false)
-  }
-
-  const handleUploadMarksClose = () => {
-    setUploadMarksVisible(false)
-  }
-
-  const handleFeeManagementClose = () => {
-    setFeeManagementVisible(false)
-  }
-
-  const handleFeeDetailsClose = () => {
-    setFeeDetailsVisible(false)
   }
 
   return (
@@ -315,36 +279,38 @@ export default function DashboardMenu({ visible, onClose }) {
               style={styles.scroll}
               contentContainerStyle={styles.scrollContent}
             >
-              <View style={styles.section}>
-                <ThemedText type='subtitle' style={[styles.sectionTitle, { color: colors.text }]}>
-                  Management
-                </ThemedText>
-                <View style={styles.items}>
-                  {menuItems.map((item) => (
-                    <TouchableOpacity
-                      activeOpacity={.9} 
-                      key={item.id}
-                      style={[styles.item, { backgroundColor: colors.cardBackground }]}
-                      onPress={() => handleMenuItemPress(item)}
-                    >
-                      <View style={styles.itemContent}>
-                        <LinearGradient colors={item.gradient} style={styles.icon}>
-                          {getIcon(item.iconType, item.icon, 18, '#FFFFFF')}
-                        </LinearGradient>
-                        <View style={styles.itemText}>
-                          <ThemedText type='subtitle' style={[styles.itemTitle, { color: colors.text }]}>
-                            {item.title}
-                          </ThemedText>
-                          <ThemedText style={[styles.itemValue, { color: colors.textSecondary }]}>
-                            View details
-                          </ThemedText>
+              {sections.map((section) => (
+                <View key={section.title} style={styles.section}>
+                  <ThemedText type='subtitle' style={[styles.sectionTitle, { color: colors.text }]}>
+                    {section.title}
+                  </ThemedText>
+                  <View style={styles.items}>
+                    {section.data.map((item) => (
+                      <TouchableOpacity
+                        activeOpacity={.9} 
+                        key={item.id}
+                        style={[styles.item, { backgroundColor: colors.cardBackground }]}
+                        onPress={() => handleMenuItemPress(item)}
+                      >
+                        <View style={styles.itemContent}>
+                          <LinearGradient colors={item.gradient} style={styles.icon}>
+                            {getIcon(item.iconType, item.icon, 18, '#FFFFFF')}
+                          </LinearGradient>
+                          <View style={styles.itemText}>
+                            <ThemedText type='subtitle' style={[styles.itemTitle, { color: colors.text }]}>
+                              {item.title}
+                            </ThemedText>
+                            <ThemedText style={[styles.itemValue, { color: colors.textSecondary }]}>
+                              View details
+                            </ThemedText>
+                          </View>
+                          <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
                         </View>
-                        <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-                      </View>
-                    </TouchableOpacity>
-                  ))}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
-              </View>
+              ))}
 
               <View style={styles.section}>
                 <ThemedText type='subtitle' style={[styles.sectionTitle, { color: colors.text }]}>
@@ -402,49 +368,11 @@ export default function DashboardMenu({ visible, onClose }) {
         </View>
       </Modal>
 
-      <SchoolProfile
-        visible={schoolProfileVisible}
-        onClose={handleSchoolProfileClose}
-      />
-      <SchoolStats
-        visible={schoolStatsVisible}
-        onClose={handleSchoolStatsClose}
-      />
-      <Events
-        visible={eventsVisible}
-        onClose={handleEventsClose}
-      />
-      <CreateStudent
-        visible={createStudentVisible}
-        onClose={handleCreateStudentClose}
-      />
-      <BulkImportStudents
-        visible={bulkImportStudentsVisible}
-        onClose={handleBulkImportStudentsClose}
-      />
-      <CreateStaff
-        visible={createStaffVisible}
-        onClose={handleCreateStaffClose}
-      />
-      <BulkImportStaff
-        visible={bulkImportStaffVisible}
-        onClose={handleBulkImportStaffClose}
-      />
-      <Attendance
-        visible={markAttendanceVisible}
-        onClose={handleMarkAttendanceClose}
-      />
-      <UploadMarks
-        visible={uploadMarksVisible}
-        onClose={handleUploadMarksClose}
-      />
-      <FeeManagement
-        visible={feeManagementVisible}
-        onClose={handleFeeManagementClose}
-      />
-      <FeeDetails
-        visible={feeDetailsVisible}
-        onClose={handleFeeDetailsClose}
+      {/* Dynamic Modal Loader */}
+      <Dashboard
+        visible={!!activeModal}
+        onClose={handleModalClose}
+        componentName={activeModal}
       />
     </>
   )
@@ -512,11 +440,11 @@ const styles = StyleSheet.create({
   },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 30 },
-  section: { marginTop: 25 },
+  section: { marginTop: 15 },
   sectionTitle: {
     fontSize: 16,
     marginLeft: 20,
-    marginBottom: 12,
+    marginBottom: 6,
   },
   items: { paddingHorizontal: 15 },
   item: {

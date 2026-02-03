@@ -244,6 +244,7 @@ const CustomDropdown = ({
           <ScrollView 
             nestedScrollEnabled={true}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
             style={{ maxHeight: maxDropdownHeight }}
           >
             {items.map((item) => (
@@ -281,30 +282,23 @@ const CustomDropdown = ({
   )
 }
 
-export default function CreateStaff({ visible, onClose }) {
-  const { colors, currentTheme } = useTheme()
+export default function CreateEmployee({ visible, onClose }) {
+  const { colors } = useTheme()
 
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
-    gender: '',
-    dob: new Date(Date.now() - 18 * 365 * 24 * 60 * 60 * 1000), // Default to 18 years ago
+    gender: 'NOT_SPECIFIED',
+    dob: new Date(Date.now() - 18 * 365 * 24 * 60 * 60 * 1000),
     email: '',
     phone: '',
-    alternatePhone: '',
     address: '',
-    city: '',
-    state: '',
-    pincode: '',
-    employeeId: '',
+    village: '',
     designation: '',
-    department: '',
     joiningDate: new Date(),
     qualification: '',
-    experience: '',
     aadharNumber: '',
     panNumber: '',
-    status: 'Active',
   })
 
   const [profilePic, setProfilePic] = useState(null)
@@ -312,20 +306,21 @@ export default function CreateStaff({ visible, onClose }) {
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState(null)
 
-  // Gender options
+  // Gender options (matching schema)
   const genderOptions = useMemo(() => [
-    { label: 'Male', value: 'Male' },
-    { label: 'Female', value: 'Female' },
-    { label: 'Other', value: 'Other' },
+    { label: 'Male', value: 'MALE' },
+    { label: 'Female', value: 'FEMALE' },
+    { label: 'Not Specified', value: 'NOT_SPECIFIED' },
   ], [])
 
-  // Status options
-  const statusOptions = useMemo(() => [
-    { label: 'Active', value: 'Active' },
-    { label: 'Inactive', value: 'Inactive' },
-    { label: 'On Leave', value: 'On Leave' },
-    { label: 'Resigned', value: 'Resigned' },
-    { label: 'Terminated', value: 'Terminated' },
+  // Designation options (matching schema enum)
+  const designationOptions = useMemo(() => [
+    { label: 'Chairperson', value: 'Chairperson' },
+    { label: 'Principal', value: 'Principal' },
+    { label: 'Vice Principal', value: 'Vice_Principal' },
+    { label: 'Accountant', value: 'Accountant' },
+    { label: 'Teacher', value: 'Teacher' },
+    { label: 'Other', value: 'Other' },
   ], [])
 
   // Update form data
@@ -368,10 +363,8 @@ export default function CreateStaff({ visible, onClose }) {
   // Validate form data
   const validateForm = useCallback(() => {
     const requiredFields = [
-      'firstName', 'lastName', 'gender', 'dob', 'email', 'phone', 
-      'address', 'city', 'state', 'pincode', 'employeeId', 
-      'designation', 'department', 'qualification', 'experience', 
-      'aadharNumber'
+      'firstName', 'lastName', 'dob', 'email', 'phone',
+      'address', 'designation',
     ]
 
     for (const field of requiredFields) {
@@ -395,33 +388,22 @@ export default function CreateStaff({ visible, onClose }) {
       return false
     }
 
-    // Pincode validation (6 digits)
-    const pincodeRegex = /^[0-9]{6}$/
-    if (!pincodeRegex.test(formData.pincode)) {
-      showToast('Pincode must be 6 digits', 'error')
-      return false
-    }
-
-    // Aadhar validation (12 digits)
-    const aadharRegex = /^[0-9]{12}$/
-    if (!aadharRegex.test(formData.aadharNumber)) {
-      showToast('Aadhar number must be 12 digits', 'error')
-      return false
+    // Aadhar validation (if provided)
+    if (formData.aadharNumber && formData.aadharNumber.trim() !== '') {
+      const aadharRegex = /^[0-9]{12}$/
+      if (!aadharRegex.test(formData.aadharNumber)) {
+        showToast('Aadhar number must be 12 digits', 'error')
+        return false
+      }
     }
 
     // PAN validation (if provided)
     if (formData.panNumber && formData.panNumber.trim() !== '') {
       const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/
       if (!panRegex.test(formData.panNumber.toUpperCase())) {
-        showToast('Please enter a valid PAN number', 'error')
+        showToast('Please enter a valid PAN number (e.g., ABCDE1234F)', 'error')
         return false
       }
-    }
-
-    // Experience validation (non-negative)
-    if (parseFloat(formData.experience) < 0) {
-      showToast('Experience cannot be negative', 'error')
-      return false
     }
 
     return true
@@ -444,6 +426,14 @@ export default function CreateStaff({ visible, onClose }) {
         if (formData[key] !== undefined && formData[key] !== null) {
           if (key === 'dob' || key === 'joiningDate') {
             formDataToSend.append(key, new Date(formData[key]).toISOString())
+          } else if (key === 'aadharNumber' && formData[key].trim() === '') {
+            // Skip empty aadharNumber
+          } else if (key === 'panNumber' && formData[key].trim() === '') {
+            // Skip empty panNumber
+          } else if (key === 'qualification' && formData[key].trim() === '') {
+            // Skip empty qualification
+          } else if (key === 'village' && formData[key].trim() === '') {
+            // Skip empty village
           } else {
             formDataToSend.append(key, formData[key].toString().trim())
           }
@@ -456,27 +446,27 @@ export default function CreateStaff({ visible, onClose }) {
         const fileType = uriParts[uriParts.length - 1]
         formDataToSend.append('profilePic', {
           uri: profilePic.uri,
-          name: `profile_${Date.now()}.${fileType}`,
+          name: `employee_profile_${Date.now()}.${fileType}`,
           type: profilePic.mimeType || `image/${fileType}`,
         })
       }
 
-      const response = await axiosApi.post('/staff', formDataToSend, {
+      const response = await axiosApi.post('/employees', formDataToSend, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       })
 
-      if (response.data.success || response.data.message?.includes('success')) {
-        showToast('Staff member created successfully!', 'success')
+      if (response.data.success) {
+        showToast('Employee created successfully!', 'success')
         resetForm()
         setTimeout(() => onClose(), 1500)
       } else {
-        showToast(response.data.message || 'Failed to create staff', 'error')
+        showToast(response.data.message || 'Failed to create employee', 'error')
       }
     } catch (error) {
-      console.error('Create staff error:', error)
-      let errorMessage = 'Failed to create staff member'
+      console.error('Create employee error:', error)
+      let errorMessage = 'Failed to create employee'
       
       if (error.response) {
         errorMessage = error.response.data?.message || 
@@ -486,7 +476,7 @@ export default function CreateStaff({ visible, onClose }) {
       } else if (error.request) {
         errorMessage = 'No response from server. Check your internet connection.'
       } else {
-        errorMessage = error.message || 'Failed to create staff member'
+        errorMessage = error.message || 'Failed to create employee'
       }
       
       showToast(errorMessage, 'error')
@@ -500,24 +490,17 @@ export default function CreateStaff({ visible, onClose }) {
     setFormData({
       firstName: '',
       lastName: '',
-      gender: '',
+      gender: 'NOT_SPECIFIED',
       dob: new Date(Date.now() - 18 * 365 * 24 * 60 * 60 * 1000),
       email: '',
       phone: '',
-      alternatePhone: '',
       address: '',
-      city: '',
-      state: '',
-      pincode: '',
-      employeeId: '',
+      village: '',
       designation: '',
-      department: '',
       joiningDate: new Date(),
       qualification: '',
-      experience: '',
       aadharNumber: '',
       panNumber: '',
-      status: 'Active',
     })
     setProfilePic(null)
     setShowDatePicker({ dob: false, joiningDate: false })
@@ -535,23 +518,16 @@ export default function CreateStaff({ visible, onClose }) {
   const onFirstNameChange = useCallback((text) => updateFormData({ firstName: text }), [updateFormData])
   const onLastNameChange = useCallback((text) => updateFormData({ lastName: text }), [updateFormData])
   const onEmailChange = useCallback((text) => updateFormData({ email: text.toLowerCase() }), [updateFormData])
-  const onPhoneChange = useCallback((text) => updateFormData({ phone: text.replace(/[^0-9]/g, '') }), [updateFormData])
-  const onAlternatePhoneChange = useCallback((text) => updateFormData({ alternatePhone: text.replace(/[^0-9]/g, '') }), [updateFormData])
+  const onPhoneChange = useCallback((text) => updateFormData({ phone: text.replace(/[^0-9]/g, '').substring(0, 10) }), [updateFormData])
   const onAddressChange = useCallback((text) => updateFormData({ address: text }), [updateFormData])
-  const onCityChange = useCallback((text) => updateFormData({ city: text }), [updateFormData])
-  const onStateChange = useCallback((text) => updateFormData({ state: text }), [updateFormData])
-  const onPincodeChange = useCallback((text) => updateFormData({ pincode: text.replace(/[^0-9]/g, '') }), [updateFormData])
-  const onEmployeeIdChange = useCallback((text) => updateFormData({ employeeId: text.toUpperCase() }), [updateFormData])
-  const onDesignationChange = useCallback((text) => updateFormData({ designation: text }), [updateFormData])
-  const onDepartmentChange = useCallback((text) => updateFormData({ department: text }), [updateFormData])
+  const onVillageChange = useCallback((text) => updateFormData({ village: text }), [updateFormData])
   const onQualificationChange = useCallback((text) => updateFormData({ qualification: text }), [updateFormData])
-  const onExperienceChange = useCallback((text) => updateFormData({ experience: text.replace(/[^0-9.]/g, '') }), [updateFormData])
-  const onAadharNumberChange = useCallback((text) => updateFormData({ aadharNumber: text.replace(/[^0-9]/g, '') }), [updateFormData])
-  const onPanNumberChange = useCallback((text) => updateFormData({ panNumber: text.toUpperCase().replace(/[^A-Z0-9]/g, '') }), [updateFormData])
+  const onAadharNumberChange = useCallback((text) => updateFormData({ aadharNumber: text.replace(/[^0-9]/g, '').substring(0, 12) }), [updateFormData])
+  const onPanNumberChange = useCallback((text) => updateFormData({ panNumber: text.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 10) }), [updateFormData])
 
   // Dropdown handlers
   const onGenderSelect = useCallback((value) => updateFormData({ gender: value }), [updateFormData])
-  const onStatusSelect = useCallback((value) => updateFormData({ status: value }), [updateFormData])
+  const onDesignationSelect = useCallback((value) => updateFormData({ designation: value }), [updateFormData])
 
   const handleClose = useCallback(() => {
     if (!loading) {
@@ -782,8 +758,8 @@ export default function CreateStaff({ visible, onClose }) {
                 <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
               </TouchableOpacity>
               <View style={{ flex: 1, alignItems: 'center' }}>
-                <ThemedText type='subtitle' style={styles.title}>Create New Staff</ThemedText>
-                <ThemedText style={styles.subtitle}>Fill the staff details below</ThemedText>
+                <ThemedText type='subtitle' style={styles.title}>Create New Employee</ThemedText>
+                <ThemedText style={styles.subtitle}>Fill the employee details below</ThemedText>
               </View>
               <View style={{ width: 44 }} />
             </View>
@@ -907,7 +883,7 @@ export default function CreateStaff({ visible, onClose }) {
                   keyboardType="email-address"
                   autoCapitalize="none"
                   editable={!loading}
-                  maxLength={100}
+                  maxLength={50}
                 />
               </View>
 
@@ -918,19 +894,6 @@ export default function CreateStaff({ visible, onClose }) {
                   placeholder="Enter 10-digit phone number"
                   value={formData.phone}
                   onChangeText={onPhoneChange}
-                  keyboardType="phone-pad"
-                  editable={!loading}
-                  maxLength={10}
-                />
-              </View>
-
-              <ThemedText style={styles.fieldLabel}>Alternate Phone Number</ThemedText>
-              <View style={styles.inputContainer}>
-                <Feather name="phone" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter alternate phone number"
-                  value={formData.alternatePhone}
-                  onChangeText={onAlternatePhoneChange}
                   keyboardType="phone-pad"
                   editable={!loading}
                   maxLength={10}
@@ -962,44 +925,18 @@ export default function CreateStaff({ visible, onClose }) {
                   numberOfLines={3}
                   style={styles.multilineInput}
                   editable={!loading}
-                  maxLength={500}
                 />
               </View>
 
-              <ThemedText style={styles.fieldLabel}>City *</ThemedText>
+              <ThemedText style={styles.fieldLabel}>Village</ThemedText>
               <View style={styles.inputContainer}>
                 <MaterialIcons name="location-city" size={20} style={styles.inputIcon} />
                 <CustomInput
-                  placeholder="Enter city"
-                  value={formData.city}
-                  onChangeText={onCityChange}
+                  placeholder="Enter village/town"
+                  value={formData.village}
+                  onChangeText={onVillageChange}
                   editable={!loading}
                   maxLength={50}
-                />
-              </View>
-
-              <ThemedText style={styles.fieldLabel}>State *</ThemedText>
-              <View style={styles.inputContainer}>
-                <MaterialIcons name="map" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter state"
-                  value={formData.state}
-                  onChangeText={onStateChange}
-                  editable={!loading}
-                  maxLength={50}
-                />
-              </View>
-
-              <ThemedText style={styles.fieldLabel}>Pincode *</ThemedText>
-              <View style={styles.inputContainer}>
-                <Entypo name="pin" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter 6-digit pincode"
-                  value={formData.pincode}
-                  onChangeText={onPincodeChange}
-                  keyboardType="number-pad"
-                  editable={!loading}
-                  maxLength={6}
                 />
               </View>
             </View>
@@ -1013,41 +950,14 @@ export default function CreateStaff({ visible, onClose }) {
                 </View>
               </View>
 
-              <ThemedText style={styles.fieldLabel}>Employee ID *</ThemedText>
-              <View style={styles.inputContainer}>
-                <AntDesign name="idcard" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter employee ID"
-                  value={formData.employeeId}
-                  onChangeText={onEmployeeIdChange}
-                  editable={!loading}
-                  maxLength={20}
-                />
-              </View>
-
               <ThemedText style={styles.fieldLabel}>Designation *</ThemedText>
-              <View style={styles.inputContainer}>
-                <MaterialIcons name="badge" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter designation"
-                  value={formData.designation}
-                  onChangeText={onDesignationChange}
-                  editable={!loading}
-                  maxLength={100}
-                />
-              </View>
-
-              <ThemedText style={styles.fieldLabel}>Department *</ThemedText>
-              <View style={styles.inputContainer}>
-                <MaterialIcons name="business" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter department"
-                  value={formData.department}
-                  onChangeText={onDepartmentChange}
-                  editable={!loading}
-                  maxLength={100}
-                />
-              </View>
+              <CustomDropdown
+                value={formData.designation}
+                items={designationOptions}
+                onSelect={onDesignationSelect}
+                placeholder="Select Designation"
+                disabled={loading}
+              />
 
               <ThemedText style={styles.fieldLabel}>Joining Date</ThemedText>
               <View style={styles.inputContainer}>
@@ -1073,7 +983,7 @@ export default function CreateStaff({ visible, onClose }) {
                 )}
               </View>
 
-              <ThemedText style={styles.fieldLabel}>Qualification *</ThemedText>
+              <ThemedText style={styles.fieldLabel}>Qualification</ThemedText>
               <View style={styles.inputContainer}>
                 <MaterialIcons name="school" size={20} style={styles.inputIcon} />
                 <CustomInput
@@ -1081,20 +991,7 @@ export default function CreateStaff({ visible, onClose }) {
                   value={formData.qualification}
                   onChangeText={onQualificationChange}
                   editable={!loading}
-                  maxLength={200}
-                />
-              </View>
-
-              <ThemedText style={styles.fieldLabel}>Experience (Years) *</ThemedText>
-              <View style={styles.inputContainer}>
-                <MaterialIcons name="timeline" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter years of experience"
-                  value={formData.experience}
-                  onChangeText={onExperienceChange}
-                  keyboardType="decimal-pad"
-                  editable={!loading}
-                  maxLength={3}
+                  maxLength={50}
                 />
               </View>
             </View>
@@ -1108,7 +1005,7 @@ export default function CreateStaff({ visible, onClose }) {
                 </View>
               </View>
 
-              <ThemedText style={styles.fieldLabel}>Aadhar Number *</ThemedText>
+              <ThemedText style={styles.fieldLabel}>Aadhar Number</ThemedText>
               <View style={styles.inputContainer}>
                 <MaterialIcons name="credit-card" size={20} style={styles.inputIcon} />
                 <CustomInput
@@ -1125,32 +1022,13 @@ export default function CreateStaff({ visible, onClose }) {
               <View style={styles.inputContainer}>
                 <MaterialIcons name="assignment" size={20} style={styles.inputIcon} />
                 <CustomInput
-                  placeholder="Enter PAN number (e.g., ABCDE1234F)"
+                  placeholder="Enter 10-digit PAN number"
                   value={formData.panNumber}
                   onChangeText={onPanNumberChange}
                   editable={!loading}
                   maxLength={10}
                 />
               </View>
-            </View>
-
-            {/* STATUS */}
-            <View style={styles.formGroup}>
-              <View style={styles.groupTitleContainer}>
-                <View style={styles.groupTitleChip}>
-                  <MaterialIcons name="settings" size={22} color={colors.primary} />
-                  <ThemedText type='subtitle' style={styles.groupTitleText}>Status</ThemedText>
-                </View>
-              </View>
-
-              <ThemedText style={styles.fieldLabel}>Employment Status</ThemedText>
-              <CustomDropdown
-                value={formData.status}
-                items={statusOptions}
-                onSelect={onStatusSelect}
-                placeholder="Select Status"
-                disabled={loading}
-              />
             </View>
           </View>
         </ScrollView>
@@ -1176,7 +1054,7 @@ export default function CreateStaff({ visible, onClose }) {
                   <FontAwesome5 name="check-circle" size={18} color="#FFFFFF" />
                 )}
                 <ThemedText style={styles.saveBtnText}>
-                  {loading ? 'Saving...' : 'Save Staff'}
+                  {loading ? 'Saving...' : 'Save Employee'}
                 </ThemedText>
               </TouchableOpacity>
             </LinearGradient>

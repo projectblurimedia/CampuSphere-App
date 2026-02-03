@@ -22,8 +22,12 @@ export const unstable_settings = {
 
 const APP_THEME_COLOR = '#1d9bf0'
 
+// Login Component
+import LoginScreen from '@/pages/login/LoginScreen'
+
 function AppContent() {
   const [fontsLoaded, setFontsLoaded] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const { colors } = useTheme()
 
   useEffect(() => {
@@ -43,9 +47,15 @@ function AppContent() {
 
   if (!fontsLoaded) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8f9fa' }}>
         <ActivityIndicator size="large" color={APP_THEME_COLOR} />
       </View>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <LoginScreen onLoginSuccess={() => setIsAuthenticated(true)} />
     )
   }
 

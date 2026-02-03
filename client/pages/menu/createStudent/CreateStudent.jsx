@@ -269,7 +269,7 @@ export default function CreateStudent({ visible, onClose }) {
     firstName: '',
     lastName: '',
     dob: new Date(),
-    academicYear: '',
+    gender: 'NOT_SPECIFIED',
     class: '1',
     section: 'A',
     admissionNo: '',
@@ -280,29 +280,41 @@ export default function CreateStudent({ visible, onClose }) {
     parentPhone: '',
     parentPhone2: '',
     parentEmail: '',
+    studentType: 'DAY_SCHOLAR',
+    isUsingSchoolTransport: false,
+    isUsingSchoolHostel: false,
+    schoolFeeDiscount: 0,
+    transportFeeDiscount: 0,
+    hostelFeeDiscount: 0,
   })
 
   const [selectedClass, setSelectedClass] = useState('1')
   const [selectedSection, setSelectedSection] = useState('A')
+  const [selectedGender, setSelectedGender] = useState('NOT_SPECIFIED')
+  const [selectedStudentType, setSelectedStudentType] = useState('DAY_SCHOLAR')
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [profilePic, setProfilePic] = useState(null)
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState(null)
 
-  const currentYear = new Date().getFullYear()
-  const academicYears = useMemo(() => 
-    Array.from({ length: 10 }, (_, i) => {
-      const start = currentYear - 2 + i
-      return { label: `${start}-${start + 1}`, value: `${start}-${start + 1}` }
-    }), [currentYear]
-  )
-
-  const classes = useMemo(() => 
-    Array.from({ length: 12 }, (_, i) => ({
-      label: `Class ${i + 1}`,
-      value: `${i + 1}`
-    })), []
-  )
+  const classes = useMemo(() => [
+    { label: 'Pre-Nursery', value: 'Pre-Nursery' },
+    { label: 'Nursery', value: 'Nursery' },
+    { label: 'LKG', value: 'LKG' },
+    { label: 'UKG', value: 'UKG' },
+    { label: 'Class 1', value: '1' },
+    { label: 'Class 2', value: '2' },
+    { label: 'Class 3', value: '3' },
+    { label: 'Class 4', value: '4' },
+    { label: 'Class 5', value: '5' },
+    { label: 'Class 6', value: '6' },
+    { label: 'Class 7', value: '7' },
+    { label: 'Class 8', value: '8' },
+    { label: 'Class 9', value: '9' },
+    { label: 'Class 10', value: '10' },
+    { label: 'Class 11', value: '11' },
+    { label: 'Class 12', value: '12' },
+  ], [])
 
   const sections = useMemo(() => 
     ['A', 'B', 'C', 'D', 'E'].map(sec => ({
@@ -310,6 +322,22 @@ export default function CreateStudent({ visible, onClose }) {
       value: sec
     })), []
   )
+
+  const genders = useMemo(() => [
+    { label: 'Male', value: 'MALE' },
+    { label: 'Female', value: 'FEMALE' },
+    { label: 'Not Specified', value: 'NOT_SPECIFIED' },
+  ], [])
+
+  const studentTypes = useMemo(() => [
+    { label: 'Day Scholar', value: 'DAY_SCHOLAR' },
+    { label: 'Hosteller', value: 'HOSTELLER' },
+  ], [])
+
+  const yesNoOptions = useMemo(() => [
+    { label: 'Yes', value: true },
+    { label: 'No', value: false },
+  ], [])
 
   const updateFormData = useCallback((updates) => {
     setFormData(prev => ({ ...prev, ...updates }))
@@ -345,7 +373,7 @@ export default function CreateStudent({ visible, onClose }) {
   }, [showToast])
 
   const handleSave = useCallback(async () => {
-    if (!formData.firstName || !formData.lastName || !formData.admissionNo || !formData.parentPhone || !formData.academicYear) {
+    if (!formData.firstName || !formData.lastName || !formData.admissionNo || !formData.parentPhone) {
       showToast('Please fill all required fields', 'error')
       return
     }
@@ -356,7 +384,7 @@ export default function CreateStudent({ visible, onClose }) {
       formDataToSend.append('firstName', formData.firstName)
       formDataToSend.append('lastName', formData.lastName)
       formDataToSend.append('dob', formData.dob.toISOString())
-      formDataToSend.append('academicYear', formData.academicYear)
+      formDataToSend.append('gender', formData.gender)
       formDataToSend.append('class', selectedClass)
       formDataToSend.append('section', selectedSection)
       formDataToSend.append('admissionNo', formData.admissionNo)
@@ -367,6 +395,12 @@ export default function CreateStudent({ visible, onClose }) {
       formDataToSend.append('parentPhone', formData.parentPhone)
       formDataToSend.append('parentPhone2', formData.parentPhone2)
       formDataToSend.append('parentEmail', formData.parentEmail)
+      formDataToSend.append('studentType', formData.studentType)
+      formDataToSend.append('isUsingSchoolTransport', formData.isUsingSchoolTransport)
+      formDataToSend.append('isUsingSchoolHostel', formData.isUsingSchoolHostel)
+      formDataToSend.append('schoolFeeDiscount', formData.schoolFeeDiscount)
+      formDataToSend.append('transportFeeDiscount', formData.transportFeeDiscount)
+      formDataToSend.append('hostelFeeDiscount', formData.hostelFeeDiscount)
 
       if (profilePic) {
         const uriParts = profilePic.split('.')
@@ -412,7 +446,7 @@ export default function CreateStudent({ visible, onClose }) {
       firstName: '',
       lastName: '',
       dob: new Date(),
-      academicYear: '',
+      gender: 'NOT_SPECIFIED',
       class: '1',
       section: 'A',
       admissionNo: '',
@@ -423,9 +457,17 @@ export default function CreateStudent({ visible, onClose }) {
       parentPhone: '',
       parentPhone2: '',
       parentEmail: '',
+      studentType: 'DAY_SCHOLAR',
+      isUsingSchoolTransport: false,
+      isUsingSchoolHostel: false,
+      schoolFeeDiscount: 0,
+      transportFeeDiscount: 0,
+      hostelFeeDiscount: 0,
     })
     setSelectedClass('1')
     setSelectedSection('A')
+    setSelectedGender('NOT_SPECIFIED')
+    setSelectedStudentType('DAY_SCHOLAR')
     setProfilePic(null)
   }, [])
 
@@ -446,8 +488,14 @@ export default function CreateStudent({ visible, onClose }) {
     updateFormData({ section: value })
   }, [updateFormData])
 
-  const onAcademicYearSelect = useCallback((value) => {
-    updateFormData({ academicYear: value })
+  const onGenderSelect = useCallback((value) => {
+    setSelectedGender(value)
+    updateFormData({ gender: value })
+  }, [updateFormData])
+
+  const onStudentTypeSelect = useCallback((value) => {
+    setSelectedStudentType(value)
+    updateFormData({ studentType: value })
   }, [updateFormData])
 
   const onFirstNameChange = useCallback((text) => updateFormData({ firstName: text }), [updateFormData])
@@ -460,6 +508,11 @@ export default function CreateStudent({ visible, onClose }) {
   const onParentPhoneChange = useCallback((text) => updateFormData({ parentPhone: text }), [updateFormData])
   const onParentPhone2Change = useCallback((text) => updateFormData({ parentPhone2: text }), [updateFormData])
   const onParentEmailChange = useCallback((text) => updateFormData({ parentEmail: text }), [updateFormData])
+  const onSchoolFeeDiscountChange = useCallback((text) => updateFormData({ schoolFeeDiscount: parseInt(text) || 0 }), [updateFormData])
+  const onTransportFeeDiscountChange = useCallback((text) => updateFormData({ transportFeeDiscount: parseInt(text) || 0 }), [updateFormData])
+  const onHostelFeeDiscountChange = useCallback((text) => updateFormData({ hostelFeeDiscount: parseInt(text) || 0 }), [updateFormData])
+  const onIsUsingSchoolTransportSelect = useCallback((value) => updateFormData({ isUsingSchoolTransport: value }), [updateFormData])
+  const onIsUsingSchoolHostelSelect = useCallback((value) => updateFormData({ isUsingSchoolHostel: value }), [updateFormData])
 
   const styles = useMemo(() => StyleSheet.create({
     container: {
@@ -783,6 +836,15 @@ export default function CreateStudent({ visible, onClose }) {
                   />
                 )}
               </View>
+
+              <ThemedText style={styles.fieldLabel}>Gender</ThemedText>
+              <CustomDropdown
+                value={formData.gender}
+                items={genders}
+                onSelect={onGenderSelect}
+                placeholder="Select Gender"
+                style={loading ? { opacity: 0.5 } : {}}
+              />
             </View>
 
             {/* ACADEMIC DETAILS */}
@@ -793,15 +855,6 @@ export default function CreateStudent({ visible, onClose }) {
                   <ThemedText type='subtitle' style={styles.groupTitleText}>Academic Details</ThemedText>
                 </View>
               </View>
-
-              <ThemedText style={styles.fieldLabel}>Academic Year</ThemedText>
-              <CustomDropdown
-                value={formData.academicYear}
-                items={academicYears}
-                onSelect={onAcademicYearSelect}
-                placeholder="Select Academic Year"
-                style={loading ? { opacity: 0.5 } : {}}
-              />
 
               <ThemedText style={styles.fieldLabel}>Class</ThemedText>
               <CustomDropdown
@@ -818,6 +871,15 @@ export default function CreateStudent({ visible, onClose }) {
                 items={sections}
                 onSelect={onSectionSelect}
                 placeholder="Select Section"
+                style={loading ? { opacity: 0.5 } : {}}
+              />
+
+              <ThemedText style={styles.fieldLabel}>Student Type</ThemedText>
+              <CustomDropdown
+                value={formData.studentType}
+                items={studentTypes}
+                onSelect={onStudentTypeSelect}
+                placeholder="Select Student Type"
                 style={loading ? { opacity: 0.5 } : {}}
               />
 
@@ -942,6 +1004,80 @@ export default function CreateStudent({ visible, onClose }) {
                   onChangeText={onParentEmailChange}
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  editable={!loading}
+                />
+              </View>
+            </View>
+
+            {/* SERVICES DETAILS */}
+            <View style={styles.formGroup}>
+              <View style={styles.groupTitleContainer}>
+                <View style={styles.groupTitleChip}>
+                  <MaterialIcons name="bus-alert" size={22} color={colors.primary} />
+                  <ThemedText type='subtitle' style={styles.groupTitleText}>Services</ThemedText>
+                </View>
+              </View>
+
+              <ThemedText style={styles.fieldLabel}>Using School Transport?</ThemedText>
+              <CustomDropdown
+                value={formData.isUsingSchoolTransport}
+                items={yesNoOptions}
+                onSelect={onIsUsingSchoolTransportSelect}
+                placeholder="Select Yes/No"
+                style={loading ? { opacity: 0.5 } : {}}
+              />
+
+              <ThemedText style={styles.fieldLabel}>Using School Hostel?</ThemedText>
+              <CustomDropdown
+                value={formData.isUsingSchoolHostel}
+                items={yesNoOptions}
+                onSelect={onIsUsingSchoolHostelSelect}
+                placeholder="Select Yes/No"
+                style={loading ? { opacity: 0.5 } : {}}
+              />
+            </View>
+
+            {/* DISCOUNTS DETAILS */}
+            <View style={styles.formGroup}>
+              <View style={styles.groupTitleContainer}>
+                <View style={styles.groupTitleChip}>
+                  <MaterialIcons name="discount" size={22} color={colors.primary} />
+                  <ThemedText type='subtitle' style={styles.groupTitleText}>Fee Discounts</ThemedText>
+                </View>
+              </View>
+
+              <ThemedText style={styles.fieldLabel}>School Fee Discount</ThemedText>
+              <View style={styles.inputContainer}>
+                <Feather name="percent" size={20} style={styles.inputIcon} />
+                <CustomInput
+                  placeholder="Enter school fee discount"
+                  value={formData.schoolFeeDiscount.toString()}
+                  onChangeText={onSchoolFeeDiscountChange}
+                  keyboardType="numeric"
+                  editable={!loading}
+                />
+              </View>
+
+              <ThemedText style={styles.fieldLabel}>Transport Fee Discount</ThemedText>
+              <View style={styles.inputContainer}>
+                <Feather name="percent" size={20} style={styles.inputIcon} />
+                <CustomInput
+                  placeholder="Enter transport fee discount"
+                  value={formData.transportFeeDiscount.toString()}
+                  onChangeText={onTransportFeeDiscountChange}
+                  keyboardType="numeric"
+                  editable={!loading}
+                />
+              </View>
+
+              <ThemedText style={styles.fieldLabel}>Hostel Fee Discount</ThemedText>
+              <View style={styles.inputContainer}>
+                <Feather name="percent" size={20} style={styles.inputIcon} />
+                <CustomInput
+                  placeholder="Enter hostel fee discount"
+                  value={formData.hostelFeeDiscount.toString()}
+                  onChangeText={onHostelFeeDiscountChange}
+                  keyboardType="numeric"
                   editable={!loading}
                 />
               </View>

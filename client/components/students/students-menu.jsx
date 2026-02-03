@@ -1,173 +1,361 @@
-import React from 'react'
-import { View, StyleSheet, TouchableOpacity, Modal } from 'react-native'
+import React, { useEffect, useRef, useState } from 'react'
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  Platform,
+  Modal,
+  Animated,
+  Dimensions,
+  ScrollView,
+} from 'react-native'
+import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
+
 export default function StudentsMenu({ visible, onClose }) {
-  const { colors } = useTheme()
+  const { theme, colors } = useTheme()
+  const translateX = useRef(new Animated.Value(SCREEN_WIDTH)).current
+  const backdropOpacity = useRef(new Animated.Value(0)).current
+  
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.spring(translateX, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 60,
+          friction: 12,
+        }),
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start()
+    } else {
+      Animated.parallel([
+        Animated.spring(translateX, {
+          toValue: SCREEN_WIDTH,
+          useNativeDriver: true,
+          tension: 60,
+          friction: 12,
+        }),
+        Animated.timing(backdropOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start()
+    }
+  }, [visible])
 
   const menuItems = [
-    { icon: 'person-add', title: 'Add New Student', color: '#10b981' },
-    { icon: 'list', title: 'Student List', color: '#3b82f6' },
-    { icon: 'checkmark-circle', title: 'Attendance', color: '#f59e0b' },
-    { icon: 'bar-chart', title: 'Stats', color: '#8b5cf6' },
-    { icon: 'card', title: 'Fees Management', color: '#ef4444' },
-    { icon: 'document-text', title: 'Marks Report', color: '#84cc16' },
+    { 
+      id: 1, 
+      title: 'Add New Student', 
+      icon: 'person-add', 
+      iconType: 'Ionicons', 
+      gradient: ['#10b981', '#059669'], 
+      action: () => console.log('Add New Student selected') 
+    },
+    { 
+      id: 2, 
+      title: 'Student List', 
+      icon: 'list', 
+      iconType: 'Ionicons', 
+      gradient: ['#3b82f6', '#2563eb'], 
+      action: () => console.log('Student List selected')
+    },
+    { 
+      id: 3, 
+      title: 'Attendance', 
+      icon: 'checkmark-circle', 
+      iconType: 'Ionicons', 
+      gradient: ['#f59e0b', '#d97706'], 
+      action: () => console.log('Attendance selected') 
+    },
+    { 
+      id: 4, 
+      title: 'Stats', 
+      icon: 'bar-chart', 
+      iconType: 'Ionicons', 
+      gradient: ['#8b5cf6', '#7c3aed'], 
+      action: () => console.log('Stats selected') 
+    },
+    { 
+      id: 5,
+      title: 'Fees Management', 
+      icon: 'card', 
+      iconType: 'Ionicons', 
+      gradient: ['#ef4444', '#dc2626'], 
+      action: () => console.log('Fees Management selected') 
+    },
+    { 
+      id: 6, 
+      title: 'Marks Report', 
+      icon: 'document-text', 
+      iconType: 'Ionicons', 
+      gradient: ['#84cc16', '#65a30d'], 
+      action: () => console.log('Marks Report selected') 
+    },
   ]
+
+  const sections = [
+    {
+      title: 'Student Management',
+      data: menuItems.filter(item => [1,2,3].includes(item.id)),
+    },
+    {
+      title: 'Reports & Analytics',
+      data: menuItems.filter(item => [4,5,6].includes(item.id)),
+    },
+  ]
+
+  const getIcon = (type, name, size, color) => {
+    const icons = {
+      Ionicons: Ionicons,
+    }
+    const Icon = icons[type] || Ionicons
+    return <Icon name={name} size={size} color={color} />
+  }
+
+  const handleMenuItemPress = (item) => {
+    item.action()
+  }
 
   return (
     <Modal
-      animationType="fade"
-      transparent={true}
-      statusBarTranslucent
       visible={visible}
+      transparent
+      animationType="none"
       onRequestClose={onClose}
+      statusBarTranslucent
     >
       <View style={styles.modalContainer}>
-        <View style={[styles.menuContainer, { backgroundColor: colors.cardBackground }]}>
-          <View style={[styles.menuHeader, { borderBottomColor: colors.border }]}>
-            <View style={styles.headerIconContainer}>
-              <Ionicons name="school-outline" size={28} color={colors.primary} />
-            </View>
-            <ThemedText type="subtitle" style={[styles.menuTitle, { color: colors.text }]}>
-              Students Menu
-            </ThemedText>
-            <TouchableOpacity 
-              activeOpacity={0.8} 
-              onPress={onClose} 
-              style={[styles.closeButton, { backgroundColor: colors.danger + 10 }]}
-            >
-              <Ionicons name="close" size={24} color={colors.danger} />
-            </TouchableOpacity>
-          </View>
+        <TouchableOpacity 
+          style={styles.backdropTouchable} 
+          activeOpacity={1} 
+          onPress={onClose}
+        >
+          <Animated.View
+            style={[
+              styles.backdrop,
+              {
+                opacity: backdropOpacity,
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              },
+            ]}
+          />
+        </TouchableOpacity>
 
-          <View style={styles.menuItems}>
-            {menuItems.map((item, index) => (
-              <TouchableOpacity 
-                key={index} 
-                style={[
-                  styles.menuItem, 
-                  { 
-                    borderBottomColor: colors.border,
-                    backgroundColor: index % 2 === 0 ? colors.surface : 'transparent'
-                  }
-                ]}
-                activeOpacity={0.7}
-                onPress={() => {
-                  console.log(`Selected: ${item.title}`)
-                  onClose()
-                }}
+        <Animated.View
+          style={[
+            styles.menuContainer,
+            {
+              backgroundColor: colors.cardBackground,
+              transform: [{ translateX: translateX }],
+            },
+          ]}
+        >
+          <LinearGradient
+            colors={[colors.gradientStart, colors.gradientEnd]}
+            style={styles.header}
+          >
+            <View style={styles.headerRow}>
+              <View style={styles.headerLeft}>
+                <Ionicons name="school" size={28} color="#FFFFFF" />
+                <View style={styles.headerText}>
+                  <ThemedText type='subtitle' style={styles.schoolName}>
+                    Bluri High School
+                  </ThemedText>
+                  <ThemedText style={styles.menuTitle}>
+                    Students Menu
+                  </ThemedText>
+                </View>
+              </View>
+              
+              <TouchableOpacity
+                style={styles.closeBtn}
+                onPress={onClose}
               >
-                <View style={[styles.menuIcon, { backgroundColor: `${item.color}15` }]}>
-                  <Ionicons name={item.icon} size={22} color={item.color} />
-                </View>
-                <View style={styles.menuItemContent}>
-                  <ThemedText type="subtitle" style={[styles.menuItemText, { color: colors.text }]}>
-                    {item.title}
-                  </ThemedText>
-                  <ThemedText style={styles.menuItemSubtitle}>
-                    Manage student details
-                  </ThemedText>
-                </View>
-                <View style={styles.menuItemArrow}>
-                  <Ionicons 
-                    name="chevron-forward-outline" 
-                    size={20} 
-                    color={colors.textSecondary} 
-                  />
-                </View>
+                <Ionicons name="close" size={24} color="#FFFFFF" />
               </TouchableOpacity>
+            </View>
+          </LinearGradient>
+
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+          >
+            {sections.map((section) => (
+              <View key={section.title} style={styles.section}>
+                <ThemedText type='subtitle' style={[styles.sectionTitle, { color: colors.text }]}>
+                  {section.title}
+                </ThemedText>
+                <View style={styles.items}>
+                  {section.data.map((item) => (
+                    <TouchableOpacity
+                      activeOpacity={.9} 
+                      key={item.id}
+                      style={[styles.item, { backgroundColor: colors.cardBackground }]}
+                      onPress={() => handleMenuItemPress(item)}
+                    >
+                      <View style={styles.itemContent}>
+                        <LinearGradient colors={item.gradient} style={styles.icon}>
+                          {getIcon(item.iconType, item.icon, 18, '#FFFFFF')}
+                        </LinearGradient>
+                        <View style={styles.itemText}>
+                          <ThemedText type='subtitle' style={[styles.itemTitle, { color: colors.text }]}>
+                            {item.title}
+                          </ThemedText>
+                          <ThemedText style={[styles.itemValue, { color: colors.textSecondary }]}>
+                            View details
+                          </ThemedText>
+                        </View>
+                        <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
             ))}
-          </View>
-        </View>
+
+            <View style={styles.footer}>
+              <ThemedText style={[styles.footerText, { color: colors.textSecondary }]}>
+                Bluri High School App v2.4.1
+              </ThemedText>
+              <ThemedText style={[styles.footerCopyright, { color: colors.textSecondary }]}>
+                © 2024 All rights reserved
+              </ThemedText>
+            </View>
+          </ScrollView>
+        </Animated.View>
       </View>
     </Modal>
   )
 }
 
 const styles = StyleSheet.create({
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-  },
+  modalContainer: { flex: 1 },
+  backdropTouchable: StyleSheet.absoluteFillObject,
+  backdrop: StyleSheet.absoluteFillObject,
   menuContainer: {
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    paddingTop: 5,
-    paddingBottom: 20,
-    maxHeight: '85%',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: -4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: SCREEN_WIDTH * 0.85,
+    height: SCREEN_HEIGHT,
+    borderTopLeftRadius: 10,
+    borderBottomLeftRadius: 10,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: { 
+        shadowColor: '#000', 
+        shadowOffset: { width: -4, height: 0 }, 
+        shadowOpacity: 0.2, 
+        shadowRadius: 20 
+      },
+      android: { elevation: 20 },
+    }),
   },
-  menuHeader: {
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 70 : 50,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    marginBottom: 8,
+    alignItems: 'flex-start',
   },
-  headerIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 10,
+  },
+  headerText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  schoolName: {
+    fontSize: 20,
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  menuTitle: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.9)',
+  },
+  closeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scroll: { flex: 1 },
+  scrollContent: { paddingBottom: 30 },
+  section: { marginTop: 15 },
+  sectionTitle: {
+    fontSize: 16,
+    marginLeft: 20,
+    marginBottom: 6,
+  },
+  items: { paddingHorizontal: 15 },
+  item: {
+    borderRadius: 12,
+    marginBottom: 8,
+    ...Platform.select({
+      ios: { 
+        shadowColor: '#000', 
+        shadowOffset: { width: 0, height: 1 }, 
+        shadowOpacity: 0.05, 
+        shadowRadius: 4 
+      },
+      android: { elevation: 1 },
+    }),
+  },
+  itemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+  },
+  icon: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  menuTitle: {
-    fontSize: 22,
+  itemText: {
     flex: 1,
+    marginRight: 8,
   },
-  closeButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  menuItems: {
-    paddingHorizontal: 15,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 6,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderBottomWidth: 1,
-  },
-  menuIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  menuItemContent: {
-    flex: 1,
-  },
-  menuItemText: {
-    fontSize: 17,
-  },
-  menuItemSubtitle: {
+  itemTitle: {
     fontSize: 14,
+    marginBottom: -5,
+  },
+  itemValue: {
+    fontSize: 12,
     opacity: 0.7,
   },
-  menuItemArrow: {
-    paddingLeft: 8,
-    opacity: 0.6,
+  footer: {
+    alignItems: 'center',
+    paddingTop: 15,
+  },
+  footerText: {
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  footerCopyright: {
+    fontSize: 11,
+    opacity: 0.5,
   },
 })

@@ -19,9 +19,7 @@ import { ToastNotification } from '@/components/ui/ToastNotification'
 import axiosApi from '@/utils/axiosApi'
 import * as DocumentPicker from 'expo-document-picker'
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window')
-
-export default function BulkImportStaff({ visible, onClose }) {
+export default function BulkImportEmployees({ visible, onClose }) {
   const { colors } = useTheme()
   
   const [excelFile, setExcelFile] = useState(null)
@@ -78,7 +76,7 @@ export default function BulkImportStaff({ visible, onClose }) {
   const downloadTemplate = useCallback(async () => {
     try {
       setLoading(true)
-      const response = await axiosApi.get('/staff/download-template', {
+      const response = await axiosApi.get('/employees/download-template', {
         responseType: 'blob'
       })
       
@@ -91,7 +89,7 @@ export default function BulkImportStaff({ visible, onClose }) {
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = 'staff_bulk_import_template.xlsx'
+      link.download = 'employees_bulk_import_template.xlsx'
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -128,7 +126,7 @@ export default function BulkImportStaff({ visible, onClose }) {
       const formData = new FormData();
       
       // Get the filename without path
-      const fileName = excelFile.name || `staff_${Date.now()}.xlsx`;
+      const fileName = excelFile.name || `employees_${Date.now()}.xlsx`;
       
       // Append the file - CORRECT WAY
       formData.append('excelFile', {
@@ -139,7 +137,7 @@ export default function BulkImportStaff({ visible, onClose }) {
 
       console.log('Uploading file:', fileName, fileUri); 
 
-      const response = await axiosApi.post('/staff/bulk-import', formData, {
+      const response = await axiosApi.post('/employees/bulk-import', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -153,12 +151,12 @@ export default function BulkImportStaff({ visible, onClose }) {
 
       if (response.data.success) {
         setImportResult(response.data.summary)
-        showToast(`Successfully imported ${response.data.summary.success} staff members`, 'success')
+        showToast(`Successfully imported ${response.data.summary.success} employee members`, 'success')
         
         if (response.data.summary.failed > 0) {
           Alert.alert(
             'Import Completed with Errors',
-            `${response.data.summary.success} staff members imported successfully, ${response.data.summary.failed} failed. Check the error details below.`,
+            `${response.data.summary.success} employee members imported successfully, ${response.data.summary.failed} failed. Check the error details below.`,
             [{ text: 'OK' }]
           )
         }
@@ -167,7 +165,7 @@ export default function BulkImportStaff({ visible, onClose }) {
       console.error('Import error details:', error);
       console.error('Error response:', error.response?.data);
       
-      let errorMessage = 'Failed to import staff';
+      let errorMessage = 'Failed to import employees';
       
       if (error.response) {
         errorMessage = error.response.data?.message || 
@@ -181,7 +179,7 @@ export default function BulkImportStaff({ visible, onClose }) {
       } else if (error.request) {
         errorMessage = 'No response from server. Check your internet connection.';
       } else {
-        errorMessage = error.message || 'Failed to import staff';
+        errorMessage = error.message || 'Failed to import employees';
       }
       
       showToast(errorMessage, 'error');
@@ -495,8 +493,8 @@ export default function BulkImportStaff({ visible, onClose }) {
                 <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
               </TouchableOpacity>
               <View style={{ flex: 1, alignItems: 'center' }}>
-                <ThemedText type='subtitle' style={styles.title}>Bulk Import Staff</ThemedText>
-                <ThemedText style={styles.subtitle}>Upload Excel file with staff data</ThemedText>
+                <ThemedText type='subtitle' style={styles.title}>Bulk Import employees</ThemedText>
+                <ThemedText style={styles.subtitle}>Upload Excel file with employees data</ThemedText>
               </View>
               <View style={{ width: 44 }} />
             </View>
@@ -517,7 +515,7 @@ export default function BulkImportStaff({ visible, onClose }) {
                 <ThemedText type='subtitle' style={styles.stepTitle}>Download Excel Template</ThemedText>
               </View>
               <ThemedText style={styles.stepDescription}>
-                Download our Excel template to ensure correct formatting. Fill in staff data following the provided format.
+                Download our Excel template to ensure correct formatting. Fill in employees data following the provided format.
               </ThemedText>
               <TouchableOpacity 
                 style={[styles.filePickerButton, { marginTop: 8 }]}
@@ -539,7 +537,7 @@ export default function BulkImportStaff({ visible, onClose }) {
                 <ThemedText type='subtitle' style={styles.stepTitle}>Prepare Your Excel File</ThemedText>
               </View>
               <ThemedText style={styles.stepDescription}>
-                Fill the Excel template with staff data. Required columns: firstName, lastName, gender, dob, email, phone, address, city, state, pincode, employeeId, designation, department, qualification, experience, aadharNumber
+                Fill the Excel template with employees data. Required columns: firstName, lastName, gender, dob, email, phone, address, city, state, pincode, employeeId, designation, department, qualification, experience, aadharNumber
               </ThemedText>
               <ThemedText style={styles.excelFormatInfo}>
                 Format: Excel (.xlsx or .xls), max 10MB file size. First row should contain headers.
@@ -554,7 +552,7 @@ export default function BulkImportStaff({ visible, onClose }) {
                 <ThemedText type='subtitle' style={styles.stepTitle}>Select Excel File</ThemedText>
               </View>
               <ThemedText style={styles.stepDescription}>
-                Choose the Excel file you've prepared with staff data. File must be less than 10MB.
+                Choose the Excel file you've prepared with employees data. File must be less than 10MB.
               </ThemedText>
               
               <TouchableOpacity 

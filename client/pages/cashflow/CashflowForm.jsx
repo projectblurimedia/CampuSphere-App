@@ -1191,7 +1191,7 @@ const CashflowForm = ({
         >
           <View style={styles.headerRow}>
             <TouchableOpacity style={styles.backButton} onPress={handleClose}>
-              <Ionicons name="arrow-back" size={20} color="#FFFFFF" />
+              <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
             </TouchableOpacity>
             <View style={styles.titleContainer}>
               <ThemedText type='subtitle' style={styles.title}>{title}</ThemedText>

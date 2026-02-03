@@ -311,9 +311,9 @@ model Employee {
   firstName       String   @db.VarChar(50)
   lastName        String   @db.VarChar(50)
   gender          Gender
-  dob             DateTime
   email           String   @unique @db.VarChar(50)
   phone           String   @unique @db.VarChar(10)
+  dob             DateTime
   address         String   @db.Text
   village         String   @db.VarChar(50)  
   designation     Designation

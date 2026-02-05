@@ -5,56 +5,53 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   ActivityIndicator,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { FontAwesome5, Feather, MaterialIcons } from '@expo/vector-icons'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useTheme } from '@/hooks/useTheme'
+import { useDispatch, useSelector } from 'react-redux'
+import { loginEmployee, clearError, resetLoginFlow } from '@/redux/employeeSlice'
 
-const PasswordStep = ({ user, onSuccess, onBack, onForgotPassword }) => {
+const PasswordStep = ({ onBack }) => {
   const { colors } = useTheme()
+  const dispatch = useDispatch()
+  
+  const { tempEmployee, isLoading, error } = useSelector((state) => state.employee)
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [loading, setLoading] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
+  const [localLoading, setLocalLoading] = useState(false)
 
-  const handlePasswordSubmit = async () => {
+  const handleBack = () => {
+    if (onBack) {
+      dispatch(clearError())
+      dispatch(resetLoginFlow())
+    }
+  }
+
+  const handleSubmit = async () => {
     if (!password.trim()) {
-      Alert.alert('Error', 'Please enter your password')
+      dispatch(clearError())
       return
     }
 
-    setLoading(true)
+    if (!tempEmployee?.employeeId) {
+      return
+    }
 
-    // Simulate API call delay
-    setTimeout(async () => {
-      if (user && user.password === password) {
-        if (rememberMe) {
-          await AsyncStorage.setItem('user_email', user.email)
-        }
-        
-        const userData = {
-          staffId: user.staffId,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          hasPassword: user.hasPassword
-        }
-        
-        await AsyncStorage.setItem('is_authenticated', 'true')
-        await AsyncStorage.setItem('user_data', JSON.stringify(userData))
-        
-        Alert.alert('Success', `Welcome ${user.name}!`, [
-          { text: 'Continue', onPress: () => onSuccess(userData) }
-        ])
-      } else {
-        Alert.alert('Error', 'Invalid password. Please try again.')
-      }
+    setLocalLoading(true)
+    
+    try {
+      await dispatch(loginEmployee({
+        employeeId: tempEmployee.employeeId,
+        password: password.trim()
+      })).unwrap() // unwrap() will throw if the promise is rejected
       
-      setLoading(false)
-    }, 1000)
+      // Success - Redux will handle the navigation
+    } catch (err) {
+      setLocalLoading(false)
+    }
   }
 
   const styles = StyleSheet.create({
@@ -79,7 +76,7 @@ const PasswordStep = ({ user, onSuccess, onBack, onForgotPassword }) => {
     },
     stepIndicator: {
       fontSize: 12,
-      fontFamily: 'Poppins-Medium',
+      fontFamily: 'Poppins-SemiBold',
       color: colors.textSecondary,
       textAlign: 'center',
       marginBottom: 5,
@@ -87,7 +84,7 @@ const PasswordStep = ({ user, onSuccess, onBack, onForgotPassword }) => {
     },
     subtitleText: {
       fontSize: 14,
-      fontFamily: 'Poppins-Regular',
+      fontFamily: 'Poppins-Medium',
       color: colors.textSecondary,
       textAlign: 'center',
       marginBottom: 30,
@@ -122,7 +119,7 @@ const PasswordStep = ({ user, onSuccess, onBack, onForgotPassword }) => {
     },
     userRole: {
       fontSize: 12,
-      fontFamily: 'Poppins-Regular',
+      fontFamily: 'Poppins-Medium',
       color: colors.textSecondary,
     },
     inputContainer: {
@@ -131,7 +128,7 @@ const PasswordStep = ({ user, onSuccess, onBack, onForgotPassword }) => {
       backgroundColor: colors.inputBackground,
       borderRadius: 12,
       paddingHorizontal: 16,
-      marginBottom: 16,
+      marginBottom: 8,
       borderWidth: 1,
       borderColor: colors.border,
       height: 56,
@@ -149,15 +146,18 @@ const PasswordStep = ({ user, onSuccess, onBack, onForgotPassword }) => {
     passwordToggle: {
       padding: 5,
     },
-    rememberForgotContainer: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 25,
+    errorText: {
+      color: colors.error || '#ef4444',
+      fontSize: 12,
+      fontFamily: 'Poppins-Medium',
+      marginBottom: 12,
+      textAlign: 'center',
     },
-    rememberMeContainer: {
+    rememberContainer: {
       flexDirection: 'row',
       alignItems: 'center',
+      marginBottom: 20,
+      alignSelf: 'flex-start',
     },
     checkbox: {
       width: 20,
@@ -173,15 +173,10 @@ const PasswordStep = ({ user, onSuccess, onBack, onForgotPassword }) => {
       backgroundColor: colors.primary,
       borderColor: colors.primary,
     },
-    rememberMeText: {
+    rememberText: {
       fontSize: 14,
       fontFamily: 'Poppins-Medium',
       color: colors.text,
-    },
-    forgotPasswordText: {
-      fontSize: 14,
-      fontFamily: 'Poppins-SemiBold',
-      color: colors.primary,
     },
     submitButton: {
       borderRadius: 12,
@@ -207,35 +202,45 @@ const PasswordStep = ({ user, onSuccess, onBack, onForgotPassword }) => {
     },
   })
 
+  if (!tempEmployee) {
+    return null
+  }
+
+  // Determine if button should be disabled
+  const isButtonDisabled = localLoading || !password.trim()
+  const showButtonLoading = localLoading
+
   return (
     <>
       {onBack && (
         <TouchableOpacity
           style={styles.backButton}
-          onPress={onBack}
-          disabled={loading}
+          onPress={handleBack}
+          disabled={localLoading}
         >
           <FontAwesome5 name="arrow-left" size={18} color={colors.primary} />
-          <Text style={styles.backButtonText}>Back to Staff ID</Text>
+          <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
       )}
 
       {/* User Info Card */}
-      {user && (
-        <View style={styles.userInfoCard}>
-          <View style={styles.userAvatar}>
-            <MaterialIcons name="person" size={24} color="#fff" />
-          </View>
-          <View style={styles.userInfoText}>
-            <Text style={styles.userName}>{user.name}</Text>
-            <Text style={styles.userRole}>{user.role} • {user.staffId}</Text>
-          </View>
+      <View style={styles.userInfoCard}>
+        <View style={styles.userAvatar}>
+          <MaterialIcons name="person" size={24} color="#fff" />
         </View>
-      )}
+        <View style={styles.userInfoText}>
+          <Text style={styles.userName}>
+            {tempEmployee.firstName} {tempEmployee.lastName}
+          </Text>
+          <Text style={styles.userRole}>
+            {tempEmployee.designation || 'Employee'} • {tempEmployee.phone || tempEmployee.email}
+          </Text>
+        </View>
+      </View>
 
       <Text style={styles.welcomeText}>Enter Password</Text>
       <Text style={styles.stepIndicator}>STEP 2 OF 2</Text>
-      <Text style={styles.subtitleText}>Enter your password to complete login</Text>
+      <Text style={styles.subtitleText}>Enter your password to continue</Text>
 
       {/* Password Input */}
       <View style={styles.inputContainer}>
@@ -245,16 +250,20 @@ const PasswordStep = ({ user, onSuccess, onBack, onForgotPassword }) => {
           placeholder="Password"
           placeholderTextColor={colors.textSecondary + '80'}
           value={password}
-          onChangeText={setPassword}
+          onChangeText={(text) => {
+            setPassword(text)
+            dispatch(clearError())
+          }}
           secureTextEntry={!showPassword}
-          editable={!loading}
+          editable={!localLoading}
           autoFocus={true}
-          onSubmitEditing={handlePasswordSubmit}
+          onSubmitEditing={handleSubmit}
+          returnKeyType="go"
         />
         <TouchableOpacity
           onPress={() => setShowPassword(!showPassword)}
           style={styles.passwordToggle}
-          disabled={loading}
+          disabled={localLoading}
         >
           <Feather
             name={showPassword ? 'eye-off' : 'eye'}
@@ -264,31 +273,30 @@ const PasswordStep = ({ user, onSuccess, onBack, onForgotPassword }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Remember Me & Forgot Password */}
-      <View style={styles.rememberForgotContainer}>
-        <TouchableOpacity
-          style={styles.rememberMeContainer}
-          onPress={() => setRememberMe(!rememberMe)}
-          disabled={loading}
-        >
-          <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-            {rememberMe && (
-              <Feather name="check" size={14} color="#fff" />
-            )}
-          </View>
-          <Text style={styles.rememberMeText}>Remember me</Text>
-        </TouchableOpacity>
+      {/* Error Message - Inline error */}
+      {error && (
+        <Text style={styles.errorText}>{error}</Text>
+      )}
 
-        <TouchableOpacity onPress={onForgotPassword} disabled={loading}>
-          <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Login Button */}
+      {/* Remember Me */}
       <TouchableOpacity
-        style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-        onPress={handlePasswordSubmit}
-        disabled={loading || !password.trim()}
+        style={styles.rememberContainer}
+        onPress={() => setRememberMe(!rememberMe)}
+        disabled={localLoading}
+      >
+        <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+          {rememberMe && (
+            <Feather name="check" size={14} color="#fff" />
+          )}
+        </View>
+        <Text style={styles.rememberText}>Remember me on this device</Text>
+      </TouchableOpacity>
+
+      {/* Submit Button */}
+      <TouchableOpacity
+        style={[styles.submitButton, isButtonDisabled && styles.submitButtonDisabled]}
+        onPress={handleSubmit}
+        disabled={isButtonDisabled}
         activeOpacity={0.9}
       >
         <LinearGradient
@@ -297,7 +305,7 @@ const PasswordStep = ({ user, onSuccess, onBack, onForgotPassword }) => {
           end={{ x: 1, y: 0 }}
           style={styles.submitGradient}
         >
-          {loading ? (
+          {showButtonLoading ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <>

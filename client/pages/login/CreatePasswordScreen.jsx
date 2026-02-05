@@ -5,29 +5,38 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   ActivityIndicator,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { FontAwesome5, Feather, MaterialIcons } from '@expo/vector-icons'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useTheme } from '@/hooks/useTheme'
-import { STAFF_DATABASE } from './data'
+import { useDispatch, useSelector } from 'react-redux'
+import { createEmployeePassword, clearError, resetLoginFlow } from '@/redux/employeeSlice'
 
-const CreatePasswordScreen = ({ user, onSuccess, onBack }) => {
+const CreatePasswordScreen = ({ onBack }) => {
   const { colors } = useTheme()
+  const dispatch = useDispatch()
+  
+  const { tempEmployee, isLoading, error } = useSelector((state) => state.employee)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
+  const [localLoading, setLocalLoading] = useState(false)
+
+  const handleBack = () => {
+    if (onBack) {
+      dispatch(clearError())
+      dispatch(resetLoginFlow())
+    }
+  }
 
   const validatePassword = (password) => {
     const minLength = 8
     const hasUpperCase = /[A-Z]/.test(password)
     const hasLowerCase = /[a-z]/.test(password)
     const hasNumbers = /\d/.test(password)
-    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password)
 
     if (password.length < minLength) {
       return 'Password must be at least 8 characters long'
@@ -41,62 +50,68 @@ const CreatePasswordScreen = ({ user, onSuccess, onBack }) => {
     if (!hasNumbers) {
       return 'Password must contain at least one number'
     }
-    if (!hasSpecialChar) {
-      return 'Password must contain at least one special character'
-    }
     return null
   }
 
-  const handleCreatePassword = async () => {
+  const handleSubmit = async () => {
+    // Clear previous errors
+    dispatch(clearError())
+    setPasswordError('')
+
     if (!newPassword.trim()) {
-      Alert.alert('Error', 'Please enter a new password')
+      setPasswordError('Please enter a new password')
       return
     }
 
     if (!confirmPassword.trim()) {
-      Alert.alert('Error', 'Please confirm your password')
+      setPasswordError('Please confirm your password')
       return
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match')
+      setPasswordError('Passwords do not match')
       return
     }
 
     const validationError = validatePassword(newPassword)
     if (validationError) {
-      Alert.alert('Password Requirements', validationError)
+      setPasswordError(validationError)
       return
     }
 
-    setLoading(true)
+    if (!tempEmployee?.employeeId) {
+      setPasswordError('Employee information not found')
+      return
+    }
 
-    // Simulate API call to update password
-    setTimeout(async () => {
-      // Update the user in our mock database
-      const updatedUser = {
-        ...user,
-        password: newPassword,
-        hasPassword: true
-      }
+    setLocalLoading(true)
+    
+    try {
+      await dispatch(createEmployeePassword({
+        employeeId: tempEmployee.employeeId,
+        password: newPassword.trim(),
+        confirmPassword: confirmPassword.trim()
+      })).unwrap()
       
-      const userData = {
-        staffId: updatedUser.staffId,
-        email: updatedUser.email,
-        name: updatedUser.name,
-        role: updatedUser.role,
-        hasPassword: updatedUser.hasPassword
-      }
-      
-      await AsyncStorage.setItem('user_data', JSON.stringify(userData))
-      await AsyncStorage.setItem('is_authenticated', 'true')
-      
-      Alert.alert('Success', 'Password created successfully!', [
-        { text: 'Continue', onPress: () => onSuccess(userData) }
-      ])
-      
-      setLoading(false)
-    }, 1500)
+      // Success - Redux will handle the navigation
+    } catch (err) {
+      setLocalLoading(false)
+    }
+  }
+
+  const checkRequirement = (password, requirement) => {
+    switch (requirement) {
+      case 'length':
+        return password.length >= 8
+      case 'uppercase':
+        return /[A-Z]/.test(password)
+      case 'lowercase':
+        return /[a-z]/.test(password)
+      case 'number':
+        return /\d/.test(password)
+      default:
+        return false
+    }
   }
 
   const styles = StyleSheet.create({
@@ -121,10 +136,10 @@ const CreatePasswordScreen = ({ user, onSuccess, onBack }) => {
     },
     subtitleText: {
       fontSize: 14,
-      fontFamily: 'Poppins-Regular',
+      fontFamily: 'Poppins-Medium',
       color: colors.textSecondary,
       textAlign: 'center',
-      marginBottom: 30,
+      marginBottom: 20,
     },
     userInfoCard: {
       backgroundColor: colors.primary + '10',
@@ -156,7 +171,27 @@ const CreatePasswordScreen = ({ user, onSuccess, onBack }) => {
     },
     userRole: {
       fontSize: 12,
-      fontFamily: 'Poppins-Regular',
+      fontFamily: 'Poppins-Medium',
+      color: colors.textSecondary,
+    },
+    passwordRequirements: {
+      backgroundColor: colors.background + '80',
+      borderRadius: 8,
+      padding: 12,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    requirementText: {
+      fontSize: 12,
+      fontFamily: 'Poppins-Medium',
+      color: colors.textSecondary,
+      marginBottom: 4,
+    },
+    requirementMet: {
+      color: colors.success || '#10b981',
+    },
+    requirementNotMet: {
       color: colors.textSecondary,
     },
     inputContainer: {
@@ -165,7 +200,7 @@ const CreatePasswordScreen = ({ user, onSuccess, onBack }) => {
       backgroundColor: colors.inputBackground,
       borderRadius: 12,
       paddingHorizontal: 16,
-      marginBottom: 16,
+      marginBottom: 12,
       borderWidth: 1,
       borderColor: colors.border,
       height: 56,
@@ -183,25 +218,12 @@ const CreatePasswordScreen = ({ user, onSuccess, onBack }) => {
     passwordToggle: {
       padding: 5,
     },
-    passwordRequirements: {
-      backgroundColor: colors.background + '80',
-      borderRadius: 8,
-      padding: 12,
-      marginBottom: 20,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    requirementText: {
+    errorText: {
+      color: colors.error || '#ef4444',
       fontSize: 12,
-      fontFamily: 'Poppins-Regular',
-      color: colors.textSecondary,
-      marginBottom: 4,
-    },
-    requirementMet: {
-      color: colors.success || '#10b981',
-    },
-    requirementNotMet: {
-      color: colors.textSecondary,
+      fontFamily: 'Poppins-Medium',
+      marginBottom: 12,
+      textAlign: 'center',
     },
     submitButton: {
       borderRadius: 12,
@@ -227,68 +249,70 @@ const CreatePasswordScreen = ({ user, onSuccess, onBack }) => {
     },
   })
 
-  const checkRequirement = (password, requirement) => {
-    switch (requirement) {
-      case 'length':
-        return password.length >= 8
-      case 'uppercase':
-        return /[A-Z]/.test(password)
-      case 'lowercase':
-        return /[a-z]/.test(password)
-      case 'number':
-        return /\d/.test(password)
-      case 'special':
-        return /[!@#$%^&*(),.?":{}|<>]/.test(password)
-      default:
-        return false
-    }
+  if (!tempEmployee) {
+    return null
   }
+
+  // Determine if button should be disabled
+  const isButtonDisabled = localLoading || !newPassword.trim() || !confirmPassword.trim()
+  const showButtonLoading = localLoading
 
   return (
     <>
       {onBack && (
         <TouchableOpacity
           style={styles.backButton}
-          onPress={onBack}
-          disabled={loading}
+          onPress={handleBack}
+          disabled={localLoading}
         >
           <FontAwesome5 name="arrow-left" size={18} color={colors.primary} />
-          <Text style={styles.backButtonText}>Back to Staff ID</Text>
+          <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
       )}
 
       {/* User Info Card */}
-      {user && (
-        <View style={styles.userInfoCard}>
-          <View style={styles.userAvatar}>
-            <MaterialIcons name="person" size={24} color="#fff" />
-          </View>
-          <View style={styles.userInfoText}>
-            <Text style={styles.userName}>{user.name}</Text>
-            <Text style={styles.userRole}>{user.role} • {user.staffId}</Text>
-          </View>
+      <View style={styles.userInfoCard}>
+        <View style={styles.userAvatar}>
+          <MaterialIcons name="person" size={24} color="#fff" />
         </View>
-      )}
+        <View style={styles.userInfoText}>
+          <Text style={styles.userName}>
+            {tempEmployee.firstName} {tempEmployee.lastName}
+          </Text>
+          <Text style={styles.userRole}>
+            {tempEmployee.designation || 'Employee'}
+          </Text>
+        </View>
+      </View>
 
       <Text style={styles.welcomeText}>Create Password</Text>
       <Text style={styles.subtitleText}>Set a secure password for your account</Text>
 
       {/* Password Requirements */}
       <View style={styles.passwordRequirements}>
-        <Text style={[styles.requirementText, checkRequirement(newPassword, 'length') ? styles.requirementMet : styles.requirementNotMet]}>
+        <Text style={[
+          styles.requirementText,
+          checkRequirement(newPassword, 'length') ? styles.requirementMet : styles.requirementNotMet
+        ]}>
           • At least 8 characters long
         </Text>
-        <Text style={[styles.requirementText, checkRequirement(newPassword, 'uppercase') ? styles.requirementMet : styles.requirementNotMet]}>
+        <Text style={[
+          styles.requirementText,
+          checkRequirement(newPassword, 'uppercase') ? styles.requirementMet : styles.requirementNotMet
+        ]}>
           • At least one uppercase letter (A-Z)
         </Text>
-        <Text style={[styles.requirementText, checkRequirement(newPassword, 'lowercase') ? styles.requirementMet : styles.requirementNotMet]}>
+        <Text style={[
+          styles.requirementText,
+          checkRequirement(newPassword, 'lowercase') ? styles.requirementMet : styles.requirementNotMet
+        ]}>
           • At least one lowercase letter (a-z)
         </Text>
-        <Text style={[styles.requirementText, checkRequirement(newPassword, 'number') ? styles.requirementMet : styles.requirementNotMet]}>
+        <Text style={[
+          styles.requirementText,
+          checkRequirement(newPassword, 'number') ? styles.requirementMet : styles.requirementNotMet
+        ]}>
           • At least one number (0-9)
-        </Text>
-        <Text style={[styles.requirementText, checkRequirement(newPassword, 'special') ? styles.requirementMet : styles.requirementNotMet]}>
-          • At least one special character (!@#$% etc.)
         </Text>
       </View>
 
@@ -300,15 +324,19 @@ const CreatePasswordScreen = ({ user, onSuccess, onBack }) => {
           placeholder="New Password"
           placeholderTextColor={colors.textSecondary + '80'}
           value={newPassword}
-          onChangeText={setNewPassword}
+          onChangeText={(text) => {
+            setNewPassword(text)
+            setPasswordError('')
+            dispatch(clearError())
+          }}
           secureTextEntry={!showNewPassword}
-          editable={!loading}
+          editable={!localLoading}
           autoFocus={true}
         />
         <TouchableOpacity
           onPress={() => setShowNewPassword(!showNewPassword)}
           style={styles.passwordToggle}
-          disabled={loading}
+          disabled={localLoading}
         >
           <Feather
             name={showNewPassword ? 'eye-off' : 'eye'}
@@ -326,14 +354,18 @@ const CreatePasswordScreen = ({ user, onSuccess, onBack }) => {
           placeholder="Confirm Password"
           placeholderTextColor={colors.textSecondary + '80'}
           value={confirmPassword}
-          onChangeText={setConfirmPassword}
+          onChangeText={(text) => {
+            setConfirmPassword(text)
+            setPasswordError('')
+            dispatch(clearError())
+          }}
           secureTextEntry={!showConfirmPassword}
-          editable={!loading}
+          editable={!localLoading}
         />
         <TouchableOpacity
           onPress={() => setShowConfirmPassword(!showConfirmPassword)}
           style={styles.passwordToggle}
-          disabled={loading}
+          disabled={localLoading}
         >
           <Feather
             name={showConfirmPassword ? 'eye-off' : 'eye'}
@@ -343,11 +375,18 @@ const CreatePasswordScreen = ({ user, onSuccess, onBack }) => {
         </TouchableOpacity>
       </View>
 
+      {/* Error Messages - Inline errors */}
+      {(passwordError || error) && (
+        <Text style={styles.errorText}>
+          {passwordError || (typeof error === 'string' ? error : 'An error occurred')}
+        </Text>
+      )}
+
       {/* Create Password Button */}
       <TouchableOpacity
-        style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-        onPress={handleCreatePassword}
-        disabled={loading || !newPassword.trim() || !confirmPassword.trim()}
+        style={[styles.submitButton, isButtonDisabled && styles.submitButtonDisabled]}
+        onPress={handleSubmit}
+        disabled={isButtonDisabled}
         activeOpacity={0.9}
       >
         <LinearGradient
@@ -356,7 +395,7 @@ const CreatePasswordScreen = ({ user, onSuccess, onBack }) => {
           end={{ x: 1, y: 0 }}
           style={styles.submitGradient}
         >
-          {loading ? (
+          {showButtonLoading ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <>

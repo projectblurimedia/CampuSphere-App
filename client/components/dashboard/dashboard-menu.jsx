@@ -22,6 +22,9 @@ import {
 import ThemeModal from '@/components/theme/ThemeModal'
 import { useTheme } from '@/hooks/useTheme'
 import Dashboard from '@/components/dynamicModals/Dashboard'
+import { useDispatch, useSelector } from 'react-redux'
+import { useRouter } from 'expo-router'
+import { logoutEmployee } from '@/redux/employeeSlice'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
@@ -29,6 +32,7 @@ export default function DashboardMenu({ visible, onClose }) {
   const { theme, colors } = useTheme()
   const [themeModalVisible, setThemeModalVisible] = useState(false)
   const [activeModal, setActiveModal] = useState(null)
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false)
   const translateX = useRef(new Animated.Value(SCREEN_WIDTH)).current
   const backdropOpacity = useRef(new Animated.Value(0)).current
   
@@ -62,6 +66,7 @@ export default function DashboardMenu({ visible, onClose }) {
         }),
       ]).start()
       setThemeModalVisible(false)
+      setLogoutModalVisible(false)
     }
   }, [visible])
 
@@ -209,10 +214,79 @@ export default function DashboardMenu({ visible, onClose }) {
     setActiveModal(null)
   }
 
-  const handleLogout = () => {
-    console.log('Logout pressed')
-    onClose()
+  const dispatch = useDispatch()
+  const router = useRouter()
+  
+  const handleLogoutPress = () => {
+    setLogoutModalVisible(true)
   }
+
+  const handleLogoutConfirm = async () => {
+    setLogoutModalVisible(false)
+    await dispatch(logoutEmployee())
+    onClose()
+    router.replace('/')
+  }
+
+  const handleLogoutCancel = () => {
+    setLogoutModalVisible(false)
+  }
+
+  // Logout Confirmation Modal Component
+  const LogoutConfirmationModal = () => (
+    <Modal
+      visible={logoutModalVisible}
+      transparent
+      animationType="fade"
+      onRequestClose={handleLogoutCancel}
+      statusBarTranslucent
+    >
+      <View style={styles.confirmationBackdrop}>
+        <View style={[styles.confirmationModal, { backgroundColor: colors.cardBackground }]}>
+          <View style={styles.confirmationHeader}>
+            <LinearGradient
+              colors={['#ef4444', '#dc2626']}
+              style={styles.confirmationIconContainer}
+            >
+              <Feather name="log-out" size={28} color="#FFFFFF" />
+            </LinearGradient>
+            <ThemedText type="subtitle" style={[styles.confirmationTitle, { color: colors.text }]}>
+              Confirm Logout
+            </ThemedText>
+            <ThemedText style={[styles.confirmationMessage, { color: colors.textSecondary }]}>
+              Are you sure you want to logout from your account?
+            </ThemedText>
+          </View>
+          
+          <View style={styles.confirmationButtons}>
+            <TouchableOpacity
+              style={[styles.cancelButton, { borderColor: colors.border, backgroundColor: colors.inputBackground }]}
+              onPress={handleLogoutCancel}
+            >
+              <ThemedText style={[styles.cancelButtonText, { color: colors.text }]}>
+                Cancel
+              </ThemedText>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.confirmButton}
+              onPress={handleLogoutConfirm}
+            >
+              <LinearGradient
+                colors={['#ef4444', '#dc2626']}
+                style={styles.confirmButtonGradient}
+              >
+                <Feather name="log-out" size={16} color="#FFFFFF" />
+                <ThemedText style={styles.confirmButtonText}>
+                  Logout
+                </ThemedText>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
 
   return (
     <>
@@ -342,7 +416,7 @@ export default function DashboardMenu({ visible, onClose }) {
 
               <TouchableOpacity
                 style={styles.logout}
-                onPress={handleLogout}
+                onPress={handleLogoutPress}
               >
                 <LinearGradient colors={['#ef4444', '#dc2626']} style={styles.logoutGradient}>
                   <Feather name="log-out" size={18} color="#FFFFFF" />
@@ -367,6 +441,9 @@ export default function DashboardMenu({ visible, onClose }) {
           />
         </View>
       </Modal>
+
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmationModal />
 
       {/* Dynamic Modal Loader */}
       <Dashboard
@@ -524,5 +601,88 @@ const styles = StyleSheet.create({
   footerCopyright: {
     fontSize: 11,
     opacity: 0.5,
+  },
+  // Logout Confirmation Modal Styles
+  confirmationBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  confirmationModal: {
+    width: '90%',
+    maxWidth: 400,
+    borderRadius: 20,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.2,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 10,
+      },
+    }),
+  },
+  confirmationHeader: {
+    alignItems: 'center',
+    padding: 30,
+    paddingBottom: 20,
+  },
+  confirmationIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  confirmationTitle: {
+    fontSize: 22,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  confirmationMessage: {
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  confirmationButtons: {
+    flexDirection: 'row',
+    padding: 20,
+    paddingTop: 10,
+    gap: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Medium',
+  },
+  confirmButton: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  confirmButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+  },
+  confirmButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins-SemiBold',
+    color: '#FFFFFF',
+    marginLeft: 8,
   },
 })

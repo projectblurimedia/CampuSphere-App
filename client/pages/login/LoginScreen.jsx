@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect } from 'react'
 import {
   View,
   Text,
@@ -11,56 +11,66 @@ import {
 import { LinearGradient } from 'expo-linear-gradient'
 import { MaterialIcons } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
-import StaffIdStep from './StaffIdStep'
+import EmailPhoneStep from './EmailPhoneStep'
 import PasswordStep from './PasswordStep'
 import CreatePasswordScreen from './CreatePasswordScreen'
-import ForgotPasswordScreen from './forgotPassword/ForgotPasswordScreen'
+import { useDispatch, useSelector } from 'react-redux'
+import { 
+  resetLoginFlow,
+  loadEmployeeFromStorage,
+  clearError 
+} from '@/redux/employeeSlice'
+import { useRouter } from 'expo-router'
+import { ToastNotification } from '@/components/ui/ToastNotification'
 
 const { height } = Dimensions.get('window')
 
-const LoginScreen = ({ onLoginSuccess }) => {
+const LoginScreen = () => {
   const { colors } = useTheme()
-  const [step, setStep] = useState('staffId') // 'staffId', 'password', 'createPassword', 'forgotPassword'
-  const [currentUser, setCurrentUser] = useState(null)
-  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('')
+  const dispatch = useDispatch()
+  const router = useRouter()
+  
+  const { 
+    currentStep, 
+    isAuthenticated,
+    employee,
+    isLoading,
+    error 
+  } = useSelector((state) => state.employee)
 
-  const handleStaffIdSuccess = (user) => {
-    setCurrentUser(user)
-    if (user.hasPassword) {
-      setStep('password')
-    } else {
-      setStep('createPassword')
+  // State for toast
+  const [toast, setToast] = React.useState(null)
+
+  // Show toast when there's an error
+  useEffect(() => {
+    if (error) {
+      setToast({
+        message: error,
+        type: 'error'
+      })
     }
-  }
+  }, [error])
 
-  const handlePasswordSuccess = (userData) => {
-    onLoginSuccess(userData)
-  }
+  const hideToast = React.useCallback(() => {
+    setToast(null)
+    dispatch(clearError())
+  }, [dispatch])
 
-  const handleForgotPassword = () => {
-    if (currentUser) {
-      setForgotPasswordEmail(currentUser.email)
+  useEffect(() => {
+    dispatch(loadEmployeeFromStorage())
+    // Clear any previous errors when component mounts
+    dispatch(clearError())
+  }, [dispatch])
+
+  useEffect(() => {
+    // If already authenticated, redirect to tabs
+    if (isAuthenticated && employee) {
+      // Small delay to ensure UI is ready
+      setTimeout(() => {
+        router.replace('/(tabs)')
+      }, 100)
     }
-    setStep('forgotPassword')
-  }
-
-  const handleBackToPassword = () => {
-    setStep('password')
-  }
-
-  const handleBackToStaffId = () => {
-    setStep('staffId')
-    setCurrentUser(null)
-  }
-
-  const handlePasswordCreated = (userData) => {
-    onLoginSuccess(userData)
-  }
-
-  const handleForgotPasswordComplete = () => {
-    setStep('password')
-    setForgotPasswordEmail('')
-  }
+  }, [isAuthenticated, employee, router])
 
   const styles = StyleSheet.create({
     container: {
@@ -106,8 +116,8 @@ const LoginScreen = ({ onLoginSuccess }) => {
       shadowRadius: 10,
     },
     schoolName: {
-      fontSize: 24,
-      fontFamily: 'Poppins-SemiBold',
+      fontSize: 22,
+      fontFamily: 'Poppins-Bold',
       color: '#fff',
       letterSpacing: 1,
     },
@@ -115,7 +125,6 @@ const LoginScreen = ({ onLoginSuccess }) => {
       fontSize: 14,
       fontFamily: 'Poppins-Medium',
       color: 'rgba(255,255,255,0.9)',
-      marginTop: 5,
     },
     formCard: {
       backgroundColor: colors.cardBackground,
@@ -145,41 +154,16 @@ const LoginScreen = ({ onLoginSuccess }) => {
   })
 
   const renderStep = () => {
-    switch (step) {
-      case 'staffId':
-        return (
-          <StaffIdStep
-            onSuccess={handleStaffIdSuccess}
-            onBack={null}
-          />
-        )
+    // Don't show loading indicator - button will handle it
+    switch (currentStep) {
+      case 'emailPhone':
+        return <EmailPhoneStep />
       case 'password':
-        return (
-          <PasswordStep
-            user={currentUser}
-            onSuccess={handlePasswordSuccess}
-            onBack={handleBackToStaffId}
-            onForgotPassword={handleForgotPassword}
-          />
-        )
+        return <PasswordStep onBack={() => dispatch(resetLoginFlow())} />
       case 'createPassword':
-        return (
-          <CreatePasswordScreen
-            user={currentUser}
-            onSuccess={handlePasswordCreated}
-            onBack={handleBackToStaffId}
-          />
-        )
-      case 'forgotPassword':
-        return (
-          <ForgotPasswordScreen
-            email={forgotPasswordEmail}
-            onSuccess={handleForgotPasswordComplete}
-            onBack={handleBackToPassword}
-          />
-        )
+        return <CreatePasswordScreen onBack={() => dispatch(resetLoginFlow())} />
       default:
-        return null
+        return <EmailPhoneStep />
     }
   }
 
@@ -188,14 +172,18 @@ const LoginScreen = ({ onLoginSuccess }) => {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Beautiful Gradient Background */}
           <LinearGradient
-            colors={[colors.primary, colors.primaryDark || '#0c7bc9']}
+            colors={[colors.gradientStart, colors.gradientEnd]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={styles.backgroundGradient}
           />
 
@@ -203,10 +191,10 @@ const LoginScreen = ({ onLoginSuccess }) => {
           <View style={styles.headerSection}>
             <View style={styles.logoContainer}>
               <View style={styles.logoCircle}>
-                <MaterialIcons name="school" size={42} color={colors.primary} />
+                <MaterialIcons name="school" size={42} color="#1d9bf0" />
               </View>
               <Text style={styles.schoolName}>SCHOOL MANAGER</Text>
-              <Text style={styles.schoolSubtitle}>Staff Portal</Text>
+              <Text style={styles.schoolSubtitle}>Employee Portal</Text>
             </View>
           </View>
 
@@ -223,6 +211,17 @@ const LoginScreen = ({ onLoginSuccess }) => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Toast Notification */}
+      <ToastNotification
+        visible={!!toast}
+        type={toast?.type}
+        message={toast?.message}
+        onHide={hideToast}
+        position="bottom-center"
+        duration={3000}
+        showCloseButton={true}
+      />
     </View>
   )
 }

@@ -4,7 +4,11 @@ import dotenv from 'dotenv'
 import cors from 'cors'
 import path from 'path'
 import helmet from 'helmet'
+import session from 'express-session'
+import rateLimit from 'express-rate-limit'
+import authRoutes from './routes/authRoutes.js'
 import studentRoutes from './routes/studentRoutes.js'
+import attendanceRoutes from './routes/attendanceRoutes.js'
 import employeeRoutes from './routes/employeeRoutes.js'
 
 dotenv.config()
@@ -21,8 +25,33 @@ app.use(cors({
   origin: '*'
 }))
 
+// Session for OTP storage
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-session-secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { 
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 15 * 60 * 1000 // 15 minutes
+  }
+}))
+
+// Rate limiting
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 requests per windowMs
+  message: 'Too many attempts, please try again later'
+})
+
+// Apply rate limiting to auth routes
+app.use('/api/auth/login', authLimiter)
+app.use('/api/auth/forgot-password', authLimiter)
+
+
 // Routes
+app.use('/api/auth', authRoutes)
 app.use('/api/students', studentRoutes)
+app.use('/api/attendances', attendanceRoutes)
 app.use('/api/employees', employeeRoutes)
 
 app.use((error, req, res, next) => {

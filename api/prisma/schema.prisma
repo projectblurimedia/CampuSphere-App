@@ -47,11 +47,6 @@ enum StudentType {
   HOSTELLER
 }
 
-enum Session {
-  MORNING
-  AFTERNOON
-}
-
 enum ExamType {
   FORMATIVE_1
   FORMATIVE_2
@@ -160,17 +155,19 @@ model Attendance {
   studentId       String 
   student         Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
   date            DateTime
-  session         Session
-  isPresent       Boolean?
-  markedBy        String?      @db.VarChar(100)
+  morning         Boolean?      
+  afternoon       Boolean?      
+  markedBy        String?      @db.VarChar(70)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
   @@index([studentId])
   @@index([date])
-  @@unique([studentId, date, session])
-  @@index([date, session])
+  @@unique([studentId, date])
+  @@index([date, morning])
+  @@index([date, afternoon])
   @@index([studentId, date])
+  @@index([morning, afternoon])
 }
 
 model Marks {
@@ -313,6 +310,7 @@ model Employee {
   gender          Gender
   email           String   @unique @db.VarChar(50)
   phone           String   @unique @db.VarChar(10)
+  hashedPassword  String?  @db.VarChar(255)
   dob             DateTime
   address         String   @db.Text
   village         String   @db.VarChar(50)  
@@ -339,4 +337,5 @@ model Employee {
   @@index([joiningDate])
   @@index([firstName, lastName])
   @@index([createdAt])
+  @@index([hashedPassword])
 }

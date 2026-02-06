@@ -296,6 +296,7 @@ const OverrideConfirmationModal = ({
       transparent={true}
       animationType="fade"
       onRequestClose={onCancel}
+      statusBarTranslucent
     >
       <View style={styles.overlay}>
         <View style={styles.modalContainer}>
@@ -353,6 +354,263 @@ const OverrideConfirmationModal = ({
   )
 }
 
+// Custom Delete Confirmation Modal Component
+const DeleteConfirmationModal = ({ 
+  visible, 
+  onConfirm, 
+  onCancel, 
+  date,
+  session,
+  className,
+  section,
+  isDeleting = false
+}) => {
+  const { colors } = useTheme()
+  
+  const styles = StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+    },
+    modalContainer: {
+      width: '90%',
+      backgroundColor: colors.cardBackground,
+      borderRadius: 20,
+      padding: 24,
+      elevation: 5,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+    },
+    iconContainer: {
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    deleteIcon: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: '#fee2e2',
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 2,
+      borderColor: '#fca5a5',
+    },
+    title: {
+      fontSize: 20,
+      fontFamily: 'Poppins-Bold',
+      textAlign: 'center',
+      marginBottom: 12,
+      color: '#dc2626',
+    },
+    message: {
+      fontSize: 15,
+      fontFamily: 'Poppins-Medium',
+      textAlign: 'center',
+      marginBottom: 8,
+      color: colors.text,
+      lineHeight: 22,
+    },
+    details: {
+      backgroundColor: colors.inputBackground,
+      borderRadius: 12,
+      padding: 16,
+      marginVertical: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    detailRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    detailLabel: {
+      fontSize: 14,
+      fontFamily: 'Poppins-Medium',
+      color: colors.textSecondary,
+    },
+    detailValue: {
+      fontSize: 14,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+    },
+    warningText: {
+      fontSize: 13,
+      color: '#dc2626',
+      textAlign: 'center',
+      marginTop: 12,
+      fontFamily: 'Poppins-SemiBold',
+    },
+    noteText: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      marginTop: 8,
+      fontStyle: 'italic',
+    },
+    buttonContainer: {
+      flexDirection: 'row',
+      marginTop: 20,
+      gap: 12,
+    },
+    cancelButton: {
+      flex: 1,
+      backgroundColor: colors.inputBackground,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    cancelButtonText: {
+      fontSize: 16,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+    },
+    confirmButton: {
+      flex: 1,
+      backgroundColor: '#dc2626',
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: 'center',
+      opacity: isDeleting ? 0.6 : 1,
+    },
+    confirmButtonText: {
+      fontSize: 16,
+      fontFamily: 'Poppins-SemiBold',
+      color: '#ffffff',
+    },
+    loadingOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.2)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderRadius: 12,
+    },
+  })
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    })
+  }
+
+  const getSessionLabel = (session) => {
+    return session === 'morning' ? 'Morning Session' : 'Afternoon Session'
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onCancel}
+      statusBarTranslucent
+    >
+      <View style={styles.overlay}>
+        <View style={styles.modalContainer}>
+          <View style={styles.iconContainer}>
+            <View style={styles.deleteIcon}>
+              {isDeleting ? (
+                <ActivityIndicator size="large" color="#dc2626" />
+              ) : (
+                <Feather name="trash-2" size={30} color="#dc2626" />
+              )}
+            </View>
+          </View>
+          
+          <ThemedText style={styles.title}>
+            {isDeleting ? 'Deleting Attendance...' : 'Delete Attendance'}
+          </ThemedText>
+          
+          <ThemedText style={styles.message}>
+            {isDeleting 
+              ? `Deleting ${getSessionLabel(session)} attendance for ${formatDate(date)}...`
+              : `Are you sure you want to delete the ${getSessionLabel(session)} attendance for ${formatDate(date)}?`
+            }
+          </ThemedText>
+          
+          <View style={styles.details}>
+            <View style={styles.detailRow}>
+              <ThemedText style={styles.detailLabel}>Class-Section:</ThemedText>
+              <ThemedText style={styles.detailValue}>{className}-{section}</ThemedText>
+            </View>
+            <View style={styles.detailRow}>
+              <ThemedText style={styles.detailLabel}>Session:</ThemedText>
+              <ThemedText style={styles.detailValue}>{getSessionLabel(session)}</ThemedText>
+            </View>
+            <View style={styles.detailRow}>
+              <ThemedText style={styles.detailLabel}>Date:</ThemedText>
+              <ThemedText style={styles.detailValue}>{formatDate(date)}</ThemedText>
+            </View>
+          </View>
+          
+          {!isDeleting && (
+            <>
+              <ThemedText style={styles.warningText}>
+                This action cannot be undone
+              </ThemedText>
+              
+              <ThemedText style={styles.noteText}>
+                All attendance records for this session will be permanently deleted
+              </ThemedText>
+            </>
+          )}
+          
+          <View style={styles.buttonContainer}>
+            {!isDeleting && (
+              <TouchableOpacity 
+                style={styles.cancelButton} 
+                onPress={onCancel}
+                activeOpacity={0.7}
+                disabled={isDeleting}
+              >
+                <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
+              </TouchableOpacity>
+            )}
+            
+            <TouchableOpacity 
+              style={styles.confirmButton} 
+              onPress={onConfirm}
+              activeOpacity={0.7}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color="#ffffff" />
+                  <ThemedText style={[styles.confirmButtonText, { marginLeft: 8 }]}>
+                    Deleting...
+                  </ThemedText>
+                </View>
+              ) : (
+                <ThemedText style={styles.confirmButtonText}>Delete</ThemedText>
+              )}
+            </TouchableOpacity>
+          </View>
+          
+          {isDeleting && (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color="#dc2626" />
+            </View>
+          )}
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
 export default function Attendance({ visible, onClose }) {
   const { colors } = useTheme()
   
@@ -383,6 +641,9 @@ export default function Attendance({ visible, onClose }) {
     session: null
   })
   const [loadingStep, setLoadingStep] = useState('')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [showDeleteOption, setShowDeleteOption] = useState(false)
 
   // Toast notification functions
   const showToast = (message, type = 'error', duration = 3000) => {
@@ -394,6 +655,10 @@ export default function Attendance({ visible, onClose }) {
   }
 
   const classSections = {
+    'Pre-Nursery': ['A', 'B'],
+    'Nursery': ['A', 'B'],
+    'LKG': ['A', 'B'],
+    'UKG': ['A', 'B'],
     '1': ['A', 'B'],
     '2': ['A', 'B'],
     '3': ['A', 'B', 'C'],
@@ -474,6 +739,8 @@ export default function Attendance({ visible, onClose }) {
       
       if (checkResponse.data.success) {
         setAttendanceExists(checkResponse.data.data)
+        // Show delete option only if attendance exists
+        setShowDeleteOption(checkResponse.data.data.exists)
       }
 
       setLoadingStep('Loading attendance data...')
@@ -544,6 +811,7 @@ export default function Attendance({ visible, onClose }) {
       setStudents([])
       setAttendance({})
       setExistingAttendance({})
+      setShowDeleteOption(false)
     } finally {
       setIsLoading(false)
       setLoadingStep('')
@@ -702,6 +970,105 @@ export default function Attendance({ visible, onClose }) {
     setOverrideData(null)
   }
 
+  const handleDeleteAttendance = async () => {
+    // Prevent multiple clicks
+    if (deleting) {
+      return
+    }
+
+    if (!selectedDate || !selectedClass || !selectedSection || !selectedSession) {
+      showToast('Please select date, class, section, and session', 'error')
+      return
+    }
+
+    if (!attendanceExists?.exists) {
+      showToast('No attendance found to delete', 'warning')
+      setShowDeleteModal(false)
+      return
+    }
+
+    setDeleting(true)
+    
+    try {
+      const attendanceDate = new Date(selectedDate)
+      attendanceDate.setHours(0, 0, 0, 0)
+      
+      const payload = {
+        date: attendanceDate.toISOString(),
+        className: selectedClass,
+        section: selectedSection,
+        session: selectedSession
+      }
+      
+      const response = await axiosApi.delete('/attendances/class/session', { data: payload })
+
+      if (response.data.success) {
+        showToast(`${selectedSession} attendance deleted successfully`, 'success')
+        
+        // Close delete modal after a brief delay
+        setTimeout(() => {
+          setShowDeleteModal(false)
+          // Reset delete option state
+          setShowDeleteOption(false)
+          // Reset attendance exists state
+          setAttendanceExists(prev => ({ ...prev, exists: false, totalMarked: 0 }))
+          // Clear existing attendance for the current session
+          const updatedExistingAttendance = { ...existingAttendance }
+          Object.keys(updatedExistingAttendance).forEach(studentId => {
+            if (selectedSession === 'morning') {
+              updatedExistingAttendance[studentId].morning = null
+            } else {
+              updatedExistingAttendance[studentId].afternoon = null
+            }
+          })
+          setExistingAttendance(updatedExistingAttendance)
+        }, 500)
+      } else {
+        showToast(response.data.message || 'Failed to delete attendance', 'error')
+        setShowDeleteModal(false)
+      }
+    } catch (error) {
+      console.error('Error deleting attendance:', error.response?.data || error)
+      
+      // Handle specific error cases
+      let errorMessage = 'Failed to delete attendance. Please try again.'
+      
+      if (error.response?.status === 404) {
+        errorMessage = 'Attendance not found. It may have already been deleted.'
+        // Reset states since attendance doesn't exist
+        setAttendanceExists(prev => ({ ...prev, exists: false, totalMarked: 0 }))
+        setShowDeleteOption(false)
+      } else if (error.response?.status === 400) {
+        errorMessage = error.response.data.message || 'Invalid request. Please check your selections.'
+      } else if (error.response?.status === 500) {
+        errorMessage = 'Server error. Please try again later.'
+      } else if (error.message === 'Network Error') {
+        errorMessage = 'Network connection error. Please check your internet connection.'
+      }
+      
+      showToast(errorMessage, 'error')
+      setShowDeleteModal(false)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleDeleteConfirm = () => {
+    // Don't open modal if already deleting
+    if (deleting) {
+      return
+    }
+    setShowDeleteModal(true)
+  }
+
+  const handleDeleteCancel = () => {
+    // Don't close if currently deleting
+    if (deleting) {
+      return
+    }
+    setShowDeleteModal(false)
+  }
+
   const formatDate = (date) => {
     return date.toLocaleDateString('en-US', {
       weekday: 'short',
@@ -787,11 +1154,34 @@ export default function Attendance({ visible, onClose }) {
 
   const getHeaderSubtitle = () => {
     if (attendanceExists?.exists && sessionMarkedBy) {
-      return `Override attendance marked by: ${sessionMarkedBy}`
+      return `Attendance marked by: ${sessionMarkedBy}`
     } else if (sessionMarkedBy && !attendanceExists?.exists) {
       return `Already marked by: ${sessionMarkedBy}`
     }
-    return `Marking as: ${teacherName}`
+    return `Will be Marked as: ${teacherName}`
+  }
+
+  const renderHeaderMoreButton = () => {
+    // Don't show delete button if currently deleting or no attendance exists
+    if (!showDeleteOption || deleting) return <View style={{ width: 44 }} />
+    
+    return (
+      <TouchableOpacity 
+        style={[
+          styles.moreButton,
+          { opacity: deleting ? 0.5 : 1 }
+        ]} 
+        onPress={handleDeleteConfirm}
+        activeOpacity={0.7}
+        disabled={deleting}
+      >
+        {deleting ? (
+          <ActivityIndicator size="small" color="#FFFFFF" />
+        ) : (
+          <Feather name="trash-2" size={20} color="#FFFFFF" />
+        )}
+      </TouchableOpacity>
+    )
   }
 
   const styles = StyleSheet.create({
@@ -812,6 +1202,16 @@ export default function Attendance({ visible, onClose }) {
       justifyContent: 'space-between',
     },
     backButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'rgba(255, 255, 255, 0.18)',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.4)',
+    },
+    moreButton: {
       width: 44,
       height: 44,
       borderRadius: 22,
@@ -1368,17 +1768,6 @@ export default function Attendance({ visible, onClose }) {
                 </View>
               )}
             </View>
-            
-            {/* {isSubmitted && markedBy && (
-              <ThemedText style={{
-                fontSize: 11,
-                color: colors.textSecondary,
-                marginTop: 4,
-                textAlign: 'right'
-              }}>
-                {attendanceExists?.exists ? 'Will be marked by' : 'Marked by'}: {markedBy}
-              </ThemedText>
-            )} */}
           </View>
         </View>
       )
@@ -1468,7 +1857,7 @@ export default function Attendance({ visible, onClose }) {
                     {getHeaderSubtitle()}
                   </ThemedText>
                 </View>
-                <View style={{ width: 44 }} />
+                {renderHeaderMoreButton()}
               </View>
             </SafeAreaView>
           </LinearGradient>
@@ -1588,7 +1977,7 @@ export default function Attendance({ visible, onClose }) {
                   onPress={handleSave}
                   activeOpacity={0.9}
                   style={styles.saveBtnPressable}
-                  disabled={saving || isLoading}
+                  disabled={saving || isLoading || deleting}
                 >
                   {saving ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
@@ -1625,6 +2014,18 @@ export default function Attendance({ visible, onClose }) {
         onCancel={handleOverrideCancel}
         date={overrideData?.date || selectedDate}
         session={overrideData?.session || selectedSession}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        visible={showDeleteModal}
+        onConfirm={handleDeleteAttendance}
+        onCancel={handleDeleteCancel}
+        date={selectedDate}
+        session={selectedSession}
+        className={selectedClass}
+        section={selectedSection}
+        isDeleting={deleting}
       />
     </>
   )

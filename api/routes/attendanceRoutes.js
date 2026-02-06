@@ -10,7 +10,8 @@ import {
   updateAttendance,
   deleteAttendance,
   getMonthlyReport,
-  getStudentsListByClass
+  getStudentsListByClass,
+  deleteClassSessionAttendance
 } from '../controllers/attendanceController.js'
 
 const router = express.Router()
@@ -30,6 +31,7 @@ router.get('/students/list', getStudentsListByClass)
 // Update and delete
 router.put('/:studentId', updateAttendance)
 router.delete('/:studentId', deleteAttendance)
+router.delete('/class/session', deleteClassSessionAttendance)
 
 // Reports
 router.get('/report/monthly', getMonthlyReport)

@@ -15,7 +15,7 @@ import {
 
 const router = express.Router()
 
-router.get('/class-sections', getClassesAndSections)
+router.get('/classes-sections', getClassesAndSections)
 router.get('/search', searchStudents)
 router.get('/statistics', getStudentStatistics)
 router.get('/classes-summary', getClassesSummary)

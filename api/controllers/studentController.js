@@ -1021,53 +1021,108 @@ export const deleteStudent = async (req, res) => {
   }
 }
 
-// Get classes and sections in the exact format
+/**
+ * @desc    Get all unique classes with their sections (only classes with active students)
+ * @route   GET /api/students/classes-sections
+ * @access  Private
+ */
 export const getClassesAndSections = async (req, res) => {
   try {
-    // Get all active students grouped by class and section
-    const result = await prisma.student.groupBy({
+    // Get all unique classes and sections from active students
+    const classGroups = await prisma.student.groupBy({
       by: ['class', 'section'],
-      where: { isActive: true },
-      _count: true,
+      where: { 
+        isActive: true 
+      },
       orderBy: [
         { class: 'asc' },
         { section: 'asc' }
       ]
     })
 
-    // Transform to exactly the format you want
+    // If no active students found
+    if (classGroups.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: {}
+      })
+    }
+
+    // Transform data into the required format - ONLY include classes with sections
     const classSections = {}
-    
-    result.forEach(item => {
-      // Convert enum to display name (e.g., "CLASS_1" to "1")
-      const className = mapEnumToDisplayName(item.class)
+
+    // Collect all sections for each class
+    classGroups.forEach(item => {
+      const classLabel = mapEnumToDisplayName(item.class)
       const section = item.section
-      
-      if (!classSections[className]) {
-        classSections[className] = []
+
+      if (!classLabel) return // Skip if class label not found
+
+      // Initialize class entry if it doesn't exist
+      if (!classSections[classLabel]) {
+        classSections[classLabel] = new Set()
       }
-      
-      // Add section if not already in array
-      if (!classSections[className].includes(section)) {
-        classSections[className].push(section)
-      }
+
+      // Add section to the set (Set ensures uniqueness)
+      classSections[classLabel].add(section)
     })
 
-    // Sort sections alphabetically for each class
+    // Remove classes with no sections
     Object.keys(classSections).forEach(className => {
-      classSections[className].sort()
+      if (classSections[className].size === 0) {
+        delete classSections[className]
+      }
     })
 
-    // Return EXACTLY the format you requested
+    // Convert Sets to sorted arrays and create final object
+    const result = {}
+
+    // Define class order for sorting
+    const classOrder = [
+      'Pre-Nursery',
+      'Nursery',
+      'LKG',
+      'UKG',
+      'Class 1',
+      'Class 2',
+      'Class 3',
+      'Class 4',
+      'Class 5',
+      'Class 6',
+      'Class 7',
+      'Class 8',
+      'Class 9',
+      'Class 10',
+      'Class 11',
+      'Class 12'
+    ]
+
+    // Sort classes according to predefined order
+    const sortedClasses = Object.keys(classSections).sort((a, b) => {
+      const aIndex = classOrder.indexOf(a)
+      const bIndex = classOrder.indexOf(b)
+      
+      // If class not in order list, put it at the end
+      return (aIndex !== -1 ? aIndex : Infinity) - (bIndex !== -1 ? bIndex : Infinity)
+    })
+
+    // Build the result object in sorted order
+    sortedClasses.forEach(className => {
+      // Convert Set to array and sort sections alphabetically
+      const sections = Array.from(classSections[className]).sort()
+      result[className] = sections
+    })
+
     res.status(200).json({
       success: true,
-      data: classSections // This will be exactly like your example
+      data: result,
+      count: Object.keys(result).length
     })
   } catch (error) {
     console.error('Get classes and sections error:', error)
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to get classes and sections',
+      message: error.message || 'Failed to get classes and sections'
     })
   }
 }

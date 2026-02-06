@@ -1,51 +1,10 @@
 import prisma from '../lib/prisma.js'
 import asyncHandler from 'express-async-handler'
-
-// Map class strings to Prisma enum values
-const mapClassToEnum = (className) => {
-  if (!className && className !== 0) return null
-
-  const classMap = {
-    'PRE-NURSERY': 'PRE_NURSERY',
-    'PRE_NURSERY': 'PRE_NURSERY',
-    'NURSERY': 'NURSERY',
-    'LKG': 'LKG',
-    'UKG': 'UKG',
-    '0': 'PRE_NURSERY',
-    '0.25': 'NURSERY',
-    '0.5': 'LKG',
-    '0.75': 'UKG',
-    '1': 'CLASS_1', 'FIRST': 'CLASS_1', 'ONE': 'CLASS_1',
-    '2': 'CLASS_2', 'SECOND': 'CLASS_2', 'TWO': 'CLASS_2',
-    '3': 'CLASS_3', 'THIRD': 'CLASS_3', 'THREE': 'CLASS_3',
-    '4': 'CLASS_4', 'FOURTH': 'CLASS_4', 'FOUR': 'CLASS_4',
-    '5': 'CLASS_5', 'FIFTH': 'CLASS_5', 'FIVE': 'CLASS_5',
-    '6': 'CLASS_6', 'SIXTH': 'CLASS_6', 'SIX': 'CLASS_6',
-    '7': 'CLASS_7', 'SEVENTH': 'CLASS_7', 'SEVEN': 'CLASS_7',
-    '8': 'CLASS_8', 'EIGHTH': 'CLASS_8', 'EIGHT': 'CLASS_8',
-    '9': 'CLASS_9', 'NINTH': 'CLASS_9', 'NINE': 'CLASS_9',
-    '10': 'CLASS_10', 'TENTH': 'CLASS_10', 'TEN': 'CLASS_10',
-    '11': 'CLASS_11', 'ELEVENTH': 'CLASS_11', 'ELEVEN': 'CLASS_11',
-    '12': 'CLASS_12', 'TWELFTH': 'CLASS_12', 'TWELVE': 'CLASS_12',
-    'I': 'CLASS_1', 'II': 'CLASS_2', 'III': 'CLASS_3', 'IV': 'CLASS_4', 'V': 'CLASS_5',
-    'VI': 'CLASS_6', 'VII': 'CLASS_7', 'VIII': 'CLASS_8', 'IX': 'CLASS_9', 'X': 'CLASS_10',
-    'XI': 'CLASS_11', 'XII': 'CLASS_12'
-  }
-
-  const classStr = className.toString().trim().toUpperCase()
-  return classMap[classStr] || null
-}
-
-// Map section strings to Prisma enum values
-const mapSectionToEnum = (section) => {
-  const sectionStr = section?.toString().trim().toUpperCase()
-  const validSections = ['A', 'B', 'C', 'D', 'E']
-  
-  if (validSections.includes(sectionStr)) {
-    return sectionStr
-  }
-  return null
-}
+import {
+  mapClassToEnum,
+  mapEnumToDisplayName,
+  validateSection
+} from '../utils/classMappings.js'
 
 // Calculate attendance status for a day
 const calculateDayStatus = (morning, afternoon) => {
@@ -67,7 +26,7 @@ const calculateDayStatus = (morning, afternoon) => {
 export const markAttendance = asyncHandler(async (req, res) => {
   const { date, className, section, studentAttendance, session, markedBy } = req.body
 
-  // Validation - Removed markedById check since it's not in schema
+  // Validation
   if (!date || !className || !section || !studentAttendance || !session || !markedBy) {
     return res.status(400).json({
       success: false,
@@ -100,7 +59,7 @@ export const markAttendance = asyncHandler(async (req, res) => {
   try {
     // Map class and section to enums
     const classEnum = mapClassToEnum(className)
-    const sectionEnum = mapSectionToEnum(section)
+    const sectionEnum = validateSection(section)
 
     if (!classEnum || !sectionEnum) {
       return res.status(400).json({
@@ -158,7 +117,7 @@ export const markAttendance = asyncHandler(async (req, res) => {
           })
         )
       } else {
-        // Create new record - only set markedBy in the create (not session specific)
+        // Create new record
         creates.push(
           prisma.attendance.create({
             data: {
@@ -183,13 +142,13 @@ export const markAttendance = asyncHandler(async (req, res) => {
       success: true,
       data: {
         date: attendanceDate,
-        className,
+        className: mapEnumToDisplayName(classEnum) || className,
         section,
         session,
         summary,
         markedBy: markedBy
       },
-      message: `Attendance marked successfully for ${className}-${section} (${session})`
+      message: `Attendance marked successfully for ${mapEnumToDisplayName(classEnum) || className}-${section} (${session})`
     })
   } catch (error) {
     console.error('Error marking attendance:', error)
@@ -209,7 +168,7 @@ export const markAttendance = asyncHandler(async (req, res) => {
 export const overrideAttendance = asyncHandler(async (req, res) => {
   const { date, className, section, studentAttendance, session, markedBy } = req.body
 
-  // Validation - Removed markedById
+  // Validation
   if (!date || !className || !section || !studentAttendance || !session || !markedBy) {
     return res.status(400).json({
       success: false,
@@ -219,7 +178,7 @@ export const overrideAttendance = asyncHandler(async (req, res) => {
 
   try {
     const classEnum = mapClassToEnum(className)
-    const sectionEnum = mapSectionToEnum(section)
+    const sectionEnum = validateSection(section)
 
     if (!classEnum || !sectionEnum) {
       return res.status(400).json({
@@ -299,13 +258,13 @@ export const overrideAttendance = asyncHandler(async (req, res) => {
       success: true,
       data: {
         date: attendanceDate,
-        className,
+        className: mapEnumToDisplayName(classEnum) || className,
         section,
         session,
         summary,
         markedBy: markedBy
       },
-      message: `Attendance overridden successfully for ${className}-${section} (${session})`
+      message: `Attendance overridden successfully for ${mapEnumToDisplayName(classEnum) || className}-${section} (${session})`
     })
   } catch (error) {
     console.error('Error overriding attendance:', error)
@@ -334,7 +293,7 @@ export const getDayAttendance = asyncHandler(async (req, res) => {
 
   try {
     const classEnum = mapClassToEnum(className)
-    const sectionEnum = mapSectionToEnum(section)
+    const sectionEnum = validateSection(section)
 
     if (!classEnum || !sectionEnum) {
       return res.status(400).json({
@@ -417,7 +376,7 @@ export const getDayAttendance = asyncHandler(async (req, res) => {
       success: true,
       data: {
         date: attendanceDate,
-        className,
+        className: mapEnumToDisplayName(classEnum) || className,
         section,
         summary: overallSummary,
         attendance: formattedAttendance
@@ -457,7 +416,7 @@ export const checkAttendanceExists = asyncHandler(async (req, res) => {
 
   try {
     const classEnum = mapClassToEnum(className)
-    const sectionEnum = mapSectionToEnum(section)
+    const sectionEnum = validateSection(section)
 
     if (!classEnum || !sectionEnum) {
       return res.status(400).json({
@@ -491,7 +450,7 @@ export const checkAttendanceExists = asyncHandler(async (req, res) => {
       data: {
         exists,
         date: attendanceDate,
-        className,
+        className: mapEnumToDisplayName(classEnum) || className,
         section,
         session,
         totalMarked: count,
@@ -525,7 +484,7 @@ export const getDayAttendanceSummary = asyncHandler(async (req, res) => {
 
   try {
     const classEnum = mapClassToEnum(className)
-    const sectionEnum = mapSectionToEnum(section)
+    const sectionEnum = validateSection(section)
 
     if (!classEnum || !sectionEnum) {
       return res.status(400).json({
@@ -543,7 +502,7 @@ export const getDayAttendanceSummary = asyncHandler(async (req, res) => {
       success: true,
       data: {
         date: attendanceDate,
-        className,
+        className: mapEnumToDisplayName(classEnum) || className,
         section,
         session,
         summary
@@ -646,7 +605,8 @@ export const getStudentAttendance = asyncHandler(async (req, res) => {
           rollNo: student.rollNo,
           admissionNo: student.admissionNo,
           class: student.class,
-          section: student.section
+          section: student.section,
+          displayClass: mapEnumToDisplayName(student.class)
         },
         period: {
           startDate: defaultStartDate,
@@ -658,7 +618,7 @@ export const getStudentAttendance = asyncHandler(async (req, res) => {
           absentDays,
           halfDays,
           effectivePresentDays,
-          attendancePercentage: attendancePercentage.toFixed(2)
+          attendancePercentage: parseFloat(attendancePercentage.toFixed(2))
         },
         dailyAttendance: attendanceRecords.map(record => ({
           date: record.date,
@@ -696,7 +656,7 @@ export const getClassSummary = asyncHandler(async (req, res) => {
 
   try {
     const classEnum = mapClassToEnum(className)
-    const sectionEnum = mapSectionToEnum(section)
+    const sectionEnum = validateSection(section)
 
     if (!classEnum || !sectionEnum) {
       return res.status(400).json({
@@ -772,7 +732,7 @@ export const getClassSummary = asyncHandler(async (req, res) => {
           absentDays,
           halfDays,
           effectivePresentDays,
-          attendancePercentage: attendancePercentage.toFixed(2)
+          attendancePercentage: parseFloat(attendancePercentage.toFixed(2))
         }
       })
 
@@ -792,7 +752,7 @@ export const getClassSummary = asyncHandler(async (req, res) => {
     res.status(200).json({
       success: true,
       data: {
-        className,
+        className: mapEnumToDisplayName(classEnum) || className,
         section,
         period: {
           startDate: start,
@@ -805,7 +765,7 @@ export const getClassSummary = asyncHandler(async (req, res) => {
           totalAbsentDays: classTotalAbsentDays,
           totalHalfDays: classTotalHalfDays,
           totalEffectivePresentDays: classEffectivePresentDays,
-          averageAttendance: classAverageAttendance.toFixed(2)
+          averageAttendance: parseFloat(classAverageAttendance.toFixed(2))
         },
         studentSummaries
       }
@@ -829,7 +789,6 @@ export const updateAttendance = asyncHandler(async (req, res) => {
   const { studentId } = req.params
   const { date, morning, afternoon, session, markedBy } = req.body
 
-  // Removed markedById validation
   if (!date || !session || !markedBy) {
     return res.status(400).json({
       success: false,
@@ -1021,7 +980,7 @@ export const getMonthlyReport = asyncHandler(async (req, res) => {
 
   try {
     const classEnum = mapClassToEnum(className)
-    const sectionEnum = mapSectionToEnum(section)
+    const sectionEnum = validateSection(section)
 
     if (!classEnum || !sectionEnum) {
       return res.status(400).json({
@@ -1104,7 +1063,7 @@ export const getMonthlyReport = asyncHandler(async (req, res) => {
           absentDays,
           halfDays,
           effectivePresentDays,
-          attendancePercentage: attendancePercentage.toFixed(2)
+          attendancePercentage: parseFloat(attendancePercentage.toFixed(2))
         },
         dailyAttendance: student.attendance.map(record => ({
           date: record.date,
@@ -1127,10 +1086,10 @@ export const getMonthlyReport = asyncHandler(async (req, res) => {
 
     // Find best and worst students
     const bestStudent = studentReports.find(
-      report => parseFloat(report.summary.attendancePercentage) === highestPercentage
+      report => report.summary.attendancePercentage === highestPercentage
     )
     const worstStudent = studentReports.find(
-      report => parseFloat(report.summary.attendancePercentage) === lowestPercentage
+      report => report.summary.attendancePercentage === lowestPercentage
     )
 
     const classSummary = {
@@ -1145,13 +1104,13 @@ export const getMonthlyReport = asyncHandler(async (req, res) => {
         rollNo: worstStudent.student.rollNo,
         percentage: worstStudent.summary.attendancePercentage
       } : null,
-      averageAttendance: (totalPercentage / students.length).toFixed(2)
+      averageAttendance: parseFloat((totalPercentage / students.length).toFixed(2))
     }
 
     res.status(200).json({
       success: true,
       data: {
-        className,
+        className: mapEnumToDisplayName(classEnum) || className,
         section,
         month: parseInt(month),
         year: parseInt(year),
@@ -1190,7 +1149,7 @@ export const getStudentsListByClass = asyncHandler(async (req, res) => {
 
   try {
     const classEnum = mapClassToEnum(className)
-    const sectionEnum = mapSectionToEnum(section)
+    const sectionEnum = validateSection(section)
 
     if (!classEnum || !sectionEnum) {
       return res.status(400).json({
@@ -1228,13 +1187,151 @@ export const getStudentsListByClass = asyncHandler(async (req, res) => {
       success: true,
       count: formattedStudents.length,
       data: formattedStudents,
-      message: `Found ${formattedStudents.length} students in ${className}-${section}`
+      message: `Found ${formattedStudents.length} students in ${mapEnumToDisplayName(classEnum) || className}-${section}`
     })
   } catch (error) {
     console.error('Error fetching students list:', error)
     res.status(500).json({
       success: false,
       message: 'Error fetching students list',
+      error: error.message
+    })
+  }
+})
+
+/**
+ * @desc    Delete attendance for an entire class session
+ * @route   DELETE /api/attendance/class/session
+ * @access  Private
+ */
+export const deleteClassSessionAttendance = asyncHandler(async (req, res) => {
+  const { date, className, section, session } = req.body
+
+  // Validation
+  if (!date || !className || !section || !session) {
+    return res.status(400).json({
+      success: false,
+      message: 'Date, class name, section, and session are required'
+    })
+  }
+
+  if (!['morning', 'afternoon'].includes(session)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid session. Must be "morning" or "afternoon"'
+    })
+  }
+
+  try {
+    const classEnum = mapClassToEnum(className)
+    const sectionEnum = validateSection(section)
+
+    if (!classEnum || !sectionEnum) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid class or section'
+      })
+    }
+
+    const attendanceDate = new Date(date)
+    attendanceDate.setHours(0, 0, 0, 0)
+
+    // Get all students in the class
+    const students = await prisma.student.findMany({
+      where: {
+        class: classEnum,
+        section: sectionEnum,
+        isActive: true
+      },
+      select: {
+        id: true
+      }
+    })
+
+    const studentIds = students.map(s => s.id)
+
+    if (studentIds.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No students found in this class-section'
+      })
+    }
+
+    // Get existing attendance records for this date
+    const existingRecords = await prisma.attendance.findMany({
+      where: {
+        studentId: { in: studentIds },
+        date: attendanceDate,
+        NOT: {
+          [session]: null
+        }
+      }
+    })
+
+    if (existingRecords.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `No attendance found for ${mapEnumToDisplayName(classEnum) || className}-${section} on ${date} (${session})`
+      })
+    }
+
+    // Update each record to null for the specific session
+    const updatePromises = existingRecords.map(record => {
+      // Create update data with session set to null
+      const updateData = {
+        [session]: null,
+        updatedAt: new Date()
+      }
+
+      // Check if the other session is also null
+      const otherSession = session === 'morning' ? 'afternoon' : 'morning'
+      if (record[otherSession] === null) {
+        // If both sessions will be null, delete the entire record
+        return prisma.attendance.delete({
+          where: { id: record.id }
+        })
+      } else {
+        // Otherwise, just update the session to null
+        return prisma.attendance.update({
+          where: { id: record.id },
+          data: updateData
+        })
+      }
+    })
+
+    // Execute all updates/deletions
+    await Promise.all(updatePromises)
+
+    // Get count of affected records
+    const affectedRecords = existingRecords.length
+    const deletedRecords = updatePromises.filter((_, index) => existingRecords[index][session === 'morning' ? 'afternoon' : 'morning'] === null).length
+    const updatedRecords = affectedRecords - deletedRecords
+
+    res.status(200).json({
+      success: true,
+      data: {
+        date: attendanceDate,
+        className: mapEnumToDisplayName(classEnum) || className,
+        section,
+        session,
+        statistics: {
+          totalStudents: studentIds.length,
+          affectedStudents: affectedRecords,
+          recordsUpdated: updatedRecords,
+          recordsDeleted: deletedRecords
+        },
+        summary: {
+          message: `Successfully cleared ${session} attendance for ${mapEnumToDisplayName(classEnum) || className}-${section} on ${date}`,
+          details: `${affectedRecords} student records processed (${updatedRecords} updated, ${deletedRecords} deleted)`
+        }
+      },
+      message: `${session} attendance cleared for ${affectedRecords} students in ${mapEnumToDisplayName(classEnum) || className}-${section}`
+    })
+  } catch (error) {
+    console.error('Error deleting class session attendance:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting class session attendance',
       error: error.message
     })
   }
@@ -1257,7 +1354,7 @@ export const getSessionStatus = asyncHandler(async (req, res) => {
 
   try {
     const classEnum = mapClassToEnum(className)
-    const sectionEnum = mapSectionToEnum(section)
+    const sectionEnum = validateSection(section)
 
     if (!classEnum || !sectionEnum) {
       return res.status(400).json({
@@ -1268,6 +1365,15 @@ export const getSessionStatus = asyncHandler(async (req, res) => {
 
     const attendanceDate = new Date(date)
     attendanceDate.setHours(0, 0, 0, 0)
+
+    // Get all students in the class
+    const totalStudents = await prisma.student.count({
+      where: {
+        class: classEnum,
+        section: sectionEnum,
+        isActive: true
+      }
+    })
 
     // Get attendance for the day
     const attendance = await prisma.attendance.findMany({
@@ -1288,19 +1394,18 @@ export const getSessionStatus = asyncHandler(async (req, res) => {
     // Calculate session status
     const morningMarked = attendance.filter(a => a.morning !== null).length
     const afternoonMarked = attendance.filter(a => a.afternoon !== null).length
-    const totalStudents = attendance.length
 
     const morningStatus = {
       marked: morningMarked,
       total: totalStudents,
-      percentage: totalStudents > 0 ? ((morningMarked / totalStudents) * 100).toFixed(2) : 0,
+      percentage: totalStudents > 0 ? parseFloat(((morningMarked / totalStudents) * 100).toFixed(2)) : 0,
       isComplete: morningMarked === totalStudents
     }
 
     const afternoonStatus = {
       marked: afternoonMarked,
       total: totalStudents,
-      percentage: totalStudents > 0 ? ((afternoonMarked / totalStudents) * 100).toFixed(2) : 0,
+      percentage: totalStudents > 0 ? parseFloat(((afternoonMarked / totalStudents) * 100).toFixed(2)) : 0,
       isComplete: afternoonMarked === totalStudents
     }
 
@@ -1308,7 +1413,7 @@ export const getSessionStatus = asyncHandler(async (req, res) => {
       success: true,
       data: {
         date: attendanceDate,
-        className,
+        className: mapEnumToDisplayName(classEnum) || className,
         section,
         morning: morningStatus,
         afternoon: afternoonStatus
@@ -1324,10 +1429,79 @@ export const getSessionStatus = asyncHandler(async (req, res) => {
   }
 })
 
+/**
+ * @desc    Get attendance summary for multiple classes
+ * @route   GET /api/attendance/bulk/summary
+ * @access  Private
+ */
+export const getBulkAttendanceSummary = asyncHandler(async (req, res) => {
+  const { date, classes } = req.query
+
+  if (!date || !classes) {
+    return res.status(400).json({
+      success: false,
+      message: 'Date and classes are required'
+    })
+  }
+
+  try {
+    const attendanceDate = new Date(date)
+    attendanceDate.setHours(0, 0, 0, 0)
+
+    const classList = Array.isArray(classes) ? classes : classes.split(',')
+
+    const summaries = await Promise.all(
+      classList.map(async (classStr) => {
+        const [className, section] = classStr.split('-')
+        const classEnum = mapClassToEnum(className)
+        const sectionEnum = validateSection(section)
+
+        if (!classEnum || !sectionEnum) {
+          return null
+        }
+
+        const summary = await calculateDaySummary(classEnum, sectionEnum, attendanceDate, 'morning')
+        
+        return {
+          className: mapEnumToDisplayName(classEnum) || className,
+          section: sectionEnum,
+          summary
+        }
+      })
+    )
+
+    const validSummaries = summaries.filter(summary => summary !== null)
+
+    res.status(200).json({
+      success: true,
+      data: {
+        date: attendanceDate,
+        summaries: validSummaries
+      }
+    })
+  } catch (error) {
+    console.error('Error fetching bulk attendance summary:', error)
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching bulk attendance summary',
+      error: error.message
+    })
+  }
+})
+
 // Helper function to calculate day summary for specific session
 const calculateDaySummary = async (classEnum, sectionEnum, date, session) => {
   const attendanceDate = new Date(date)
   attendanceDate.setHours(0, 0, 0, 0)
+
+  // Get all students in the class
+  const totalStudents = await prisma.student.count({
+    where: {
+      class: classEnum,
+      section: sectionEnum,
+      isActive: true
+    }
+  })
 
   // Get attendance for the day
   const attendance = await prisma.attendance.findMany({
@@ -1362,9 +1536,11 @@ const calculateDaySummary = async (classEnum, sectionEnum, date, session) => {
     else notMarkedCount++
   })
 
-  const totalStudents = attendance.length
+  // If no records exist for some students, they are not marked
+  notMarkedCount += (totalStudents - attendance.length)
+
   const attendancePercentage = totalStudents > 0 
-    ? (presentCount / totalStudents) * 100 
+    ? parseFloat(((presentCount / totalStudents) * 100).toFixed(2))
     : 0
 
   return {
@@ -1372,9 +1548,9 @@ const calculateDaySummary = async (classEnum, sectionEnum, date, session) => {
     present: presentCount,
     absent: absentCount,
     notMarked: notMarkedCount,
-    attendancePercentage: attendancePercentage.toFixed(2)
+    attendancePercentage
   }
 }
 
 // Export helper functions
-export { mapClassToEnum, mapSectionToEnum, calculateDayStatus }
+export { calculateDayStatus }

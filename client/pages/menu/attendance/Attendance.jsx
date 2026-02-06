@@ -30,12 +30,25 @@ const CustomDropdown = ({
   onSelect,
   placeholder = "Select an option",
   style,
+  isLoading = false,
 }) => {
   const { colors } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
-  const [selectedLabel, setSelectedLabel] = useState(
-    items.find(item => item.value === value)?.label || placeholder
-  )
+  const [selectedLabel, setSelectedLabel] = useState(placeholder)
+
+  // Update selected label whenever value or items change
+  useEffect(() => {
+    if (value && items && items.length > 0) {
+      const foundItem = items.find(item => item.value === value)
+      if (foundItem) {
+        setSelectedLabel(foundItem.label)
+      } else {
+        setSelectedLabel(placeholder)
+      }
+    } else {
+      setSelectedLabel(placeholder)
+    }
+  }, [value, items, placeholder])
 
   const handleSelect = (item) => {
     setSelectedLabel(item.label)
@@ -104,18 +117,19 @@ const CustomDropdown = ({
   return (
     <View style={[dropdownStyles.customDropdownContainer, style]}>
       <TouchableOpacity
-        style={dropdownStyles.dropdownHeader}
-        onPress={() => setIsOpen(!isOpen)}
+        style={[dropdownStyles.dropdownHeader, isLoading && { opacity: 0.5 }]}
+        onPress={() => !isLoading && setIsOpen(!isOpen)}
         activeOpacity={0.7}
+        disabled={isLoading || items.length === 0}
       >
         <Feather name="chevron-down" size={18} color={colors.textSecondary} style={{ marginRight: 8 }} />
         <ThemedText style={dropdownStyles.dropdownSelectedText}>
-          {selectedLabel}
+          {isLoading ? 'Loading...' : selectedLabel}
         </ThemedText>
         <Feather name="chevron-down" size={16} color={colors.primary} />
       </TouchableOpacity>
       
-      {isOpen && (
+      {isOpen && !isLoading && items.length > 0 && (
         <View style={dropdownStyles.dropdownList}>
           <ScrollView 
             nestedScrollEnabled={true}
@@ -618,8 +632,8 @@ export default function Attendance({ visible, onClose }) {
   const employee = useSelector(state => state.employee.employee)
   const teacherName = employee ? `${employee.firstName} ${employee.lastName}` : 'Teacher'
   
-  const [selectedClass, setSelectedClass] = useState('1')
-  const [selectedSection, setSelectedSection] = useState('A')
+  const [selectedClass, setSelectedClass] = useState(null)
+  const [selectedSection, setSelectedSection] = useState(null)
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [selectedSession, setSelectedSession] = useState('morning')
@@ -644,6 +658,12 @@ export default function Attendance({ visible, onClose }) {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteOption, setShowDeleteOption] = useState(false)
+  
+  // New state for classes and sections
+  const [classesAndSections, setClassesAndSections] = useState({})
+  const [isLoadingClasses, setIsLoadingClasses] = useState(false)
+  const [classes, setClasses] = useState([])
+  const [sections, setSections] = useState([])
 
   // Toast notification functions
   const showToast = (message, type = 'error', duration = 3000) => {
@@ -654,39 +674,176 @@ export default function Attendance({ visible, onClose }) {
     setToast(null)
   }
 
-  const classSections = {
-    'Pre-Nursery': ['A', 'B'],
-    'Nursery': ['A', 'B'],
-    'LKG': ['A', 'B'],
-    'UKG': ['A', 'B'],
-    '1': ['A', 'B'],
-    '2': ['A', 'B'],
-    '3': ['A', 'B', 'C'],
-    '4': ['A', 'B'],
-    '5': ['A', 'B', 'C'],
-    '6': ['A', 'B'],
-    '7': ['A', 'B', 'C'],
-    '8': ['A', 'B'],
-    '9': ['A', 'B'],
-    '10': ['A', 'B'],
-    '11': ['A', 'B'],
-    '12': ['A', 'B'],
-  }
-
-  const classes = Array.from({ length: 12 }, (_, i) => ({
-    label: `Class ${i + 1}`,
-    value: `${i + 1}`
-  }))
-
-  const sections = classSections[selectedClass]?.map(section => ({
-    label: `Section ${section}`,
-    value: section
-  })) || []
-
   const sessions = [
     { label: 'Morning Session', value: 'morning' },
     { label: 'Afternoon Session', value: 'afternoon' },
   ]
+
+  // Function to load classes and sections from API
+  const loadClassesAndSections = useCallback(async () => {
+    try {
+      setIsLoadingClasses(true)
+      setLoadingStep('Loading classes and sections...')
+
+      const response = await axiosApi.get('/students/classes-sections')
+      
+      if (response.data.success) {
+        const classesData = response.data.data
+        setClassesAndSections(classesData)
+        
+        // Transform the data for dropdown
+        const classesArray = Object.keys(classesData).map(className => ({
+          label: className,
+          value: className === 'Pre-Nursery' || className === 'Nursery' || className === 'LKG' || className === 'UKG' 
+            ? className 
+            : className.split(' ')[1] // Extract number from "Class X"
+        }))
+        
+        // Sort classes: Pre-Nursery, Nursery, LKG, UKG, then Class 1-12
+        const sortedClasses = classesArray.sort((a, b) => {
+          // Define the correct order for non-numeric classes
+          const specialOrder = {
+            'Pre-Nursery': 0,
+            'Nursery': 1,
+            'LKG': 2,
+            'UKG': 3
+          }
+          
+          // Get order for both items
+          const orderA = specialOrder[a.value] !== undefined ? specialOrder[a.value] : 
+                        specialOrder[a.label] !== undefined ? specialOrder[a.label] : 4
+          const orderB = specialOrder[b.value] !== undefined ? specialOrder[b.value] : 
+                        specialOrder[b.label] !== undefined ? specialOrder[b.label] : 4
+          
+          // If both are numeric classes (after the special ones)
+          if (orderA === 4 && orderB === 4) {
+            // Extract numeric value and compare as numbers
+            const numA = parseInt(a.value) || parseInt(a.label?.split(' ')[1]) || 100
+            const numB = parseInt(b.value) || parseInt(b.label?.split(' ')[1]) || 100
+            return numA - numB
+          }
+          
+          return orderA - orderB
+        })
+        
+        setClasses(sortedClasses)
+        
+        // Set first class and section by default if none selected
+        if (sortedClasses.length > 0) {
+          if (!selectedClass) {
+            const firstClass = sortedClasses[0].value
+            setSelectedClass(firstClass)
+            
+            // Get sections for first class
+            const firstClassSections = classesData[sortedClasses[0].label] || []
+            if (firstClassSections.length > 0 && !selectedSection) {
+              setSelectedSection(firstClassSections[0])
+            }
+          }
+        }
+        
+      } else {
+        throw new Error(response.data.message || 'Failed to load classes and sections')
+      }
+    } catch (err) {
+      console.error('Error loading classes and sections:', err)
+      showToast('Failed to load classes. Using default list.', 'warning')
+      
+      // Fallback to hardcoded classes if API fails
+      const fallbackClasses = [
+        { label: 'Pre-Nursery', value: 'Pre-Nursery' },
+        { label: 'Nursery', value: 'Nursery' },
+        { label: 'LKG', value: 'LKG' },
+        { label: 'UKG', value: 'UKG' },
+        { label: 'Class 1', value: '1' },
+        { label: 'Class 2', value: '2' },
+        { label: 'Class 3', value: '3' },
+        { label: 'Class 4', value: '4' },
+        { label: 'Class 5', value: '5' },
+        { label: 'Class 6', value: '6' },
+        { label: 'Class 7', value: '7' },
+        { label: 'Class 8', value: '8' },
+        { label: 'Class 9', value: '9' },
+        { label: 'Class 10', value: '10' },
+        { label: 'Class 11', value: '11' },
+        { label: 'Class 12', value: '12' },
+      ]
+      
+      const fallbackClassSections = {
+        'Pre-Nursery': ['A', 'B'],
+        'Nursery': ['A', 'B'],
+        'LKG': ['A', 'B'],
+        'UKG': ['A', 'B'],
+        '1': ['A', 'B'],
+        '2': ['A', 'B'],
+        '3': ['A', 'B'],
+        '4': ['A', 'B'],
+        '5': ['A', 'B'],
+        '6': ['A', 'B'],
+        '7': ['A', 'B'],
+        '8': ['A', 'B'],
+        '9': ['A', 'B'],
+        '10': ['A', 'B'],
+        '11': ['A', 'B'],
+        '12': ['A', 'B'],
+      }
+      
+      setClasses(fallbackClasses)
+      setClassesAndSections(fallbackClassSections)
+      
+      // Set first class and section by default
+      if (fallbackClasses.length > 0) {
+        if (!selectedClass) {
+          const firstClass = fallbackClasses[0].value
+          setSelectedClass(firstClass)
+          
+          if (!selectedSection) {
+            const firstClassSections = fallbackClassSections[fallbackClasses[0].label] || ['A']
+            setSelectedSection(firstClassSections[0])
+          }
+        }
+      }
+    } finally {
+      setIsLoadingClasses(false)
+      setLoadingStep('')
+    }
+  }, [])
+
+  // Function to update sections based on selected class
+  const updateSectionsForClass = (className) => {
+    if (!className || !classesAndSections) return
+    
+    // Find the class label
+    const classItem = classes.find(c => c.value === className)
+    if (!classItem) return
+    
+    const classLabel = classItem.label
+    const classSections = classesAndSections[classLabel] || []
+    
+    if (classSections.length > 0) {
+      const sectionsArray = classSections.map(section => ({
+        label: `Section ${section}`,
+        value: section
+      }))
+      setSections(sectionsArray)
+      
+      // Auto-select first section if current section is not in the list
+      if (!selectedSection || !classSections.includes(selectedSection)) {
+        setSelectedSection(classSections[0])
+      }
+    } else {
+      // Default fallback
+      const defaultSections = ['A'].map(section => ({
+        label: `Section ${section}`,
+        value: section
+      }))
+      setSections(defaultSections)
+      
+      if (!selectedSection) {
+        setSelectedSection('A')
+      }
+    }
+  }
 
   // Function to load all required data
   const loadAllData = useCallback(async () => {
@@ -818,12 +975,32 @@ export default function Attendance({ visible, onClose }) {
     }
   }, [selectedClass, selectedSection, selectedDate, selectedSession, teacherName])
 
-  // Load data when component mounts or dependencies change
+  // Load classes and sections when component mounts
   useEffect(() => {
-    if (visible && selectedClass && selectedSection) {
+    if (visible) {
+      loadClassesAndSections()
+    }
+  }, [visible])
+
+  // Update sections when class changes or classes are loaded
+  useEffect(() => {
+    if (selectedClass && Object.keys(classesAndSections).length > 0) {
+      updateSectionsForClass(selectedClass)
+    }
+  }, [selectedClass, classesAndSections])
+
+  // Load attendance data when class and section are selected
+  useEffect(() => {
+    if (visible && selectedClass && selectedSection && !isLoadingClasses) {
       loadAllData()
     }
-  }, [visible, loadAllData])
+  }, [visible, selectedClass, selectedSection, selectedDate, selectedSession, isLoadingClasses])
+
+  // Handle class selection
+  const handleClassSelect = (classValue) => {
+    setSelectedClass(classValue)
+    // Section will be updated by the useEffect above
+  }
 
   const toggleAttendance = (studentId) => {
     setAttendance(prev => {
@@ -1529,6 +1706,22 @@ export default function Attendance({ visible, onClose }) {
   })
 
   const renderStudents = () => {
+    if (isLoadingClasses || classes.length === 0) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <ThemedText style={styles.loadingText}>
+            Loading classes and sections...
+          </ThemedText>
+          {loadingStep ? (
+            <ThemedText style={styles.loadingStepText}>
+              {loadingStep}
+            </ThemedText>
+          ) : null}
+        </View>
+      )
+    }
+
     if (isLoading) {
       return (
         <View style={styles.loadingContainer}>
@@ -1863,12 +2056,12 @@ export default function Attendance({ visible, onClose }) {
           </LinearGradient>
 
           {/* Loading overlay */}
-          {isLoading && (
+          {(isLoadingClasses || isLoading) && (
             <View style={styles.loadingOverlay}>
               <View style={styles.loadingCard}>
                 <ActivityIndicator size="large" color={colors.primary} />
                 <ThemedText style={styles.loadingText}>
-                  Loading attendance data...
+                  {isLoadingClasses ? 'Loading classes and sections...' : 'Loading attendance data...'}
                 </ThemedText>
                 {loadingStep ? (
                   <ThemedText style={styles.loadingStepText}>
@@ -1922,8 +2115,9 @@ export default function Attendance({ visible, onClose }) {
                     <CustomDropdown
                       value={selectedClass}
                       items={classes}
-                      onSelect={setSelectedClass}
+                      onSelect={handleClassSelect}
                       placeholder="Select Class"
+                      isLoading={isLoadingClasses}
                     />
                   </View>
                   <View style={styles.halfWidth}>
@@ -1933,6 +2127,7 @@ export default function Attendance({ visible, onClose }) {
                       items={sections}
                       onSelect={setSelectedSection}
                       placeholder="Select Section"
+                      isLoading={isLoadingClasses}
                     />
                   </View>
                 </View>
@@ -1977,7 +2172,7 @@ export default function Attendance({ visible, onClose }) {
                   onPress={handleSave}
                   activeOpacity={0.9}
                   style={styles.saveBtnPressable}
-                  disabled={saving || isLoading || deleting}
+                  disabled={saving || isLoading || isLoadingClasses || deleting}
                 >
                   {saving ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />

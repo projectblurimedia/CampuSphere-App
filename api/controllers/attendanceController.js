@@ -152,6 +152,7 @@ export const markAttendance = asyncHandler(async (req, res) => {
             where: { id: existingRecord.id },
             data: {
               [session]: attendanceData.isPresent,
+              markedBy: markedBy,
               updatedAt: new Date()
             }
           })

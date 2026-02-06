@@ -1,7 +1,15 @@
 export const mapClassToEnum = (classInput) => {
-  if (!classInput && classInput !== 0) return 'CLASS_1'
+  if (!classInput && classInput !== 0 && classInput !== '0') return null
   
-  const classStr = classInput.toString().trim().toUpperCase().replace(/\s+/g, '_')
+  const classStr = classInput.toString().trim()
+  
+  // Direct mapping for CLASS_X format
+  if (classStr.toUpperCase().startsWith('CLASS_')) {
+    return classStr.toUpperCase()
+  }
+  
+  // Handle numeric values and other formats
+  const upperStr = classStr.toUpperCase()
   
   const enumMap = {
     'PRE_NURSERY': 'PRE_NURSERY',
@@ -21,9 +29,21 @@ export const mapClassToEnum = (classInput) => {
     '10': 'CLASS_10',
     '11': 'CLASS_11',
     '12': 'CLASS_12',
+    'CLASS 1': 'CLASS_1',
+    'CLASS 2': 'CLASS_2',
+    'CLASS 3': 'CLASS_3',
+    'CLASS 4': 'CLASS_4',
+    'CLASS 5': 'CLASS_5',
+    'CLASS 6': 'CLASS_6',
+    'CLASS 7': 'CLASS_7',
+    'CLASS 8': 'CLASS_8',
+    'CLASS 9': 'CLASS_9',
+    'CLASS 10': 'CLASS_10',
+    'CLASS 11': 'CLASS_11',
+    'CLASS 12': 'CLASS_12',
   }
   
-  return enumMap[classStr] || 'CLASS_1'
+  return enumMap[upperStr] || null
 }
 
 export const mapEnumToDisplayName = (classEnum) => {
@@ -76,4 +96,14 @@ export const formatPhoneNumber = (phone) => {
   if (!phone) return ''
   const cleaned = phone.toString().replace(/\D/g, '')
   return cleaned.substring(0, 10)
+}
+
+// Add this helper function to validate section
+export const validateSection = (sectionInput) => {
+  if (!sectionInput) return null
+  
+  const sectionStr = sectionInput.toString().trim().toUpperCase()
+  const validSections = ['A', 'B', 'C', 'D', 'E']
+  
+  return validSections.includes(sectionStr) ? sectionStr : null
 }

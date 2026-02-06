@@ -9,11 +9,13 @@ import {
   getStudentStatistics,
   getClassesSummary,
   getClassDetails,
-  getStudentsByClassAndSection
+  getStudentsByClassAndSection,
+  getClassesAndSections,
 } from '../controllers/studentController.js'
 
 const router = express.Router()
 
+router.get('/class-sections', getClassesAndSections)
 router.get('/search', searchStudents)
 router.get('/statistics', getStudentStatistics)
 router.get('/classes-summary', getClassesSummary)

@@ -448,17 +448,34 @@ export const getAllStudents = async (req, res) => {
       sortOrder = 'desc',
     } = req.query
 
-    const where = {}
+    const where = {
+      isActive: true
+    }
 
+    // Handle class filter
     if (classFilter) {
       const classEnum = mapClassToEnum(classFilter)
       if (classEnum) {
         where.class = classEnum
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid class filter: "${classFilter}"`
+        })
       }
     }
 
+    // Handle section filter
     if (section) {
-      where.section = section.toUpperCase()
+      const validatedSection = validateSection(section)
+      if (validatedSection) {
+        where.section = validatedSection
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid section: "${section}". Valid sections: A, B, C, D, E`
+        })
+      }
     }
 
     if (search) {
@@ -471,8 +488,6 @@ export const getAllStudents = async (req, res) => {
         { village: { contains: search, mode: 'insensitive' } },
       ]
     }
-
-    where.isActive = true
 
     const pageNum = parseInt(page)
     const limitNum = parseInt(limit)
@@ -801,12 +816,23 @@ export const getClassesSummary = async (req, res) => {
 export const getClassDetails = async (req, res) => {
   try {
     const { class: classInput } = req.query
+    console.log('getClassDetails - Received classInput:', classInput)
 
+    if (!classInput || classInput === '' || classInput === 'undefined') {
+      return res.status(400).json({
+        success: false,
+        message: 'Class parameter is required'
+      })
+    }
+
+    // Map class name to enum
     const classEnum = mapClassToEnum(classInput)
+    console.log('getClassDetails - Mapped classEnum:', classEnum)
+    
     if (!classEnum) {
       return res.status(400).json({
         success: false,
-        message: `Invalid class: "${classInput}"`
+        message: `Invalid class: "${classInput}". Valid formats: "1", "10", "Class 1", "Class_1", "CLASS_1"`
       })
     }
 
@@ -819,6 +845,8 @@ export const getClassDetails = async (req, res) => {
       _count: true,
       orderBy: { section: 'asc' }
     })
+
+    console.log('getClassDetails - Found details:', details)
 
     // Transform data
     const sectionSummary = {}
@@ -855,6 +883,7 @@ export const getClassDetails = async (req, res) => {
       data: result,
       class: classEnum,
       classLabel: mapEnumToDisplayName(classEnum),
+      totalStudents: result.reduce((sum, section) => sum + section.totalCount, 0),
     })
   } catch (error) {
     console.error('Get class details error:', error)
@@ -875,29 +904,56 @@ export const getStudentsByClassAndSection = async (req, res) => {
       sortOrder = 'asc',
     } = req.query
 
-    const classEnum = mapClassToEnum(classInput)
-    if (!classEnum) {
+    console.log('getStudentsByClassAndSection - classInput:', classInput, 'section:', section)
+
+    if (!classInput || classInput === '' || classInput === 'undefined') {
       return res.status(400).json({
         success: false,
-        message: `Invalid class: "${classInput}"`
+        message: 'Class parameter is required'
       })
     }
 
-    if (!section) {
+    // Map class name to enum
+    const classEnum = mapClassToEnum(classInput)
+    console.log('getStudentsByClassAndSection - Mapped classEnum:', classEnum)
+    
+    if (!classEnum) {
       return res.status(400).json({
         success: false,
-        message: 'Section is required',
+        message: `Invalid class: "${classInput}". Valid formats: "1", "10", "Class 1", "Class_1", "CLASS_1"`
+      })
+    }
+
+    if (!section || section === '' || section === 'undefined') {
+      return res.status(400).json({
+        success: false,
+        message: 'Section parameter is required'
+      })
+    }
+
+    // Validate section
+    const validatedSection = validateSection(section)
+    console.log('getStudentsByClassAndSection - Validated section:', validatedSection)
+    
+    if (!validatedSection) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid section: "${section}". Valid sections: A, B, C, D, E`
       })
     }
 
     const where = {
       class: classEnum,
-      section: section.toUpperCase(),
+      section: validatedSection,
       isActive: true
     }
 
+    console.log('getStudentsByClassAndSection - Where clause:', where)
+
     const orderBy = {}
-    orderBy[sortBy] = sortOrder
+    const validSortFields = ['firstName', 'lastName', 'rollNo', 'admissionNo', 'createdAt']
+    const sortField = validSortFields.includes(sortBy) ? sortBy : 'firstName'
+    orderBy[sortField] = sortOrder === 'desc' ? 'desc' : 'asc'
 
     const students = await prisma.student.findMany({
       where,
@@ -910,6 +966,8 @@ export const getStudentsByClassAndSection = async (req, res) => {
       }
     })
 
+    console.log('getStudentsByClassAndSection - Found students:', students.length)
+
     const studentsWithDisplay = addDisplayClassToStudents(students)
 
     res.status(200).json({
@@ -919,7 +977,7 @@ export const getStudentsByClassAndSection = async (req, res) => {
       filters: {
         class: classEnum,
         classLabel: mapEnumToDisplayName(classEnum),
-        section: section.toUpperCase(),
+        section: validatedSection,
       },
     })
   } catch (error) {
@@ -959,6 +1017,57 @@ export const deleteStudent = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to delete student',
+    })
+  }
+}
+
+// Get classes and sections in the exact format
+export const getClassesAndSections = async (req, res) => {
+  try {
+    // Get all active students grouped by class and section
+    const result = await prisma.student.groupBy({
+      by: ['class', 'section'],
+      where: { isActive: true },
+      _count: true,
+      orderBy: [
+        { class: 'asc' },
+        { section: 'asc' }
+      ]
+    })
+
+    // Transform to exactly the format you want
+    const classSections = {}
+    
+    result.forEach(item => {
+      // Convert enum to display name (e.g., "CLASS_1" to "1")
+      const className = mapEnumToDisplayName(item.class)
+      const section = item.section
+      
+      if (!classSections[className]) {
+        classSections[className] = []
+      }
+      
+      // Add section if not already in array
+      if (!classSections[className].includes(section)) {
+        classSections[className].push(section)
+      }
+    })
+
+    // Sort sections alphabetically for each class
+    Object.keys(classSections).forEach(className => {
+      classSections[className].sort()
+    })
+
+    // Return EXACTLY the format you requested
+    res.status(200).json({
+      success: true,
+      data: classSections // This will be exactly like your example
+    })
+  } catch (error) {
+    console.error('Get classes and sections error:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get classes and sections',
     })
   }
 }

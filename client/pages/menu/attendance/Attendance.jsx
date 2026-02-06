@@ -618,9 +618,6 @@ export default function Attendance({ visible, onClose }) {
         markedBy: teacherName
       }
       
-      // Log payload for debugging
-      console.log('Sending payload:', JSON.stringify(payload, null, 2))
-
       const response = await axiosApi.post('/attendances/mark', payload)
 
       if (response.data.success) {
@@ -677,8 +674,6 @@ export default function Attendance({ visible, onClose }) {
         markedBy: teacherName
       }
       
-      console.log('Override payload:', JSON.stringify(payload, null, 2))
-
       const response = await axiosApi.put('/attendances/override', payload)
 
       if (response.data.success) {
@@ -765,7 +760,13 @@ export default function Attendance({ visible, onClose }) {
   const getCurrentSessionMarkedBy = (studentId) => {
     if (!existingAttendance[studentId]) return null
     
-    // Since we don't have session-specific markedBy fields, return the general markedBy
+    // Check if we have specific session data from the attendanceExists check
+    if (attendanceExists?.exists) {
+      // If attendance exists, return the current teacher name (who is overriding)
+      return teacherName
+    }
+    
+    // Otherwise return the existing markedBy
     return existingAttendance[studentId].markedBy
   }
 
@@ -782,6 +783,15 @@ export default function Attendance({ visible, onClose }) {
     
     const status = getCurrentSessionStatus(studentId)
     return status !== null
+  }
+
+  const getHeaderSubtitle = () => {
+    if (attendanceExists?.exists && sessionMarkedBy) {
+      return `Override attendance marked by: ${sessionMarkedBy}`
+    } else if (sessionMarkedBy && !attendanceExists?.exists) {
+      return `Already marked by: ${sessionMarkedBy}`
+    }
+    return `Marking as: ${teacherName}`
   }
 
   const styles = StyleSheet.create({
@@ -817,6 +827,7 @@ export default function Attendance({ visible, onClose }) {
       marginBottom: -5,
     },
     subtitle: {
+      textAlign: 'center',
       marginTop: 4,
       fontSize: 11,
       color: 'rgba(255,255,255,0.9)',
@@ -1148,7 +1159,7 @@ export default function Attendance({ visible, onClose }) {
     if (students.length === 0) {
       return (
         <View style={styles.emptyState}>
-          <Feather name="users" size={40} color={colors.textSecondary} />
+          <FontAwesome5 name="users" size={40} color={colors.textSecondary} />
           <ThemedText style={styles.noStudentsText}>
             No students found for {selectedClass}-{selectedSection}
           </ThemedText>
@@ -1358,16 +1369,16 @@ export default function Attendance({ visible, onClose }) {
               )}
             </View>
             
-            {isSubmitted && !attendanceExists?.exists && markedBy && (
+            {/* {isSubmitted && markedBy && (
               <ThemedText style={{
                 fontSize: 11,
                 color: colors.textSecondary,
                 marginTop: 4,
                 textAlign: 'right'
               }}>
-                Marked by: {markedBy}
+                {attendanceExists?.exists ? 'Will be marked by' : 'Marked by'}: {markedBy}
               </ThemedText>
-            )}
+            )} */}
           </View>
         </View>
       )
@@ -1410,18 +1421,10 @@ export default function Attendance({ visible, onClose }) {
     return null
   }
 
-  // Determine what to show in the subtitle
-  const getHeaderSubtitle = () => {
-    if (sessionMarkedBy) {
-      return `Already marked by: ${sessionMarkedBy}`
-    }
-    return `Marking as: ${teacherName}`
-  }
-
   // Get header gradient colors based on attendance status
   const getHeaderGradientColors = () => {
     if (attendanceExists?.exists) {
-      return ['#f59e0b', '#d97706'] // Orange gradient for existing attendance
+      return ['#d85e00', '#d94206'] 
     }
     return [colors.gradientStart, colors.gradientEnd] // Default gradient
   }
@@ -1429,7 +1432,7 @@ export default function Attendance({ visible, onClose }) {
   // Get save button gradient colors
   const getSaveButtonGradientColors = () => {
     if (attendanceExists?.exists) {
-      return ['#f59e0b', '#d97706'] // Orange gradient for existing attendance
+      return ['#d85e00', '#d94206'] 
     }
     return [colors.gradientStart, colors.gradientEnd] // Default gradient
   }

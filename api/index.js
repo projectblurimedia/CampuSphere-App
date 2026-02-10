@@ -9,6 +9,7 @@ import rateLimit from 'express-rate-limit'
 import authRoutes from './routes/authRoutes.js'
 import studentRoutes from './routes/studentRoutes.js'
 import attendanceRoutes from './routes/attendanceRoutes.js'
+import marksRoutes from './routes/marksRoutes.js'
 import employeeRoutes from './routes/employeeRoutes.js'
 
 dotenv.config()
@@ -52,6 +53,7 @@ app.use('/api/auth/forgot-password', authLimiter)
 app.use('/api/auth', authRoutes)
 app.use('/api/students', studentRoutes)
 app.use('/api/attendances', attendanceRoutes)
+app.use('/api/marks', marksRoutes)
 app.use('/api/employees', employeeRoutes)
 
 app.use((error, req, res, next) => {

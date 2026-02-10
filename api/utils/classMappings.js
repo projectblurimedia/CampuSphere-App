@@ -98,7 +98,6 @@ export const formatPhoneNumber = (phone) => {
   return cleaned.substring(0, 10)
 }
 
-// Add this helper function to validate section
 export const validateSection = (sectionInput) => {
   if (!sectionInput) return null
   
@@ -106,4 +105,120 @@ export const validateSection = (sectionInput) => {
   const validSections = ['A', 'B', 'C', 'D', 'E']
   
   return validSections.includes(sectionStr) ? sectionStr : null
+}
+
+// Add exam type mapping helper
+export const mapExamType = (examType) => {
+  if (!examType) return null
+  
+  const typeStr = examType.toString().trim().toLowerCase()
+  
+  const examTypeMap = {
+    'formative 1': 'FORMATIVE_1',
+    'formative-1': 'FORMATIVE_1',
+    'formative_1': 'FORMATIVE_1',
+    'formative1': 'FORMATIVE_1',
+    'formative 2': 'FORMATIVE_2',
+    'formative-2': 'FORMATIVE_2',
+    'formative_2': 'FORMATIVE_2',
+    'formative2': 'FORMATIVE_2',
+    'formative 3': 'FORMATIVE_3',
+    'formative-3': 'FORMATIVE_3',
+    'formative_3': 'FORMATIVE_3',
+    'formative3': 'FORMATIVE_3',
+    'summative 1': 'SUMMATIVE_1',
+    'summative-1': 'SUMMATIVE_1',
+    'summative_1': 'SUMMATIVE_1',
+    'summative1': 'SUMMATIVE_1',
+    'summative 2': 'SUMMATIVE_2',
+    'summative-2': 'SUMMATIVE_2',
+    'summative_2': 'SUMMATIVE_2',
+    'summative2': 'SUMMATIVE_2',
+    'pre-final 1': 'PRE_FINAL_1',
+    'pre-final-1': 'PRE_FINAL_1',
+    'pre_final_1': 'PRE_FINAL_1',
+    'prefinal1': 'PRE_FINAL_1',
+    'pre-final 2': 'PRE_FINAL_2',
+    'pre-final-2': 'PRE_FINAL_2',
+    'pre_final_2': 'PRE_FINAL_2',
+    'prefinal2': 'PRE_FINAL_2',
+    'pre-final 3': 'PRE_FINAL_3',
+    'pre-final-3': 'PRE_FINAL_3',
+    'pre_final_3': 'PRE_FINAL_3',
+    'prefinal3': 'PRE_FINAL_3',
+    'final': 'FINAL'
+  }
+  
+  return examTypeMap[typeStr] || null
+}
+
+// Add subject mapping helper
+export const mapSubject = (subject) => {
+  if (!subject) return null
+  
+  const subjectStr = subject.toString().trim().toLowerCase()
+  
+  const subjectMap = {
+    'telugu': 'TELUGU',
+    'mathematics': 'MATHEMATICS',
+    'math': 'MATHEMATICS',
+    'maths': 'MATHEMATICS',
+    'science': 'SCIENCE',
+    'english': 'ENGLISH',
+    'hindi': 'HINDI',
+    'social': 'SOCIAL',
+    'social studies': 'SOCIAL',
+    'social-studies': 'SOCIAL',
+    'social_studies': 'SOCIAL',
+    'computers': 'COMPUTERS',
+    'computer': 'COMPUTERS',
+    'computer science': 'COMPUTERS',
+    'computer-science': 'COMPUTERS',
+    'computer_science': 'COMPUTERS',
+    'physics': 'PHYSICS',
+    'biology': 'BIOLOGY'
+  }
+  
+  return subjectMap[subjectStr] || null
+}
+
+// Add helper to get display names for enums
+export const getExamTypeDisplayName = (examType) => {
+  if (!examType) return null
+  
+  const examTypeStr = examType.toString()
+  
+  const displayMap = {
+    'FORMATIVE_1': 'Formative 1',
+    'FORMATIVE_2': 'Formative 2',
+    'FORMATIVE_3': 'Formative 3',
+    'SUMMATIVE_1': 'Summative 1',
+    'SUMMATIVE_2': 'Summative 2',
+    'PRE_FINAL_1': 'Pre-Final 1',
+    'PRE_FINAL_2': 'Pre-Final 2',
+    'PRE_FINAL_3': 'Pre-Final 3',
+    'FINAL': 'Final'
+  }
+  
+  return displayMap[examTypeStr] || examTypeStr
+}
+
+export const getSubjectDisplayName = (subject) => {
+  if (!subject) return null
+  
+  const subjectStr = subject.toString()
+  
+  const displayMap = {
+    'TELUGU': 'Telugu',
+    'MATHEMATICS': 'Mathematics',
+    'SCIENCE': 'Science',
+    'ENGLISH': 'English',
+    'HINDI': 'Hindi',
+    'SOCIAL': 'Social Studies',
+    'COMPUTERS': 'Computers',
+    'PHYSICS': 'Physics',
+    'BIOLOGY': 'Biology'
+  }
+  
+  return displayMap[subjectStr] || subjectStr
 }

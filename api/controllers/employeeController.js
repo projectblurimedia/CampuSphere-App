@@ -162,7 +162,6 @@ const getDesignationDisplayName = (designation) => {
 export const getAllEmployees = async (req, res) => {
   try {
     const { 
-      department,
       designation,
       status = 'active',
       page = 1, 
@@ -173,10 +172,6 @@ export const getAllEmployees = async (req, res) => {
     } = req.query
     
     const where = {}
-    
-    if (department) {
-      where.department = { contains: department, mode: 'insensitive' }
-    }
     
     if (designation) {
       const designationEnum = mapDesignationToEnum(designation)
@@ -196,7 +191,6 @@ export const getAllEmployees = async (req, res) => {
         { lastName: { contains: search, mode: 'insensitive' } },
         { email: { contains: search, mode: 'insensitive' } },
         { phone: { contains: search, mode: 'insensitive' } },
-        { department: { contains: search, mode: 'insensitive' } },
         { village: { contains: search, mode: 'insensitive' } }
       ]
     }
@@ -298,7 +292,6 @@ export const createEmployee = [
         address,
         village,
         designation,
-        department,
         joiningDate,
         qualification,
         aadharNumber,
@@ -308,7 +301,7 @@ export const createEmployee = [
       // Validate required fields
       const requiredFields = [
         'firstName', 'lastName', 'dob', 'email', 'phone',
-        'address', 'designation', 'department'
+        'address', 'designation'
       ]
       
       const missingFields = requiredFields.filter(field => !req.body[field])
@@ -444,7 +437,6 @@ export const createEmployee = [
           address: address.trim(),
           village: village ? village.trim() : null,
           designation: designationEnum,
-          department: department.trim(),
           joiningDate: joiningDate ? parseDate(joiningDate) : new Date(),
           qualification: qualification ? qualification.trim() : null,
           aadharNumber: aadharNumber && aadharNumber.trim() !== '' ? aadharNumber.trim() : null,
@@ -533,7 +525,6 @@ export const updateEmployee = [
         address,
         village,
         designation,
-        department,
         joiningDate,
         qualification,
         aadharNumber,
@@ -648,7 +639,6 @@ export const updateEmployee = [
         address: address !== undefined ? address.trim() : existingEmployee.address,
         village: village !== undefined ? village.trim() : existingEmployee.village,
         designation: designationEnum,
-        department: department !== undefined ? department.trim() : existingEmployee.department,
         joiningDate: joiningDate !== undefined ? parseDate(joiningDate) : existingEmployee.joiningDate,
         qualification: qualification !== undefined ? qualification.trim() : existingEmployee.qualification,
         aadharNumber: aadharNumber !== undefined ? (aadharNumber.trim() !== '' ? aadharNumber.trim() : null) : existingEmployee.aadharNumber,
@@ -760,7 +750,6 @@ export const searchEmployees = async (req, res) => {
   try {
     const { 
       query: searchQuery,
-      department,
       designation,
       status = 'active',
       page = 1,
@@ -777,13 +766,8 @@ export const searchEmployees = async (req, res) => {
         { lastName: { contains: searchQuery, mode: 'insensitive' } },
         { email: { contains: searchQuery, mode: 'insensitive' } },
         { phone: { contains: searchQuery, mode: 'insensitive' } },
-        { department: { contains: searchQuery, mode: 'insensitive' } },
         { village: { contains: searchQuery, mode: 'insensitive' } }
       ]
-    }
-    
-    if (department) {
-      where.department = { contains: department, mode: 'insensitive' }
     }
     
     if (designation) {
@@ -847,20 +831,10 @@ export const searchEmployees = async (req, res) => {
 // Get employee statistics
 export const getEmployeeStatistics = async (req, res) => {
   try {
-    const [total, byDepartment, byDesignation, byGender, latestEmployees] = await Promise.all([
+    const [total, byDesignation, byGender, latestEmployees] = await Promise.all([
       // Total employees
       prisma.employee.count({
         where: { isActive: true }
-      }),
-      
-      // Employees by department
-      prisma.employee.groupBy({
-        by: ['department'],
-        where: { isActive: true },
-        _count: true,
-        orderBy: {
-          _count: 'desc'
-        }
       }),
       
       // Employees by designation
@@ -894,7 +868,6 @@ export const getEmployeeStatistics = async (req, res) => {
           lastName: true,
           email: true,
           designation: true,
-          department: true,
           profilePicUrl: true,
           createdAt: true
         }
@@ -915,7 +888,6 @@ export const getEmployeeStatistics = async (req, res) => {
     
     const statistics = {
       total,
-      byDepartment,
       byDesignation: byDesignationWithDisplay,
       byGender,
       latest: latestEmployeesWithDisplay
@@ -948,7 +920,7 @@ export const downloadEmployeeTemplate = async (req, res) => {
     const headers = [
       ['firstName*', 'lastName*', 'gender* (MALE/FEMALE/NOT_SPECIFIED)', 'dob* (YYYY-MM-DD)', 
        'email*', 'phone* (10 digits)', 'address*', 'village', 'designation* (Chairperson/Principal/Vice_Principal/Accountant/Teacher/Other)', 
-       'department*', 'joiningDate (YYYY-MM-DD)', 'qualification', 
+        'joiningDate (YYYY-MM-DD)', 'qualification', 
        'aadharNumber (12 digits)', 'panNumber (10 characters)']
     ]
     
@@ -976,7 +948,6 @@ export const downloadEmployeeTemplate = async (req, res) => {
       { wch: 25 }, // address
       { wch: 15 }, // village
       { wch: 20 }, // designation
-      { wch: 15 }, // department
       { wch: 12 }, // joiningDate
       { wch: 20 }, // qualification
       { wch: 15 }, // aadharNumber
@@ -1007,7 +978,6 @@ export const downloadEmployeeTemplate = async (req, res) => {
       ['address*: Complete address'],
       ['village: Village/Town name'],
       ['designation*: Job designation (Chairperson, Principal, Vice_Principal, Accountant, Teacher, or Other)'],
-      ['department*: Department (e.g., Academic, Administration, Sports)'],
       ['joiningDate: Date of joining (format: YYYY-MM-DD)'],
       ['qualification: Educational qualifications'],
       ['aadharNumber: 12-digit Aadhar number (must be unique if provided)'],
@@ -1130,7 +1100,7 @@ export const bulkImportEmployees = [
           // Validate required fields
           const requiredFields = [
             'firstName', 'lastName', 'gender', 'dob', 'email', 'phone',
-            'address', 'designation', 'department'
+            'address', 'designation'
           ]
           
           const missingFields = requiredFields.filter(field => !row[field] || row[field].toString().trim() === '')
@@ -1260,7 +1230,6 @@ export const bulkImportEmployees = [
             address: row.address.toString().trim(),
             village: row.village ? row.village.toString().trim() : null,
             designation: designationEnum,
-            department: row.department.toString().trim(),
             joiningDate: joiningDate,
             qualification: row.qualification ? row.qualification.toString().trim() : null,
             aadharNumber: aadharNumber,

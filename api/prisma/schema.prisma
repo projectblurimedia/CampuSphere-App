@@ -48,36 +48,39 @@ enum StudentType {
 }
 
 enum ExamType {
-  FORMATIVE_1
-  FORMATIVE_2
-  FORMATIVE_3
-  SUMMATIVE_1
-  SUMMATIVE_2
-  CUSTOM
+  FORMATIVE_1  @map("Formative 1")
+  FORMATIVE_2  @map("Formative 2")
+  FORMATIVE_3  @map("Formative 3")
+  SUMMATIVE_1  @map("Summative 1")
+  SUMMATIVE_2  @map("Summative 2")
+  PRE_FINAL_1  @map("Pre-Final 1")
+  PRE_FINAL_2  @map("Pre-Final 2")
+  PRE_FINAL_3  @map("Pre-Final 3")
+  FINAL        @map("Final")
 }
 
 enum Subject {
+  TELUGU
   MATHEMATICS
   SCIENCE
   ENGLISH
   HINDI
-  SOCIAL_STUDIES
-  COMPUTER_SCIENCE
+  SOCIAL
+  COMPUTERS
   PHYSICS
-  CHEMISTRY
   BIOLOGY
 }
 
 enum Grade {
-  A_PLUS
-  A
-  B_PLUS
-  B
-  C
-  D
-  E
-  F
-  NA
+  A_PLUS  @map("A+")
+  A       @map("A")
+  B_PLUS  @map("B+")
+  B       @map("B")
+  C       @map("C")
+  D       @map("D")
+  E       @map("E")
+  F       @map("F")
+  NA      @map("N/A")
 }
 
 enum ResultStatus {
@@ -175,31 +178,26 @@ model Marks {
   studentId           String  
   student             Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
   examType            ExamType
-  customExamName      String?       @db.VarChar(100)
   
-  subject             Subject
-  marks               Int           
-  totalMarks          Int           
-  percentage          Float?
-  grade               Grade         @default(NA)
-  result              ResultStatus  @default(NA)
-  passingPercentage   Int           @default(35)  
+  // Format: { "TELUGU": { "marks": 85, "totalMarks": 100, "grade": "A", "result": "PASS", "isAbsent": false }, ... }
+  marksData           Json          @db.JsonB
+  totalObtained       Int           @default(0)     
+  totalMaximum        Int           @default(0)     
+  percentage          Float?                         
+  overallGrade        Grade         @default(NA)
+  overallResult       ResultStatus  @default(NA)
+  
   uploadedBy          String?       @db.VarChar(50)
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
-
+  uploadedAt          DateTime      @default(now())  
+  
+  // Indexes for performance
   @@index([studentId])
   @@index([examType])
-  @@index([subject])
-  @@index([grade])
-  @@index([result])
+  @@index([overallGrade])
+  @@index([overallResult])
   @@index([studentId, examType])
-  @@index([studentId, subject])
-  @@index([examType, subject])
-  
-  // For marks analysis
-  @@index([studentId, examType, subject])
-  @@unique([studentId, examType, subject])
+  @@index([uploadedAt])
+  @@unique([studentId, examType])
 }
 
 model FeeDetails {

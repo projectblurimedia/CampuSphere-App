@@ -18,35 +18,9 @@ import { useTheme } from '@/hooks/useTheme'
 import { LinearGradient } from 'expo-linear-gradient'
 import axiosApi from '@/utils/axiosApi'
 import { ToastNotification } from '@/components/ui/ToastNotification'
+import { useSelector } from 'react-redux'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
-
-// Function to generate academic years
-const generateAcademicYears = () => {
-  const currentYear = new Date().getFullYear()
-  const currentMonth = new Date().getMonth() + 1
-  let baseYear = currentYear
-  
-  // If current month is after June, next academic year starts
-  if (currentMonth > 6) {
-    baseYear = currentYear
-  } else {
-    baseYear = currentYear - 1
-  }
-  
-  const years = []
-  // Previous 1 year + current + next 5 years
-  for (let i = 1; i >= -5; i--) {
-    const startYear = baseYear - i
-    const endYear = startYear + 1
-    years.push(`${startYear}-${endYear}`)
-  }
-  
-  return years
-}
-
-const ACADEMIC_YEARS = generateAcademicYears()
-const CURRENT_ACADEMIC_YEAR = ACADEMIC_YEARS[1] // Current academic year is at index 1
 
 const BusFeeManagement = ({ 
   visible, 
@@ -60,9 +34,9 @@ const BusFeeManagement = ({
     villageName: '',
     distance: '',
     feeAmount: '',
-    vehicleType: 'bus',
-    academicYear: CURRENT_ACADEMIC_YEAR,
     description: '',
+    createdBy: '',
+    updatedBy: ''
   })
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState({})
@@ -71,8 +45,15 @@ const BusFeeManagement = ({
     message: '',
     type: 'info'
   })
-  const [showYearDropdown, setShowYearDropdown] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+
+  const employee = useSelector(state => state.employee.employee)
+  const teacherName = employee ? `${employee.firstName} ${employee.lastName}` : 'Accountant'
+
+  // Get current user from Redux/context
+  const getCurrentUser = () => {
+    return teacherName || 'Unknown Employee'
+  }
 
   useEffect(() => {
     if (initialData) {
@@ -80,9 +61,9 @@ const BusFeeManagement = ({
         villageName: initialData.villageName || '',
         distance: initialData.distance?.toString() || '',
         feeAmount: initialData.feeAmount?.toString() || '',
-        vehicleType: initialData.vehicleType || 'bus',
-        academicYear: initialData.academicYear || CURRENT_ACADEMIC_YEAR,
         description: initialData.description || '',
+        createdBy: initialData.createdBy || '',
+        updatedBy: getCurrentUser()
       })
       setErrors({})
     } else {
@@ -90,9 +71,9 @@ const BusFeeManagement = ({
         villageName: '',
         distance: '',
         feeAmount: '',
-        vehicleType: 'bus',
-        academicYear: CURRENT_ACADEMIC_YEAR,
         description: '',
+        createdBy: getCurrentUser(),
+        updatedBy: getCurrentUser()
       })
       setErrors({})
     }
@@ -117,26 +98,26 @@ const BusFeeManagement = ({
       newErrors.villageName = 'Village name is required'
     }
     
-    if (!formData.distance.trim()) {
+    if (!formData.distance) {
       newErrors.distance = 'Distance is required'
     } else if (isNaN(formData.distance) || parseFloat(formData.distance) <= 0) {
       newErrors.distance = 'Enter valid distance in km'
     }
     
-    if (!formData.feeAmount.trim()) {
+    if (!formData.feeAmount) {
       newErrors.feeAmount = 'Annual bus fee is required'
     } else if (isNaN(formData.feeAmount) || parseFloat(formData.feeAmount) <= 0) {
       newErrors.feeAmount = 'Enter valid annual bus fee amount'
     }
     
-    // Check for duplicate
+    // Check for duplicate active fee structure
     if (!initialData) {
       const duplicate = existingBusFees.find(fee => 
-        fee.villageName.toLowerCase() === formData.villageName.toLowerCase() &&
-        fee.academicYear === formData.academicYear
+        fee.villageName?.toLowerCase() === formData.villageName.trim().toLowerCase() && 
+        fee.isActive === true
       )
       if (duplicate) {
-        newErrors.villageName = `Bus fee already exists for ${formData.villageName} in ${formData.academicYear}`
+        newErrors.villageName = `Active bus fee already exists for ${formData.villageName}`
       }
     }
     
@@ -155,34 +136,23 @@ const BusFeeManagement = ({
         villageName: formData.villageName.trim(),
         distance: parseFloat(formData.distance),
         feeAmount: parseFloat(formData.feeAmount),
-        vehicleType: formData.vehicleType,
-        academicYear: formData.academicYear,
-        description: formData.description.trim()
+        description: formData.description || null,
+        createdBy: formData.createdBy,
+        updatedBy: formData.updatedBy
       }
 
       let response
-      if (initialData && initialData._id) {
-        // Update existing
-        response = await axiosApi.put(`/bus-fees/${initialData._id}`, payload)
+      if (initialData && initialData.id) {
+        response = await axiosApi.put(`/fee-structure/bus/${initialData.id}`, payload)
         showToast('Bus fee updated successfully!', 'success')
       } else {
-        // Create new
-        response = await axiosApi.post('/bus-fees', payload)
+        response = await axiosApi.post('/fee-structure/bus', payload)
         showToast('Bus fee created successfully!', 'success')
       }
 
       if (response.data.success) {
-        const newData = {
-          _id: response.data.data._id || Date.now().toString(),
-          ...response.data.data,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-        
-        onSave(newData)
+        onSave(response.data.data)
         setLoading(false)
-        
-        // Close modal after a delay to show toast
         setTimeout(() => {
           onClose()
         }, 1500)
@@ -198,9 +168,9 @@ const BusFeeManagement = ({
   const handleDelete = async () => {
     try {
       setLoading(true)
-      await axiosApi.delete(`/bus-fees/${initialData._id}`)
+      await axiosApi.delete(`/fee-structure/bus/${initialData.id}`)
       showToast('Bus fee deleted successfully!', 'success')
-      onSave(null, true) // Pass true to indicate deletion
+      onSave(null, true)
       setShowDeleteModal(false)
       setTimeout(() => {
         onClose()
@@ -213,70 +183,6 @@ const BusFeeManagement = ({
       setShowDeleteModal(false)
     }
   }
-
-  const handleSelectYear = (year) => {
-    setFormData(prev => ({ ...prev, academicYear: year }))
-    setShowYearDropdown(false)
-  }
-
-  const renderDropdownItem = ({ item, onSelect, isSelected }) => (
-    <TouchableOpacity
-      style={[
-        styles.dropdownItem,
-        isSelected && { backgroundColor: colors.success + '15' }
-      ]}
-      onPress={() => onSelect(item)}
-    >
-      <ThemedText 
-        style={[
-          styles.dropdownItemText,
-          isSelected && { color: colors.success, fontFamily: 'Poppins-SemiBold' }
-        ]}
-      >
-        {item}
-      </ThemedText>
-      {isSelected && (
-        <Feather name="check" size={18} color={colors.success} />
-      )}
-    </TouchableOpacity>
-  )
-
-  const renderYearDropdown = () => (
-    <Modal
-      transparent
-      visible={showYearDropdown}
-      animationType="fade"
-      onRequestClose={() => setShowYearDropdown(false)}
-    >
-      <TouchableOpacity
-        style={styles.dropdownOverlay}
-        activeOpacity={1}
-        onPress={() => setShowYearDropdown(false)}
-      >
-        <View style={[styles.dropdownContainer, { backgroundColor: colors.cardBackground }]}>
-          <View style={[styles.dropdownHeader, { backgroundColor: colors.success + '10' }]}>
-            <ThemedText style={[styles.dropdownTitle, { color: colors.success }]}>
-              Select Academic Year
-            </ThemedText>
-            <TouchableOpacity onPress={() => setShowYearDropdown(false)}>
-              <Feather name="x" size={20} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-          <FlatList
-            data={ACADEMIC_YEARS}
-            keyExtractor={(item) => item}
-            renderItem={({ item }) => renderDropdownItem({
-              item,
-              onSelect: handleSelectYear,
-              isSelected: formData.academicYear === item
-            })}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.dropdownList}
-          />
-        </View>
-      </TouchableOpacity>
-    </Modal>
-  )
 
   const renderDeleteModal = () => (
     <Modal
@@ -436,17 +342,6 @@ const BusFeeManagement = ({
       fontSize: 15,
       fontFamily: 'Poppins-Medium',
     },
-    dropdownInput: {
-      borderWidth: 1.5,
-      borderColor: colors.border,
-      backgroundColor: colors.inputBackground,
-      borderRadius: 12,
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      color: colors.text,
-      fontSize: 15,
-      fontFamily: 'Poppins-Medium',
-    },
     focusedInput: {
       borderColor: colors.success,
     },
@@ -471,41 +366,6 @@ const BusFeeManagement = ({
     },
     halfContainer: {
       flex: 1,
-    },
-    vehicleTypeContainer: {
-      marginTop: 12,
-    },
-    vehicleTypeLabel: {
-      fontSize: 14,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-SemiBold',
-      marginBottom: 8,
-    },
-    vehicleTypeGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 10,
-    },
-    vehicleTypeButton: {
-      flex: 1,
-      minWidth: '22%',
-      paddingVertical: 12,
-      alignItems: 'center',
-      borderRadius: 10,
-      borderWidth: 1.5,
-      borderColor: colors.border,
-      backgroundColor: colors.inputBackground,
-    },
-    vehicleTypeSelected: {
-      backgroundColor: colors.success + '15',
-      borderColor: colors.success,
-    },
-    vehicleTypeIcon: {
-      marginBottom: 6,
-    },
-    vehicleTypeText: {
-      fontSize: 12,
-      fontFamily: 'Poppins-Medium',
     },
     descriptionInput: {
       minHeight: 80,
@@ -727,13 +587,6 @@ const BusFeeManagement = ({
 
   if (!visible) return null
 
-  const vehicleTypes = [
-    { label: 'Bus', value: 'bus', icon: 'bus' },
-    { label: 'Van', value: 'van', icon: 'van-utility' },
-    { label: 'Auto', value: 'auto', icon: 'rickshaw' },
-    { label: 'Other', value: 'other', icon: 'car' },
-  ]
-
   return (
     <View style={modalStyles.overlay}>
       <View style={modalStyles.modalContainer}>
@@ -829,11 +682,17 @@ const BusFeeManagement = ({
                     style={[
                       modalStyles.input,
                       errors.distance && modalStyles.errorInput,
-                      !errors.distance && formData.distance.trim() && modalStyles.focusedInput
+                      !errors.distance && formData.distance && modalStyles.focusedInput
                     ]}
                     value={formData.distance}
                     onChangeText={(text) => {
-                      setFormData(prev => ({ ...prev, distance: text }))
+                      const cleaned = text.replace(/[^0-9.]/g, '')
+                      const parts = cleaned.split('.')
+                      if (parts.length > 2) {
+                        setFormData(prev => ({ ...prev, distance: parts[0] + '.' + parts.slice(1).join('') }))
+                      } else {
+                        setFormData(prev => ({ ...prev, distance: cleaned }))
+                      }
                       if (errors.distance) {
                         setErrors(prev => ({ ...prev, distance: '' }))
                       }
@@ -864,11 +723,12 @@ const BusFeeManagement = ({
                     style={[
                       modalStyles.input,
                       errors.feeAmount && modalStyles.errorInput,
-                      !errors.feeAmount && formData.feeAmount.trim() && modalStyles.focusedInput
+                      !errors.feeAmount && formData.feeAmount && modalStyles.focusedInput
                     ]}
                     value={formData.feeAmount}
                     onChangeText={(text) => {
-                      setFormData(prev => ({ ...prev, feeAmount: text }))
+                      const cleaned = text.replace(/[^0-9]/g, '')
+                      setFormData(prev => ({ ...prev, feeAmount: cleaned }))
                       if (errors.feeAmount) {
                         setErrors(prev => ({ ...prev, feeAmount: '' }))
                       }
@@ -888,79 +748,6 @@ const BusFeeManagement = ({
                   <ThemedText style={modalStyles.errorText}>{errors.feeAmount}</ThemedText>
                 )}
               </View>
-            </View>
-
-            <View style={modalStyles.inputContainer}>
-              <ThemedText style={modalStyles.vehicleTypeLabel}>Vehicle Type</ThemedText>
-              <View style={modalStyles.vehicleTypeGrid}>
-                {vehicleTypes.map((type) => (
-                  <TouchableOpacity
-                    key={type.value}
-                    style={[
-                      modalStyles.vehicleTypeButton,
-                      formData.vehicleType === type.value && modalStyles.vehicleTypeSelected
-                    ]}
-                    onPress={() => setFormData(prev => ({ ...prev, vehicleType: type.value }))}
-                  >
-                    <MaterialCommunityIcons
-                      name={type.icon}
-                      size={20}
-                      color={formData.vehicleType === type.value ? colors.success : colors.textSecondary}
-                      style={modalStyles.vehicleTypeIcon}
-                    />
-                    <ThemedText style={[
-                      modalStyles.vehicleTypeText,
-                      { 
-                        color: formData.vehicleType === type.value ? colors.success : colors.textSecondary,
-                        fontFamily: formData.vehicleType === type.value ? 'Poppins-SemiBold' : 'Poppins-Medium'
-                      }
-                    ]}>
-                      {type.label}
-                    </ThemedText>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={modalStyles.inputContainer}>
-              <ThemedText style={modalStyles.label}>Academic Year</ThemedText>
-              <TouchableOpacity
-                onPress={() => !initialData && setShowYearDropdown(true)}
-                disabled={!!initialData}
-              >
-                <View style={modalStyles.inputWrapper}>
-                  <View
-                    style={[
-                      initialData ? modalStyles.lockedInput : modalStyles.dropdownInput,
-                    ]}
-                  >
-                    <ThemedText
-                      style={{
-                        color: initialData ? colors.text + '90' : colors.text,
-                        fontSize: 15,
-                        fontFamily: 'Poppins-Medium',
-                      }}
-                    >
-                      {formData.academicYear}
-                    </ThemedText>
-                  </View>
-                  {!initialData ? (
-                    <Feather 
-                      name={showYearDropdown ? "chevron-up" : "chevron-down"} 
-                      size={18} 
-                      color={colors.textSecondary} 
-                      style={modalStyles.inputIcon}
-                    />
-                  ) : (
-                    <Feather 
-                      name="lock" 
-                      size={18} 
-                      color={colors.textSecondary + '90'} 
-                      style={modalStyles.inputIcon}
-                    />
-                  )}
-                </View>
-              </TouchableOpacity>
             </View>
 
             <View style={modalStyles.inputContainer}>
@@ -1037,11 +824,8 @@ const BusFeeManagement = ({
         </View>
       </View>
 
-      {/* Dropdown Modals */}
-      {renderYearDropdown()}
       {renderDeleteModal()}
 
-      {/* Toast Notification */}
       <ToastNotification
         visible={toast.visible}
         type={toast.type}

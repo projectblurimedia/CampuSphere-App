@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   View,
   StyleSheet,
@@ -8,8 +8,8 @@ import {
   Modal,
   ActivityIndicator,
   Animated,
-  Dimensions,
   RefreshControl,
+  Dimensions
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -30,12 +30,8 @@ import HeaderComponent from './components/HeaderComponent'
 import ClassFeeCard from './components/ClassFeeCard'
 import BusFeeCard from './components/BusFeeCard'
 import HostelFeeCard from './components/HostelFeeCard'
-import AcademicYearDropdown from './components/AcademicYearDropdown'
 import BulkUploadModal from './components/BulkUploadModal'
 import EmptyState from './components/EmptyState'
-
-// Import utils
-import { academicYears, sortClassesByOrder } from './utils/classOrder'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -57,7 +53,6 @@ export default function FeeManagement({ visible, onClose }) {
   const [filteredBusFees, setFilteredBusFees] = useState([])
   const [filteredHostelFees, setFilteredHostelFees] = useState([])
   const [activeTab, setActiveTab] = useState('class')
-  const [selectedAcademicYear, setSelectedAcademicYear] = useState('All')
   const [toast, setToast] = useState({
     visible: false,
     message: '',
@@ -70,6 +65,9 @@ export default function FeeManagement({ visible, onClose }) {
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadResult, setUploadResult] = useState(null)
+  
+  // New state for loading step
+  const [loadingStep, setLoadingStep] = useState('')
   
   const slideAnim = useRef(new Animated.Value(0)).current
   const searchInputRef = useRef(null)
@@ -88,7 +86,6 @@ export default function FeeManagement({ visible, onClose }) {
   }
 
   useEffect(() => {
-    // Animate tab indicator when tab changes
     Animated.timing(slideAnim, {
       toValue: activeTab === 'class' ? 0 : activeTab === 'bus' ? 1 : 2,
       duration: 300,
@@ -96,12 +93,28 @@ export default function FeeManagement({ visible, onClose }) {
     }).start()
   }, [activeTab])
 
-  // Load initial data
   useEffect(() => {
     if (visible) {
       loadData()
     }
   }, [visible])
+
+  // Class order for consistent sorting
+  const classOrder = [
+    'PRE_NURSERY', 'NURSERY', 'LKG', 'UKG',
+    'CLASS_1', 'CLASS_2', 'CLASS_3', 'CLASS_4', 'CLASS_5',
+    'CLASS_6', 'CLASS_7', 'CLASS_8', 'CLASS_9', 'CLASS_10',
+    'CLASS_11', 'CLASS_12'
+  ]
+
+  // Helper function to sort class fees by enum order
+  const sortClassFeesByEnumOrder = (fees) => {
+    return [...fees].sort((a, b) => {
+      const indexA = classOrder.indexOf(a.className)
+      const indexB = classOrder.indexOf(b.className)
+      return indexA - indexB
+    })
+  }
 
   const loadData = async (pageNum = 1, isRefreshing = false) => {
     try {
@@ -114,71 +127,83 @@ export default function FeeManagement({ visible, onClose }) {
       const limit = 20
       const offset = (pageNum - 1) * limit
 
+      setLoadingStep('Fetching class fees...')
       // Fetch class fees
-      const classResponse = await axiosApi.get('/class-fees', {
+      const classResponse = await axiosApi.get('/fee-structure/class', {
         params: {
           page: pageNum,
           limit: limit,
-          academicYear: selectedAcademicYear !== 'All' ? selectedAcademicYear : undefined,
           isActive: true
         }
       })
 
+      setLoadingStep('Fetching bus fees...')
       // Fetch bus fees
-      const busResponse = await axiosApi.get('/bus-fees', {
+      const busResponse = await axiosApi.get('/fee-structure/bus', {
         params: {
           page: pageNum,
           limit: limit,
-          academicYear: selectedAcademicYear !== 'All' ? selectedAcademicYear : undefined,
           isActive: true
         }
       })
 
+      setLoadingStep('Fetching hostel fees...')
       // Fetch hostel fees
-      const hostelResponse = await axiosApi.get('/hostel-fees', {
+      const hostelResponse = await axiosApi.get('/fee-structure/hostel', {
         params: {
           page: pageNum,
           limit: limit,
-          academicYear: selectedAcademicYear !== 'All' ? selectedAcademicYear : undefined,
           isActive: true
         }
       })
+
+      setLoadingStep('Processing fee data...')
 
       if (pageNum === 1) {
-        const rawClassFees = classResponse.data.data?.classFees || []
-        const sortedClassFees = sortClassesByOrder(rawClassFees)
+        const rawClassFees = classResponse.data.data || []
+        const sortedClassFees = sortClassFeesByEnumOrder(rawClassFees)
         
         setClassFees(sortedClassFees)
-        setBusFees(busResponse.data.data?.busFees || [])
-        setHostelFees(hostelResponse.data.data?.hostelFees || [])
+        setBusFees(busResponse.data.data || [])
+        setHostelFees(hostelResponse.data.data || [])
         setFilteredClassFees(sortedClassFees)
-        setFilteredBusFees(busResponse.data.data?.busFees || [])
-        setFilteredHostelFees(hostelResponse.data.data?.hostelFees || [])
+        setFilteredBusFees(busResponse.data.data || [])
+        setFilteredHostelFees(hostelResponse.data.data || [])
       } else {
-        const newClassFees = classResponse.data.data?.classFees || []
-        const sortedNewClassFees = sortClassesByOrder(newClassFees)
+        const newClassFees = classResponse.data.data || []
+        const sortedNewClassFees = sortClassFeesByEnumOrder(newClassFees)
         
         setClassFees(prev => {
           const combined = [...prev, ...sortedNewClassFees]
-          return sortClassesByOrder(combined)
+          return sortClassFeesByEnumOrder(combined)
         })
         
-        setBusFees(prev => [...prev, ...(busResponse.data.data?.busFees || [])])
-        setHostelFees(prev => [...prev, ...(hostelResponse.data.data?.hostelFees || [])])
+        setBusFees(prev => [...prev, ...(busResponse.data.data || [])])
+        setHostelFees(prev => [...prev, ...(hostelResponse.data.data || [])])
+        
         setFilteredClassFees(prev => {
           const combined = [...prev, ...sortedNewClassFees]
-          return sortClassesByOrder(combined)
+          return sortClassFeesByEnumOrder(combined)
         })
-        setFilteredBusFees(prev => [...prev, ...(busResponse.data.data?.busFees || [])])
-        setFilteredHostelFees(prev => [...prev, ...(hostelResponse.data.data?.hostelFees || [])])
+        setFilteredBusFees(prev => [...prev, ...(busResponse.data.data || [])])
+        setFilteredHostelFees(prev => [...prev, ...(hostelResponse.data.data || [])])
       }
 
       // Update pagination info
-      const classTotalPages = classResponse.data.data?.pagination?.pages || 1
-      const busTotalPages = busResponse.data.data?.pagination?.pages || 1
-      const hostelTotalPages = hostelResponse.data.data?.pagination?.pages || 1
-      setTotalPages(Math.max(classTotalPages, busTotalPages, hostelTotalPages))
-      setHasMore(pageNum < Math.max(classTotalPages, busTotalPages, hostelTotalPages))
+      const classPagination = classResponse.data.pagination || {}
+      const busPagination = busResponse.data.pagination || {}
+      const hostelPagination = hostelResponse.data.pagination || {}
+      
+      setTotalPages(Math.max(
+        classPagination.totalPages || 1,
+        busPagination.totalPages || 1,
+        hostelPagination.totalPages || 1
+      ))
+      setHasMore(pageNum < Math.max(
+        classPagination.totalPages || 1,
+        busPagination.totalPages || 1,
+        hostelPagination.totalPages || 1
+      ))
 
     } catch (error) {
       console.error('Error loading fees:', error)
@@ -187,6 +212,7 @@ export default function FeeManagement({ visible, onClose }) {
     } finally {
       setLoading(false)
       setRefreshing(false)
+      setLoadingStep('')
     }
   }
 
@@ -194,11 +220,10 @@ export default function FeeManagement({ visible, onClose }) {
     setPage(1)
     setHasMore(true)
     loadData(1, true)
-  }, [selectedAcademicYear])
+  }, [])
 
   const handleLoadMore = () => {
     if (!hasMore || loading || refreshing) return
-    
     const nextPage = page + 1
     setPage(nextPage)
     loadData(nextPage)
@@ -208,149 +233,39 @@ export default function FeeManagement({ visible, onClose }) {
     setSearchQuery(query)
     
     if (!query.trim()) {
-      // If no search query, just filter by academic year
-      if (selectedAcademicYear === 'All') {
-        const sortedClassFees = sortClassesByOrder(classFees)
-        setFilteredClassFees(sortedClassFees)
+      if (activeTab === 'class') {
+        setFilteredClassFees(sortClassFeesByEnumOrder(classFees))
+      } else if (activeTab === 'bus') {
         setFilteredBusFees(busFees)
+      } else if (activeTab === 'hostel') {
         setFilteredHostelFees(hostelFees)
-      } else {
-        const filteredByYear = classFees.filter(fee => fee.academicYear === selectedAcademicYear)
-        const sortedFilteredClassFees = sortClassesByOrder(filteredByYear)
-        setFilteredClassFees(sortedFilteredClassFees)
-        setFilteredBusFees(busFees.filter(fee => fee.academicYear === selectedAcademicYear))
-        setFilteredHostelFees(hostelFees.filter(fee => fee.academicYear === selectedAcademicYear))
       }
       return
     }
     
     const lowerQuery = query.toLowerCase()
     
-    // Filter based on active tab
     if (activeTab === 'class') {
-      let filteredClasses = classFees
-      
-      // Filter by academic year if not "All"
-      if (selectedAcademicYear !== 'All') {
-        filteredClasses = filteredClasses.filter(fee => fee.academicYear === selectedAcademicYear)
-      }
-      
-      // Filter by search query
-      if (query.trim()) {
-        filteredClasses = filteredClasses.filter(fee => 
-          fee.className?.toLowerCase().includes(lowerQuery) ||
-          fee.totalAnnualFee?.toString().includes(query)
-        )
-      }
-      
-      // Sort the filtered results
-      const sortedFilteredClasses = sortClassesByOrder(filteredClasses)
-      setFilteredClassFees(sortedFilteredClasses)
+      let filtered = classFees.filter(fee => 
+        fee.className?.toLowerCase().includes(lowerQuery) ||
+        fee.totalAnnualFee?.toString().includes(query)
+      )
+      setFilteredClassFees(sortClassFeesByEnumOrder(filtered))
     } else if (activeTab === 'bus') {
-      let filteredBuses = busFees
-      
-      // Filter by academic year if not "All"
-      if (selectedAcademicYear !== 'All') {
-        filteredBuses = filteredBuses.filter(fee => fee.academicYear === selectedAcademicYear)
-      }
-      
-      // Filter by search query
-      if (query.trim()) {
-        filteredBuses = filteredBuses.filter(fee => 
-          fee.villageName?.toLowerCase().includes(lowerQuery) ||
-          fee.vehicleType?.toLowerCase().includes(lowerQuery) ||
-          fee.feeAmount?.toString().includes(query) ||
-          fee.distance?.toString().includes(query)
-        )
-      }
-      
-      setFilteredBusFees(filteredBuses)
+      let filtered = busFees.filter(fee => 
+        fee.villageName?.toLowerCase().includes(lowerQuery) ||
+        fee.feeAmount?.toString().includes(query) ||
+        fee.distance?.toString().includes(query)
+      )
+      setFilteredBusFees(filtered)
     } else if (activeTab === 'hostel') {
-      let filteredHostels = hostelFees
-      
-      // Filter by academic year if not "All"
-      if (selectedAcademicYear !== 'All') {
-        filteredHostels = filteredHostels.filter(fee => fee.academicYear === selectedAcademicYear)
-      }
-      
-      // Filter by search query
-      if (query.trim()) {
-        filteredHostels = filteredHostels.filter(fee => 
-          fee.hostelType?.toLowerCase().includes(lowerQuery) ||
-          fee.hostelName?.toLowerCase().includes(lowerQuery) ||
-          fee.feeAmount?.toString().includes(query) ||
-          fee.roomType?.toLowerCase().includes(lowerQuery)
-        )
-      }
-      
-      setFilteredHostelFees(filteredHostels)
+      let filtered = hostelFees.filter(fee => 
+        fee.className?.toLowerCase().includes(lowerQuery) ||
+        fee.totalAnnualFee?.toString().includes(query)
+      )
+      setFilteredHostelFees(filtered)
     }
-  }, [activeTab, selectedAcademicYear, classFees, busFees, hostelFees])
-
-  const handleYearSelect = async (year) => {
-    setSelectedAcademicYear(year)
-    setSearchQuery('')
-    setPage(1)
-    setHasMore(true)
-
-    try {
-      setLoading(true)
-
-      const limit = 20
-      
-      // Fetch filtered data
-      const classResponse = await axiosApi.get('/class-fees', {
-        params: {
-          page: 1,
-          limit: limit,
-          academicYear: year !== 'All' ? year : undefined,
-          isActive: true
-        }
-      })
-
-      const busResponse = await axiosApi.get('/bus-fees', {
-        params: {
-          page: 1,
-          limit: limit,
-          academicYear: year !== 'All' ? year : undefined,
-          isActive: true
-        }
-      })
-
-      const hostelResponse = await axiosApi.get('/hostel-fees', {
-        params: {
-          page: 1,
-          limit: limit,
-          academicYear: year !== 'All' ? year : undefined,
-          isActive: true
-        }
-      })
-
-      const rawClassFees = classResponse.data.data?.classFees || []
-      const sortedClassFees = sortClassesByOrder(rawClassFees)
-      
-      setClassFees(sortedClassFees)
-      setBusFees(busResponse.data.data?.busFees || [])
-      setHostelFees(hostelResponse.data.data?.hostelFees || [])
-      setFilteredClassFees(sortedClassFees)
-      setFilteredBusFees(busResponse.data.data?.busFees || [])
-      setFilteredHostelFees(hostelResponse.data.data?.hostelFees || [])
-
-      // Update pagination info
-      const classTotalPages = classResponse.data.data?.pagination?.pages || 1
-      const busTotalPages = busResponse.data.data?.pagination?.pages || 1
-      const hostelTotalPages = hostelResponse.data.data?.pagination?.pages || 1
-      setTotalPages(Math.max(classTotalPages, busTotalPages, hostelTotalPages))
-      setHasMore(1 < Math.max(classTotalPages, busTotalPages, hostelTotalPages))
-
-    } catch (error) {
-      console.error('Error loading filtered fees:', error)
-      const errorMessage = error.response?.data?.message || 'Failed to load filtered fees.'
-      showToast(errorMessage, 'error')
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [activeTab, classFees, busFees, hostelFees])
 
   const handleAddBusFee = useCallback(() => {
     setEditingBusFee(null)
@@ -385,15 +300,12 @@ export default function FeeManagement({ visible, onClose }) {
   const handleBusFeeSave = async (data, isDeleted = false) => {
     try {
       if (isDeleted) {
-        // Refresh data after deletion
         await loadData(1, true)
         showToast('Bus fee deleted successfully!', 'success')
       } else if (data) {
-        // Refresh data after save
         await loadData(1, true)
         showToast('Bus fee saved successfully!', 'success')
       }
-      
       setBusFeeModalVisible(false)
       setEditingBusFee(null)
     } catch (error) {
@@ -406,15 +318,12 @@ export default function FeeManagement({ visible, onClose }) {
   const handleClassFeeSave = async (data, isDeleted = false) => {
     try {
       if (isDeleted) {
-        // Refresh data after deletion
         await loadData(1, true)
         showToast('Class fee deleted successfully!', 'success')
       } else if (data) {
-        // Refresh data after save
         await loadData(1, true)
         showToast('Class fee saved successfully!', 'success')
       }
-      
       setClassFeeModalVisible(false)
       setEditingClassFee(null)
     } catch (error) {
@@ -427,15 +336,12 @@ export default function FeeManagement({ visible, onClose }) {
   const handleHostelFeeSave = async (data, isDeleted = false) => {
     try {
       if (isDeleted) {
-        // Refresh data after deletion
         await loadData(1, true)
         showToast('Hostel fee deleted successfully!', 'success')
       } else if (data) {
-        // Refresh data after save
         await loadData(1, true)
         showToast('Hostel fee saved successfully!', 'success')
       }
-      
       setHostelFeeModalVisible(false)
       setEditingHostelFee(null)
     } catch (error) {
@@ -450,7 +356,6 @@ export default function FeeManagement({ visible, onClose }) {
       setUploading(true)
       setUploadProgress(0)
 
-      // Create FormData
       const formData = new FormData()
       formData.append('file', {
         uri: file.uri,
@@ -458,12 +363,14 @@ export default function FeeManagement({ visible, onClose }) {
         type: file.mimeType,
       })
 
-      // Determine endpoint based on active tab
-      const endpoint = activeTab === 'class' 
-        ? '/class-fees/bulk-upload' 
-        : activeTab === 'bus' 
-        ? '/bus-fees/bulk-upload' 
-        : '/hostel-fees/bulk-upload'
+      let endpoint
+      if (activeTab === 'class') {
+        endpoint = '/fee-structure/class/bulk'
+      } else if (activeTab === 'bus') {
+        endpoint = '/fee-structure/bus/bulk'
+      } else {
+        endpoint = '/fee-structure/hostel/bulk'
+      }
 
       const response = await axiosApi.post(endpoint, formData, {
         headers: {
@@ -481,13 +388,11 @@ export default function FeeManagement({ visible, onClose }) {
         const results = response.data.data
         setUploadResult(results)
         
-        let successMessage = `Bulk upload completed! `;
-        if (results.created) successMessage += `Created: ${results.created}, `;
-        if (results.updated) successMessage += `Updated: ${results.updated}`;
+        let successMessage = `Bulk upload completed! `
+        if (results.successful) successMessage += `Success: ${results.successful.length}, `
+        if (results.failed) successMessage += `Failed: ${results.failed.length}`
         
         showToast(successMessage, 'success')
-        
-        // Refresh data
         await loadData(1, true)
       }
     } catch (error) {
@@ -497,45 +402,6 @@ export default function FeeManagement({ visible, onClose }) {
     } finally {
       setUploading(false)
       setUploadProgress(0)
-    }
-  }
-
-  const downloadTemplate = async () => {
-    try {
-      setLoading(true)
-      
-      // Determine which template to download
-      const endpoint = activeTab === 'class' 
-        ? '/class-fees/download-template' 
-        : activeTab === 'bus' 
-        ? '/bus-fees/download-template'
-        : '/hostel-fees/download-template'
-      
-      const response = await axiosApi.get(endpoint, {
-        responseType: 'blob',
-      })
-      
-      // Create blob from response
-      const blob = new Blob([response.data], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      })
-      
-      // Create download link
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `${activeTab}_fees_template.xlsx`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      
-      showToast('Template downloaded successfully!', 'success')
-      
-    } catch (error) {
-      console.error('Error downloading template:', error)
-      showToast('Failed to download template. Please try again.', 'error')
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -586,12 +452,13 @@ export default function FeeManagement({ visible, onClose }) {
   }, [activeTab, colors])
 
   const renderFooter = () => {
-    if (!hasMore || loading || refreshing) return null
+    if (!hasMore) return null
     return (
       <View style={styles.loadMoreContainer}>
         <TouchableOpacity 
           style={[styles.loadMoreButton, { backgroundColor: colors.primary + '15' }]}
           onPress={handleLoadMore}
+          disabled={loading || refreshing}
         >
           <ThemedText style={[styles.loadMoreText, { color: colors.primary }]}>
             Load More
@@ -642,20 +509,38 @@ export default function FeeManagement({ visible, onClose }) {
     content: {
       flex: 1,
     },
-    loadingContainer: {
+    loadingOverlay: {
       position: 'absolute',
       top: 0,
       left: 0,
       right: 0,
       bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: colors.background + 'CC',
+      zIndex: 1000,
+    },
+    loadingCard: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 16,
+      padding: 24,
+      alignItems: 'center',
+      minWidth: 200,
     },
     loadingText: {
       marginTop: 12,
-      color: colors.textSecondary,
+      color: colors.text,
+      textAlign: 'center',
+      fontSize: 14,
       fontFamily: 'Poppins-Medium',
+    },
+    loadingStepText: {
+      marginTop: 8,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      fontSize: 12,
+      fontStyle: 'italic',
+      fontFamily: 'Poppins-Regular',
     },
     loadMoreContainer: {
       alignItems: 'center',
@@ -710,7 +595,7 @@ export default function FeeManagement({ visible, onClose }) {
           ref={flatListRef}
           data={getCurrentData()}
           renderItem={renderItem}
-          keyExtractor={(item) => `${activeTab}-fee-${item._id}`}
+          keyExtractor={(item) => `${activeTab}-fee-${item.id}`}
           ListHeaderComponent={
             <HeaderComponent
               colors={colors}
@@ -718,8 +603,6 @@ export default function FeeManagement({ visible, onClose }) {
               handleSearch={handleSearch}
               activeTab={activeTab}
               setActiveTab={setActiveTab}
-              selectedAcademicYear={selectedAcademicYear}
-              handleYearSelect={handleYearSelect}
               filteredClassFees={filteredClassFees}
               filteredBusFees={filteredBusFees}
               filteredHostelFees={filteredHostelFees}
@@ -747,31 +630,50 @@ export default function FeeManagement({ visible, onClose }) {
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.5}
           ListEmptyComponent={
-            <EmptyState
-              activeTab={activeTab}
-              colors={colors}
-              onAdd={
-                activeTab === 'class' ? handleAddClassFee :
-                activeTab === 'bus' ? handleAddBusFee :
-                handleAddHostelFee
-              }
-              onUpload={() => setShowUploadModal(true)}
-            />
+            !loading ? (
+              <EmptyState
+                activeTab={activeTab}
+                colors={colors}
+                onAdd={
+                  activeTab === 'class' ? handleAddClassFee :
+                  activeTab === 'bus' ? handleAddBusFee :
+                  handleAddHostelFee
+                }
+                onUpload={() => setShowUploadModal(true)}
+              />
+            ) : null
           }
           ListFooterComponent={renderFooter}
         />
 
-        {loading && !refreshing && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <ThemedText style={styles.loadingText}>Loading fee management...</ThemedText>
+        {/* Loading overlay with step information - Same style as Attendance component */}
+        {loading && (
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingCard}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <ThemedText style={styles.loadingText}>
+                Loading fee management...
+              </ThemedText>
+              {loadingStep ? (
+                <ThemedText style={styles.loadingStepText}>
+                  {loadingStep}
+                </ThemedText>
+              ) : null}
+            </View>
           </View>
         )}
 
         {uploading && !showUploadModal && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <ThemedText style={styles.loadingText}>Uploading file...</ThemedText>
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingCard}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <ThemedText style={styles.loadingText}>
+                Uploading file...
+              </ThemedText>
+              <ThemedText style={styles.loadingStepText}>
+                {uploadProgress}% complete
+              </ThemedText>
+            </View>
           </View>
         )}
 
@@ -808,7 +710,6 @@ export default function FeeManagement({ visible, onClose }) {
           existingHostelFees={hostelFees}
         />
 
-        {/* Bulk Upload Modal */}
         <BulkUploadModal
           visible={showUploadModal}
           activeTab={activeTab}
@@ -816,7 +717,6 @@ export default function FeeManagement({ visible, onClose }) {
           uploading={uploading}
           uploadProgress={uploadProgress}
           uploadResult={uploadResult}
-          onDownloadTemplate={downloadTemplate}
           onUpload={handleBulkUpload}
           onClose={resetUpload}
           onRefresh={() => {
@@ -825,7 +725,6 @@ export default function FeeManagement({ visible, onClose }) {
           }}
         />
 
-        {/* Toast Notification */}
         <ToastNotification
           visible={toast.visible}
           type={toast.type}

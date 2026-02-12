@@ -13,60 +13,34 @@ import {
   FlatList,
 } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
-import { Feather, MaterialIcons, Ionicons, FontAwesome5, Entypo } from '@expo/vector-icons'
+import { Feather, MaterialIcons, FontAwesome5, Entypo } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 import { LinearGradient } from 'expo-linear-gradient'
 import axiosApi from '@/utils/axiosApi'
 import { ToastNotification } from '@/components/ui/ToastNotification'
+import { useSelector } from 'react-redux'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
-// Class options
-const CLASS_OPTIONS = [
-  'Pre-Nursery',
-  'Nursery',
-  'L.K.G',
-  'U.K.G',
-  '1',
-  '2',
-  '3',
-  '4',
-  '5',
-  '6',
-  '7',
-  '8',
-  '9',
-  '10',
-  '11',
-  '12'
+// Class enum options matching Prisma schema
+const CLASS_ENUM_OPTIONS = [
+  { label: 'Pre-Nursery', value: 'PRE_NURSERY' },
+  { label: 'Nursery', value: 'NURSERY' },
+  { label: 'LKG', value: 'LKG' },
+  { label: 'UKG', value: 'UKG' },
+  { label: 'Class 1', value: 'CLASS_1' },
+  { label: 'Class 2', value: 'CLASS_2' },
+  { label: 'Class 3', value: 'CLASS_3' },
+  { label: 'Class 4', value: 'CLASS_4' },
+  { label: 'Class 5', value: 'CLASS_5' },
+  { label: 'Class 6', value: 'CLASS_6' },
+  { label: 'Class 7', value: 'CLASS_7' },
+  { label: 'Class 8', value: 'CLASS_8' },
+  { label: 'Class 9', value: 'CLASS_9' },
+  { label: 'Class 10', value: 'CLASS_10' },
+  { label: 'Class 11', value: 'CLASS_11' },
+  { label: 'Class 12', value: 'CLASS_12' }
 ]
-
-// Function to generate academic years
-const generateAcademicYears = () => {
-  const currentYear = new Date().getFullYear()
-  const currentMonth = new Date().getMonth() + 1
-  let baseYear = currentYear
-  
-  // If current month is after June, next academic year starts
-  if (currentMonth > 6) {
-    baseYear = currentYear
-  } else {
-    baseYear = currentYear - 1
-  }
-  
-  const years = []
-  // Previous 1 year + current + next 5 years
-  for (let i = 1; i >= -5; i--) {
-    const startYear = baseYear - i
-    const endYear = startYear + 1
-    years.push(`${startYear}-${endYear}`)
-  }
-  
-  return years
-}
-
-const ACADEMIC_YEARS = generateAcademicYears()
-const CURRENT_ACADEMIC_YEAR = ACADEMIC_YEARS[1] // Current academic year is at index 1
 
 const ClassFeeManagement = ({ 
   visible, 
@@ -78,61 +52,67 @@ const ClassFeeManagement = ({
   const { colors } = useTheme()
   const [formData, setFormData] = useState({
     className: '',
-    academicYear: CURRENT_ACADEMIC_YEAR,
-    totalTerms: '3',
-    totalAnnualFee: '',
     tuitionFee: '',
     examFee: '',
-    libraryFee: '',
-    sportsFee: '',
     activityFee: '',
+    booksFee: '',
+    sportsFee: '',
     labFee: '',
     computerFee: '',
     otherCharges: '',
+    description: '',
+    createdBy: '',
+    updatedBy: ''
   })
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState({})
-  const [breakdownExpanded, setBreakdownExpanded] = useState(false)
   const [toast, setToast] = useState({
     visible: false,
     message: '',
     type: 'info'
   })
   const [showClassDropdown, setShowClassDropdown] = useState(false)
-  const [showYearDropdown, setShowYearDropdown] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+
+  const employee = useSelector(state => state.employee.employee)
+  const teacherName = employee ? `${employee.firstName} ${employee.lastName}` : 'Accountant'
+
+  // Get current user from Redux/context
+  const getCurrentUser = () => {
+    return teacherName || 'Unknown Employee'
+  }
 
   useEffect(() => {
     if (initialData) {
       setFormData({
         className: initialData.className || '',
-        academicYear: initialData.academicYear || CURRENT_ACADEMIC_YEAR,
-        totalTerms: initialData.totalTerms?.toString() || '3',
-        totalAnnualFee: initialData.totalAnnualFee?.toString() || '',
         tuitionFee: initialData.tuitionFee?.toString() || '',
         examFee: initialData.examFee?.toString() || '',
-        libraryFee: initialData.libraryFee?.toString() || '',
-        sportsFee: initialData.sportsFee?.toString() || '',
         activityFee: initialData.activityFee?.toString() || '',
+        booksFee: initialData.booksFee?.toString() || '',
+        sportsFee: initialData.sportsFee?.toString() || '',
         labFee: initialData.labFee?.toString() || '',
         computerFee: initialData.computerFee?.toString() || '',
         otherCharges: initialData.otherCharges?.toString() || '',
+        description: initialData.description || '',
+        createdBy: initialData.createdBy || '',
+        updatedBy: getCurrentUser()
       })
       setErrors({})
     } else {
       setFormData({
         className: '',
-        academicYear: CURRENT_ACADEMIC_YEAR,
-        totalTerms: '3',
-        totalAnnualFee: '',
         tuitionFee: '',
         examFee: '',
-        libraryFee: '',
-        sportsFee: '',
         activityFee: '',
+        booksFee: '',
+        sportsFee: '',
         labFee: '',
         computerFee: '',
         otherCharges: '',
+        description: '',
+        createdBy: getCurrentUser(),
+        updatedBy: getCurrentUser()
       })
       setErrors({})
     }
@@ -150,38 +130,47 @@ const ClassFeeManagement = ({
     setToast(prev => ({ ...prev, visible: false }))
   }
 
+  const calculateTotalAnnualFee = () => {
+    const components = [
+      'tuitionFee', 'examFee', 'activityFee', 'booksFee',
+      'sportsFee', 'labFee', 'computerFee', 'otherCharges'
+    ]
+    return components.reduce((total, field) => {
+      return total + (parseFloat(formData[field]) || 0)
+    }, 0)
+  }
+
   const validateForm = () => {
     const newErrors = {}
     
-    if (!formData.className.trim()) {
+    if (!formData.className) {
       newErrors.className = 'Class name is required'
     }
     
-    if (!formData.totalAnnualFee.trim()) {
-      newErrors.totalAnnualFee = 'Annual fee is required'
-    } else if (isNaN(formData.totalAnnualFee) || parseFloat(formData.totalAnnualFee) <= 0) {
-      newErrors.totalAnnualFee = 'Enter valid annual fee'
+    // Check if at least one fee component has value
+    const totalFee = calculateTotalAnnualFee()
+    if (totalFee <= 0) {
+      newErrors.general = 'At least one fee amount must be greater than 0'
     }
     
-    if (!formData.totalTerms.trim()) {
-      newErrors.totalTerms = 'Number of terms is required'
-    } else if (isNaN(formData.totalTerms) || parseInt(formData.totalTerms) <= 0 || parseInt(formData.totalTerms) > 4) {
-      newErrors.totalTerms = 'Enter valid number of terms (1-4)'
-    }
-    
-    // Check for duplicate
+    // Check for duplicate active fee structure
     if (!initialData) {
       const duplicate = existingClassFees.find(fee => 
-        fee.className.toLowerCase() === formData.className.toLowerCase() &&
-        fee.academicYear === formData.academicYear
+        fee.className === formData.className && 
+        fee.isActive === true
       )
       if (duplicate) {
-        newErrors.className = `Class fee already exists for Class ${formData.className} in ${formData.academicYear}`
+        newErrors.className = `Active fee structure already exists for ${getClassLabel(formData.className)}`
       }
     }
     
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
+  }
+
+  const getClassLabel = (enumValue) => {
+    const found = CLASS_ENUM_OPTIONS.find(opt => opt.value === enumValue)
+    return found ? found.label : enumValue
   }
 
   const handleSubmit = async () => {
@@ -191,45 +180,36 @@ const ClassFeeManagement = ({
 
     setLoading(true)
     try {
+      const totalAnnualFee = calculateTotalAnnualFee()
+      
       const payload = {
-        className: formData.className.trim(),
-        academicYear: formData.academicYear,
-        totalTerms: parseInt(formData.totalTerms),
-        totalAnnualFee: parseFloat(formData.totalAnnualFee),
+        className: formData.className,
+        totalAnnualFee: totalAnnualFee,
         tuitionFee: parseFloat(formData.tuitionFee) || 0,
         examFee: parseFloat(formData.examFee) || 0,
-        libraryFee: parseFloat(formData.libraryFee) || 0,
-        sportsFee: parseFloat(formData.sportsFee) || 0,
         activityFee: parseFloat(formData.activityFee) || 0,
+        booksFee: parseFloat(formData.booksFee) || 0,
+        sportsFee: parseFloat(formData.sportsFee) || 0,
         labFee: parseFloat(formData.labFee) || 0,
         computerFee: parseFloat(formData.computerFee) || 0,
         otherCharges: parseFloat(formData.otherCharges) || 0,
-        description: ''
+        description: formData.description || null,
+        createdBy: formData.createdBy,
+        updatedBy: formData.updatedBy
       }
 
       let response
-      if (initialData && initialData._id) {
-        // Update existing
-        response = await axiosApi.put(`/class-fees/${initialData._id}`, payload)
+      if (initialData && initialData.id) {
+        response = await axiosApi.put(`/fee-structure/class/${initialData.id}`, payload)
         showToast('Class fee updated successfully!', 'success')
       } else {
-        // Create new
-        response = await axiosApi.post('/class-fees', payload)
+        response = await axiosApi.post('/fee-structure/class', payload)
         showToast('Class fee created successfully!', 'success')
       }
 
       if (response.data.success) {
-        const newData = {
-          _id: response.data.data._id || Date.now().toString(),
-          ...response.data.data,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-        
-        onSave(newData)
+        onSave(response.data.data)
         setLoading(false)
-        
-        // Close modal after a delay to show toast
         setTimeout(() => {
           onClose()
         }, 1500)
@@ -245,9 +225,9 @@ const ClassFeeManagement = ({
   const handleDelete = async () => {
     try {
       setLoading(true)
-      await axiosApi.delete(`/class-fees/${initialData._id}`)
+      await axiosApi.delete(`/fee-structure/class/${initialData.id}`)
       showToast('Class fee deleted successfully!', 'success')
-      onSave(null, true) // Pass true to indicate deletion
+      onSave(null, true)
       setShowDeleteModal(false)
       setTimeout(() => {
         onClose()
@@ -261,40 +241,43 @@ const ClassFeeManagement = ({
     }
   }
 
-  const calculateTermAmount = () => {
-    if (!formData.totalAnnualFee || !formData.totalTerms) return 0
-    const annualFee = parseFloat(formData.totalAnnualFee) || 0
-    const terms = parseInt(formData.totalTerms) || 3
-    return terms > 0 ? annualFee / terms : 0
+  const handleToggleStatus = async () => {
+    try {
+      setLoading(true)
+      const response = await axiosApi.patch(`/fee-structure/class/${initialData.id}/toggle-status`, {
+        updatedBy: getCurrentUser()
+      })
+      
+      if (response.data.success) {
+        showToast(`Class fee ${response.data.data.isActive ? 'activated' : 'deactivated'} successfully!`, 'success')
+        onSave(response.data.data)
+        setTimeout(() => {
+          onClose()
+        }, 1500)
+      }
+    } catch (error) {
+      console.error('Error toggling class fee status:', error)
+      const errorMessage = error.response?.data?.message || 'Failed to update status. Please try again.'
+      showToast(errorMessage, 'error')
+      setLoading(false)
+    }
   }
 
-  const calculateBreakdownTotal = () => {
-    const breakdown = [
-      'tuitionFee', 'examFee', 'libraryFee', 'sportsFee', 
-      'activityFee', 'labFee', 'computerFee', 'otherCharges'
-    ]
-    
-    return breakdown.reduce((total, field) => {
-      return total + (parseFloat(formData[field]) || 0)
-    }, 0)
+  const handleComponentChange = (field, text) => {
+    const cleaned = text.replace(/[^0-9]/g, '')
+    setFormData(prev => ({ ...prev, [field]: cleaned }))
+    // Clear general error if exists
+    if (errors.general) {
+      setErrors(prev => ({ ...prev, general: '' }))
+    }
   }
 
-  const handleAutoCalculate = () => {
-    const breakdownTotal = calculateBreakdownTotal()
-    setFormData(prev => ({ ...prev, totalAnnualFee: breakdownTotal.toString() }))
-  }
-
-  const handleSelectClass = (className) => {
-    setFormData(prev => ({ ...prev, className }))
+  const handleSelectClass = (classValue) => {
+    setFormData(prev => ({ ...prev, className: classValue }))
     setShowClassDropdown(false)
     if (errors.className) {
       setErrors(prev => ({ ...prev, className: '' }))
     }
-  }
-
-  const handleSelectYear = (year) => {
-    setFormData(prev => ({ ...prev, academicYear: year }))
-    setShowYearDropdown(false)
   }
 
   const renderDropdownItem = ({ item, onSelect, isSelected }) => (
@@ -303,7 +286,7 @@ const ClassFeeManagement = ({
         styles.dropdownItem,
         isSelected && { backgroundColor: colors.primary + '15' }
       ]}
-      onPress={() => onSelect(item)}
+      onPress={() => onSelect(item.value)}
     >
       <ThemedText 
         style={[
@@ -311,7 +294,7 @@ const ClassFeeManagement = ({
           isSelected && { color: colors.primary, fontFamily: 'Poppins-SemiBold' }
         ]}
       >
-        {item}
+        {item.label}
       </ThemedText>
       {isSelected && (
         <Feather name="check" size={18} color={colors.primary} />
@@ -341,49 +324,12 @@ const ClassFeeManagement = ({
             </TouchableOpacity>
           </View>
           <FlatList
-            data={CLASS_OPTIONS}
-            keyExtractor={(item) => item}
+            data={CLASS_ENUM_OPTIONS}
+            keyExtractor={(item) => item.value}
             renderItem={({ item }) => renderDropdownItem({
               item,
               onSelect: handleSelectClass,
-              isSelected: formData.className === item
-            })}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.dropdownList}
-          />
-        </View>
-      </TouchableOpacity>
-    </Modal>
-  )
-
-  const renderYearDropdown = () => (
-    <Modal
-      transparent
-      visible={showYearDropdown}
-      animationType="fade"
-      onRequestClose={() => setShowYearDropdown(false)}
-    >
-      <TouchableOpacity
-        style={styles.dropdownOverlay}
-        activeOpacity={1}
-        onPress={() => setShowYearDropdown(false)}
-      >
-        <View style={[styles.dropdownContainer, { backgroundColor: colors.cardBackground }]}>
-          <View style={styles.dropdownHeader}>
-            <ThemedText style={[styles.dropdownTitle, { color: colors.primary }]}>
-              Select Academic Year
-            </ThemedText>
-            <TouchableOpacity onPress={() => setShowYearDropdown(false)}>
-              <Feather name="x" size={20} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-          <FlatList
-            data={ACADEMIC_YEARS}
-            keyExtractor={(item) => item}
-            renderItem={({ item }) => renderDropdownItem({
-              item,
-              onSelect: handleSelectYear,
-              isSelected: formData.academicYear === item
+              isSelected: formData.className === item.value
             })}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.dropdownList}
@@ -415,7 +361,7 @@ const ClassFeeManagement = ({
               Are you sure you want to delete class fee for
             </ThemedText>
             <ThemedText style={[styles.deleteModalHighlight, { color: colors.primary }]}>
-              Class {formData.className}?
+              {getClassLabel(formData.className)}?
             </ThemedText>
             <ThemedText style={[styles.deleteModalSubText, { color: colors.textSecondary }]}>
               This action cannot be undone.
@@ -575,79 +521,15 @@ const ClassFeeManagement = ({
     halfContainer: {
       flex: 1,
     },
-    feeSummaryCard: {
-      backgroundColor: colors.primary + '08',
-      borderRadius: 16,
-      padding: 20,
-      marginTop: 12,
-      borderWidth: 1,
-      borderColor: colors.primary + '20',
-    },
-    summaryItem: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 5,
-    },
-    summaryLabel: {
-      fontSize: 14,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
-    },
-    summaryValue: {
-      fontSize: 14,
-      color: colors.text,
-      fontFamily: 'Poppins-SemiBold',
-    },
-    totalItem: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingTop: 16,
-      borderTopWidth: 1,
-      borderTopColor: colors.primary + '20',
+    feeBreakdownSection: {
       marginTop: 8,
+      marginBottom: 16,
     },
-    totalLabel: {
-      fontSize: 15,
-      color: colors.primary,
-      fontFamily: 'Poppins-Bold',
-    },
-    totalValue: {
-      fontSize: 18,
-      color: colors.primary,
-      fontFamily: 'Poppins-Bold',
-    },
-    breakdownHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginTop: 24,
-      marginBottom: 5,
-    },
-    breakdownTitle: {
+    sectionTitle: {
       fontSize: 16,
       color: colors.text,
       fontFamily: 'Poppins-Bold',
-    },
-    expandButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      backgroundColor: colors.inputBackground,
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    expandText: {
-      fontSize: 12,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
-    },
-    breakdownContent: {
-      marginTop: 12,
+      marginBottom: 16,
     },
     breakdownGrid: {
       flexDirection: 'row',
@@ -668,24 +550,43 @@ const ClassFeeManagement = ({
       fontSize: 15,
       fontFamily: 'Poppins-Medium',
     },
-    autoCalcButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-      backgroundColor: colors.primary + '15',
+    descriptionInput: {
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      backgroundColor: colors.inputBackground,
+      borderRadius: 12,
       paddingHorizontal: 16,
-      paddingVertical: 10,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: colors.primary + '30',
-      marginTop: 12,
-      marginBottom: 16,
+      paddingVertical: 14,
+      color: colors.text,
+      fontSize: 15,
+      fontFamily: 'Poppins-Medium',
+      minHeight: 80,
+      textAlignVertical: 'top',
+      paddingTop: 14,
     },
-    autoCalcText: {
-      fontSize: 13,
-      color: colors.primary,
+    totalFeeCard: {
+      backgroundColor: colors.primary + '08',
+      borderRadius: 16,
+      padding: 20,
+      marginTop: 16,
+      marginBottom: 8,
+      borderWidth: 1,
+      borderColor: colors.primary + '20',
+    },
+    totalFeeRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    totalFeeLabel: {
+      fontSize: 16,
+      color: colors.text,
       fontFamily: 'Poppins-SemiBold',
+    },
+    totalFeeAmount: {
+      fontSize: 22,
+      color: colors.primary,
+      fontFamily: 'Poppins-Bold',
     },
     buttonContainer: {
       flexDirection: 'row',
@@ -731,6 +632,20 @@ const ClassFeeManagement = ({
       alignItems: 'center',
       justifyContent: 'center',
       gap: 8,
+    },
+    generalError: {
+      backgroundColor: '#ef444410',
+      padding: 12,
+      borderRadius: 8,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: '#ef444430',
+    },
+    generalErrorText: {
+      color: '#ef4444',
+      fontSize: 13,
+      textAlign: 'center',
+      fontFamily: 'Poppins-Medium',
     },
   })
 
@@ -884,7 +799,7 @@ const ClassFeeManagement = ({
   const breakdownFields = [
     { label: 'Tuition Fee', field: 'tuitionFee', icon: 'book' },
     { label: 'Exam Fee', field: 'examFee', icon: 'edit' },
-    { label: 'Library Fee', field: 'libraryFee', icon: 'open-book' },
+    { label: 'Books Fee', field: 'booksFee', icon: 'open-book' },
     { label: 'Sports Fee', field: 'sportsFee', icon: 'sports-club' },
     { label: 'Activity Fee', field: 'activityFee', icon: 'users' },
     { label: 'Lab Fee', field: 'labFee', icon: 'lab-flask' },
@@ -892,8 +807,8 @@ const ClassFeeManagement = ({
     { label: 'Other Charges', field: 'otherCharges', icon: 'circle-with-plus' },
   ]
 
-  const termAmount = calculateTermAmount()
-  const breakdownTotal = calculateBreakdownTotal()
+  const totalAnnualFee = calculateTotalAnnualFee()
+  const isTotalValid = totalAnnualFee > 0
 
   return (
     <View style={modalStyles.overlay}>
@@ -946,22 +861,22 @@ const ClassFeeManagement = ({
                     style={[
                       initialData ? modalStyles.lockedInput : modalStyles.dropdownInput,
                       errors.className && modalStyles.errorInput,
-                      !initialData && !errors.className && formData.className.trim() && modalStyles.focusedInput
+                      !initialData && !errors.className && formData.className && modalStyles.focusedInput
                     ]}
                   >
                     <ThemedText
                       style={{
-                        color: formData.className.trim() ? (initialData ? colors.text + '90' : colors.text) : colors.textSecondary,
+                        color: formData.className ? (initialData ? colors.text + '90' : colors.text) : colors.textSecondary,
                         fontSize: 15,
                         fontFamily: 'Poppins-Medium',
                       }}
                     >
-                      {formData.className.trim() || 'Select Class'}
+                      {formData.className ? getClassLabel(formData.className) : 'Select Class'}
                     </ThemedText>
                   </View>
                   {!initialData ? (
                     <Feather 
-                      name={showClassDropdown ? "chevron-up" : "chevron-down"} 
+                      name="chevron-down" 
                       size={18} 
                       color={colors.textSecondary} 
                       style={modalStyles.dropdownIcon}
@@ -981,222 +896,76 @@ const ClassFeeManagement = ({
               )}
             </View>
 
-            <View style={modalStyles.rowContainer}>
-              {/* Academic Year Dropdown */}
-              <View style={modalStyles.halfContainer}>
-                <ThemedText style={modalStyles.label}>Academic Year</ThemedText>
-                <TouchableOpacity
-                  onPress={() => !initialData && setShowYearDropdown(true)}
-                  disabled={!!initialData}
-                >
-                  <View style={modalStyles.inputWrapper}>
-                    <View
-                      style={[
-                        initialData ? modalStyles.lockedInput : modalStyles.dropdownInput,
-                      ]}
-                    >
-                      <ThemedText
-                        style={{
-                          color: initialData ? colors.text + '90' : colors.text,
-                          fontSize: 15,
-                          fontFamily: 'Poppins-Medium',
-                        }}
-                      >
-                        {formData.academicYear}
-                      </ThemedText>
-                    </View>
-                    {!initialData ? (
-                      <Feather 
-                        name={showYearDropdown ? "chevron-up" : "chevron-down"} 
-                        size={18} 
-                        color={colors.textSecondary} 
-                        style={modalStyles.dropdownIcon}
-                      />
-                    ) : (
-                      <Feather 
-                        name="lock" 
-                        size={18} 
-                        color={colors.textSecondary + '90'} 
-                        style={modalStyles.dropdownIcon}
-                      />
-                    )}
-                  </View>
-                </TouchableOpacity>
-              </View>
-              
-              {/* Total Terms Input */}
-              <View style={modalStyles.halfContainer}>
-                <View style={modalStyles.labelRow}>
-                  <ThemedText style={modalStyles.label}>
-                    Total Terms <ThemedText style={modalStyles.requiredStar}>*</ThemedText>
-                  </ThemedText>
-                </View>
-                <View style={modalStyles.inputWrapper}>
-                  <TextInput
-                    style={[
-                      modalStyles.breakdownInput,
-                      errors.totalTerms && modalStyles.errorInput,
-                      !errors.totalTerms && formData.totalTerms.trim() && modalStyles.focusedInput
-                    ]}
-                    value={formData.totalTerms}
-                    onChangeText={(text) => {
-                      setFormData(prev => ({ ...prev, totalTerms: text }))
-                      if (errors.totalTerms) {
-                        setErrors(prev => ({ ...prev, totalTerms: '' }))
-                      }
-                    }}
-                    placeholder="3"
-                    placeholderTextColor={colors.textSecondary}
-                    keyboardType="numeric"
-                  />
-                  <MaterialIcons
-                    name="vertical-split" 
-                    size={18} 
-                    color={colors.textSecondary} 
-                    style={modalStyles.dropdownIcon}
-                  />
-                </View>
-                {errors.totalTerms && (
-                  <ThemedText style={modalStyles.errorText}>{errors.totalTerms}</ThemedText>
-                )}
-              </View>
-            </View>
-
-            {/* Total Annual Fee Input */}
-            <View style={modalStyles.inputContainer}>
-              <View style={modalStyles.labelRow}>
-                <ThemedText style={modalStyles.label}>
-                  Total Annual Fee (₹) <ThemedText style={modalStyles.requiredStar}>*</ThemedText>
+            {/* General Error Message */}
+            {errors.general && (
+              <View style={modalStyles.generalError}>
+                <ThemedText style={modalStyles.generalErrorText}>
+                  {errors.general}
                 </ThemedText>
-              </View>
-              <View style={modalStyles.inputWrapper}>
-                <TextInput
-                  style={[
-                    modalStyles.breakdownInput,
-                    errors.totalAnnualFee && modalStyles.errorInput,
-                    !errors.totalAnnualFee && formData.totalAnnualFee.trim() && modalStyles.focusedInput
-                  ]}
-                  value={formData.totalAnnualFee}
-                  onChangeText={(text) => {
-                    setFormData(prev => ({ ...prev, totalAnnualFee: text }))
-                    if (errors.totalAnnualFee) {
-                      setErrors(prev => ({ ...prev, totalAnnualFee: '' }))
-                    }
-                  }}
-                  placeholder="Enter total annual fee"
-                  placeholderTextColor={colors.textSecondary}
-                  keyboardType="numeric"
-                />
-                <FontAwesome5 
-                  name="rupee-sign" 
-                  size={18} 
-                  color={colors.textSecondary} 
-                  style={modalStyles.dropdownIcon}
-                />
-              </View>
-              {errors.totalAnnualFee && (
-                <ThemedText style={modalStyles.errorText}>{errors.totalAnnualFee}</ThemedText>
-              )}
-            </View>
-
-            {/* Fee Breakdown Section */}
-            <View style={modalStyles.breakdownHeader}>
-              <ThemedText style={modalStyles.breakdownTitle}>Fee Breakdown</ThemedText>
-              <TouchableOpacity 
-                onPress={() => setBreakdownExpanded(!breakdownExpanded)} 
-                style={modalStyles.expandButton}
-              >
-                <Feather 
-                  name={breakdownExpanded ? 'chevron-up' : 'chevron-down'} 
-                  size={16} 
-                  color={colors.textSecondary} 
-                />
-                <ThemedText style={modalStyles.expandText}>
-                  {breakdownExpanded ? 'Hide' : 'Show'} Breakdown
-                </ThemedText>
-              </TouchableOpacity>
-            </View>
-
-            {breakdownExpanded && (
-              <View style={modalStyles.breakdownContent}>
-                <TouchableOpacity 
-                  onPress={handleAutoCalculate} 
-                  style={modalStyles.autoCalcButton}
-                >
-                  <FontAwesome5 name="calculator" size={16} color={colors.primary} />
-                  <ThemedText style={modalStyles.autoCalcText}>
-                    Auto-calculate total from breakdown
-                  </ThemedText>
-                </TouchableOpacity>
-                
-                <View style={modalStyles.breakdownGrid}>
-                  {breakdownFields.map((item) => (
-                    <View key={item.field} style={modalStyles.breakdownItem}>
-                      <View style={modalStyles.labelRow}>
-                        <ThemedText style={modalStyles.label}>{item.label}</ThemedText>
-                      </View>
-                      <View style={modalStyles.inputWrapper}>
-                        <TextInput
-                          style={modalStyles.breakdownInput}
-                          value={formData[item.field]}
-                          onChangeText={(text) => {
-                            const cleanedText = text.replace(/[^0-9.]/g, '')
-                            const parts = cleanedText.split('.')
-                            if (parts.length > 2) {
-                              setFormData(prev => ({ 
-                                ...prev, 
-                                [item.field]: parts[0] + '.' + parts.slice(1).join('')
-                              }))
-                            } else {
-                              setFormData(prev => ({ ...prev, [item.field]: cleanedText }))
-                            }
-                          }}
-                          placeholder="0"
-                          placeholderTextColor={colors.textSecondary}
-                          keyboardType="numeric"
-                        />
-                        <Entypo 
-                          name={item.icon} 
-                          size={16} 
-                          color={colors.textSecondary} 
-                          style={modalStyles.dropdownIcon}
-                        />
-                      </View>
-                    </View>
-                  ))}
-                </View>
-
-                <View style={[modalStyles.feeSummaryCard, { marginTop: 16 }]}>
-                  <View style={modalStyles.summaryItem}>
-                    <ThemedText style={modalStyles.summaryLabel}>Breakdown Total:</ThemedText>
-                    <ThemedText style={modalStyles.summaryValue}>
-                      ₹{breakdownTotal.toLocaleString()}
-                    </ThemedText>
-                  </View>
-                </View>
               </View>
             )}
 
-            {/* Fee Summary Card */}
-            <View style={modalStyles.feeSummaryCard}>
-              <View style={modalStyles.summaryItem}>
-                <ThemedText style={modalStyles.summaryLabel}>Annual Fee:</ThemedText>
-                <ThemedText style={modalStyles.summaryValue}>
-                  ₹{(parseFloat(formData.totalAnnualFee) || 0).toLocaleString()}
-                </ThemedText>
+            {/* Fee Breakdown Section - Always Visible */}
+            <View style={modalStyles.feeBreakdownSection}>
+              <ThemedText style={modalStyles.sectionTitle}>Fee Breakdown</ThemedText>
+              
+              <View style={modalStyles.breakdownGrid}>
+                {breakdownFields.map((item) => (
+                  <View key={item.field} style={modalStyles.breakdownItem}>
+                    <View style={modalStyles.labelRow}>
+                      <ThemedText style={modalStyles.label}>{item.label}</ThemedText>
+                    </View>
+                    <View style={modalStyles.inputWrapper}>
+                      <TextInput
+                        style={modalStyles.breakdownInput}
+                        value={formData[item.field]}
+                        onChangeText={(text) => handleComponentChange(item.field, text)}
+                        placeholder="0"
+                        placeholderTextColor={colors.textSecondary}
+                        keyboardType="numeric"
+                      />
+                      <Entypo 
+                        name={item.icon} 
+                        size={16} 
+                        color={colors.textSecondary} 
+                        style={modalStyles.dropdownIcon}
+                      />
+                    </View>
+                  </View>
+                ))}
               </View>
-              <View style={modalStyles.summaryItem}>
-                <ThemedText style={modalStyles.summaryLabel}>Per Term ({formData.totalTerms || 3} terms):</ThemedText>
-                <ThemedText style={modalStyles.summaryValue}>
-                  ₹{termAmount.toLocaleString()}
-                </ThemedText>
+            </View>
+
+            {/* Description Input */}
+            <View style={modalStyles.inputContainer}>
+              <ThemedText style={modalStyles.label}>Description (Optional)</ThemedText>
+              <TextInput
+                style={modalStyles.descriptionInput}
+                value={formData.description}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, description: text }))}
+                placeholder="Add any additional notes or details..."
+                placeholderTextColor={colors.textSecondary}
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+
+            {/* Total Annual Fee Card - Auto-calculated */}
+            <View style={modalStyles.totalFeeCard}>
+              <View style={modalStyles.totalFeeRow}>
+                <ThemedText style={modalStyles.totalFeeLabel}>Total Annual Fee</ThemedText>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <FontAwesome5 name="rupee-sign" size={18} color={colors.primary} style={{ marginRight: 4 }} />
+                  <ThemedText style={modalStyles.totalFeeAmount}>
+                    {totalAnnualFee.toLocaleString()}
+                  </ThemedText>
+                </View>
               </View>
-              <View style={modalStyles.totalItem}>
-                <ThemedText style={modalStyles.totalLabel}>TOTAL FEE</ThemedText>
-                <ThemedText style={modalStyles.totalValue}>
-                  ₹{(parseFloat(formData.totalAnnualFee) || 0).toLocaleString()}
+              {!isTotalValid && (
+                <ThemedText style={{ color: '#ef4444', fontSize: 12, marginTop: 8, textAlign: 'center' }}>
+                  Please enter at least one fee amount
                 </ThemedText>
-              </View>
+              )}
             </View>
 
           </ScrollView>
@@ -1226,12 +995,22 @@ const ClassFeeManagement = ({
           
           <LinearGradient
             colors={[colors.primary, colors.primaryDark || colors.primary]}
-            style={[modalStyles.saveButton, { opacity: loading ? 0.7 : 1 }]}
+            style={[
+              modalStyles.saveButton, 
+              { 
+                opacity: (loading || !isTotalValid) ? 0.7 : 1,
+              }
+            ]}
           >
             <TouchableOpacity 
               onPress={handleSubmit}
-              disabled={loading}
-              style={{ flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center' }}
+              disabled={loading || !isTotalValid}
+              style={{ 
+                flex: 1, 
+                width: '100%', 
+                justifyContent: 'center', 
+                alignItems: 'center'
+              }}
             >
               {loading ? (
                 <View style={modalStyles.loadingContainer}>
@@ -1255,7 +1034,6 @@ const ClassFeeManagement = ({
 
       {/* Dropdown Modals */}
       {renderClassDropdown()}
-      {renderYearDropdown()}
       {renderDeleteModal()}
 
       {/* Toast Notification */}
@@ -1269,6 +1047,6 @@ const ClassFeeManagement = ({
       />
     </View>
   )
-}  
+}
 
 export default ClassFeeManagement

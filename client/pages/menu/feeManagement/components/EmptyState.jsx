@@ -16,7 +16,7 @@ const EmptyState = React.memo(({ activeTab, colors, onAdd, onUpload }) => {
     switch(activeTab) {
       case 'class': return 'school'
       case 'bus': return 'directions-bus'
-      case 'hostel': return 'home'
+      case 'hostel': return 'apartment'
       default: return 'school'
     }
   }

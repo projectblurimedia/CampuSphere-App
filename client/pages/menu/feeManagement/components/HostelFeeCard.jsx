@@ -8,25 +8,32 @@ import { ThemedText } from '@/components/ui/themed-text'
 import {
   Feather,
   MaterialIcons,
-  MaterialCommunityIcons,
   FontAwesome5,
 } from '@expo/vector-icons'
 
-const HostelFeeCard = React.memo(({ item, onPress, colors }) => {
-  // Calculate term amount if applicable
-  const termAmount = item.totalAnnualFee / (item.totalTerms || 3)
-  
-  // Format hostel name display
-  const formatHostelName = (name) => {
-    if (!name) return 'Hostel'
-    
-    const str = name.toString()
-    // Capitalize first letter of each word
-    return str.replace(/\b\w/g, char => char.toUpperCase())
-  }
+const CLASS_LABELS = {
+  'PRE_NURSERY': 'Pre-Nursery',
+  'NURSERY': 'Nursery',
+  'LKG': 'LKG',
+  'UKG': 'UKG',
+  'CLASS_1': '1',
+  'CLASS_2': '2',
+  'CLASS_3': '3',
+  'CLASS_4': '4',
+  'CLASS_5': '5',
+  'CLASS_6': '6',
+  'CLASS_7': '7',
+  'CLASS_8': '8',
+  'CLASS_9': '9',
+  'CLASS_10': '10',
+  'CLASS_11': '11',
+  'CLASS_12': '12'
+}
 
-  // Use warning color for hostel (similar to class using primary)
-  const hostelColor = colors.warning
+const HostelFeeCard = React.memo(({ item, onPress, colors }) => {
+  const getClassLabel = (className) => {
+    return CLASS_LABELS[className] || className || 'Class'
+  }
 
   return (
     <TouchableOpacity
@@ -35,24 +42,14 @@ const HostelFeeCard = React.memo(({ item, onPress, colors }) => {
       onPress={onPress}
     >
       <View style={styles.header}>
-        <View style={[styles.icon, { backgroundColor: hostelColor + '20' }]}>
-          <MaterialIcons name="apartment" size={24} color={hostelColor} />
+        <View style={[styles.icon, { backgroundColor: colors.warning + '20' }]}>
+          <MaterialIcons name="apartment" size={24} color={colors.warning} />
         </View>
         <View style={styles.info}>
-          <ThemedText style={styles.hostelName}>Hostel {formatHostelName(item.className)}</ThemedText>
+          <ThemedText style={styles.hostelName}>
+            Class {getClassLabel(item.className)} Hostel
+          </ThemedText>
           <View style={styles.metaRow}>
-            <View style={[styles.badge, { backgroundColor: hostelColor + '10' }]}>
-              <Feather name="calendar" size={10} color={hostelColor} />
-              <ThemedText style={[styles.badgeText, { color: hostelColor }]}>
-                {item.academicYear}
-              </ThemedText>
-            </View>
-            <View style={[styles.badge, { backgroundColor: colors.info + '10' }]}>
-              <MaterialCommunityIcons name="layers" size={10} color={colors.info} />
-              <ThemedText style={[styles.badgeText, { color: colors.info }]}>
-                {item.totalTerms || 3} Terms
-              </ThemedText>
-            </View>
             {!item.isActive && (
               <View style={[styles.badge, { backgroundColor: colors.error + '10' }]}>
                 <Feather name="x-circle" size={10} color={colors.error} />
@@ -63,31 +60,21 @@ const HostelFeeCard = React.memo(({ item, onPress, colors }) => {
             )}
           </View>
         </View>
-        <View style={[styles.editIcon, { backgroundColor: hostelColor + '15' }]}>
-          <Feather name="edit" size={16} color={hostelColor} />
+        <View style={[styles.editIcon, { backgroundColor: colors.warning + '15' }]}>
+          <Feather name="edit" size={16} color={colors.warning} />
         </View>
       </View>
       
-      <View style={styles.feeContainer}>
-        <View style={styles.column}>
-          <ThemedText style={styles.feeLabel}>Annual Fee</ThemedText>
-          <View style={styles.feeAmountRow}>
-            <FontAwesome5 name="rupee-sign" size={12} color={hostelColor} />
-            <ThemedText style={[styles.annualFee, { color: hostelColor }]}>
-              {item.totalAnnualFee?.toLocaleString() || '0'}
-            </ThemedText>
-          </View>
+      <View style={[styles.feeContainer, { backgroundColor: colors.inputBackground }]}>
+        <View style={styles.feeInfoRow}>
+          <FontAwesome5 name="rupee-sign" size={14} color={colors.textSecondary} />
+          <ThemedText style={[styles.feeLabel, { color: colors.textSecondary }]}>
+            Annual Hostel Fee:
+          </ThemedText>
         </View>
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <View style={styles.column}>
-          <ThemedText style={styles.feeLabel}>Per Term</ThemedText>
-          <View style={styles.feeAmountRow}>
-            <FontAwesome5 name="rupee-sign" size={12} color={colors.secondary} />
-            <ThemedText style={[styles.termFee, { color: colors.secondary }]}>
-              {termAmount.toLocaleString()}
-            </ThemedText>
-          </View>
-        </View>
+        <ThemedText style={[styles.feeAmount, { color: colors.warning }]}>
+          ₹{item.totalAnnualFee?.toLocaleString() || '0'}
+        </ThemedText>
       </View>
       
       {item.description && (
@@ -135,7 +122,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flexWrap: 'wrap',
   },
   badge: {
     flexDirection: 'row',
@@ -159,39 +145,25 @@ const styles = StyleSheet.create({
   feeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.02)',
+    justifyContent: 'space-between',
     borderRadius: 12,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     marginBottom: 8,
   },
-  column: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  divider: {
-    width: 1,
-    height: 30,
-  },
-  feeLabel: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
-    marginBottom: 4,
-    color: '#666',
-  },
-  feeAmountRow: {
+  feeInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 6,
   },
-  annualFee: {
+  feeLabel: {
+    fontSize: 13,
+    fontFamily: 'Poppins-Medium',
+  },
+  feeAmount: {
     fontSize: 16,
     fontFamily: 'Poppins-Bold',
   },
-  termFee: {
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
-  },
-  
   descriptionContainer: {
     flexDirection: 'row',
     alignItems: 'center',

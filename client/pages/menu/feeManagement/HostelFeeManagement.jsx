@@ -18,55 +18,29 @@ import { useTheme } from '@/hooks/useTheme'
 import { LinearGradient } from 'expo-linear-gradient'
 import axiosApi from '@/utils/axiosApi'
 import { ToastNotification } from '@/components/ui/ToastNotification'
+import { useSelector } from 'react-redux'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
-// Class options
-const CLASS_OPTIONS = [
-  'Pre-Nursery',
-  'Nursery',
-  'L.K.G',
-  'U.K.G',
-  '1',
-  '2',
-  '3',
-  '4',
-  '5',
-  '6',
-  '7',
-  '8',
-  '9',
-  '10',
-  '11',
-  '12'
+// Class enum options matching Prisma schema
+const CLASS_ENUM_OPTIONS = [
+  { label: 'Pre-Nursery', value: 'PRE_NURSERY' },
+  { label: 'Nursery', value: 'NURSERY' },
+  { label: 'LKG', value: 'LKG' },
+  { label: 'UKG', value: 'UKG' },
+  { label: 'Class 1', value: 'CLASS_1' },
+  { label: 'Class 2', value: 'CLASS_2' },
+  { label: 'Class 3', value: 'CLASS_3' },
+  { label: 'Class 4', value: 'CLASS_4' },
+  { label: 'Class 5', value: 'CLASS_5' },
+  { label: 'Class 6', value: 'CLASS_6' },
+  { label: 'Class 7', value: 'CLASS_7' },
+  { label: 'Class 8', value: 'CLASS_8' },
+  { label: 'Class 9', value: 'CLASS_9' },
+  { label: 'Class 10', value: 'CLASS_10' },
+  { label: 'Class 11', value: 'CLASS_11' },
+  { label: 'Class 12', value: 'CLASS_12' }
 ]
-
-// Function to generate academic years
-const generateAcademicYears = () => {
-  const currentYear = new Date().getFullYear()
-  const currentMonth = new Date().getMonth() + 1
-  let baseYear = currentYear
-  
-  // If current month is after June, next academic year starts
-  if (currentMonth > 6) {
-    baseYear = currentYear
-  } else {
-    baseYear = currentYear - 1
-  }
-  
-  const years = []
-  // Previous 1 year + current + next 5 years
-  for (let i = 1; i >= -5; i--) {
-    const startYear = baseYear - i
-    const endYear = startYear + 1
-    years.push(`${startYear}-${endYear}`)
-  }
-  
-  return years
-}
-
-const ACADEMIC_YEARS = generateAcademicYears()
-const CURRENT_ACADEMIC_YEAR = ACADEMIC_YEARS[1] // Current academic year is at index 1
 
 const HostelFeeManagement = ({ 
   visible, 
@@ -78,10 +52,10 @@ const HostelFeeManagement = ({
   const { colors } = useTheme()
   const [formData, setFormData] = useState({
     className: '',
-    academicYear: CURRENT_ACADEMIC_YEAR,
-    totalTerms: '3',
     totalAnnualFee: '',
     description: '',
+    createdBy: '',
+    updatedBy: ''
   })
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState({})
@@ -91,26 +65,33 @@ const HostelFeeManagement = ({
     type: 'info'
   })
   const [showClassDropdown, setShowClassDropdown] = useState(false)
-  const [showYearDropdown, setShowYearDropdown] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+
+  const employee = useSelector(state => state.employee.employee)
+  const teacherName = employee ? `${employee.firstName} ${employee.lastName}` : 'Accountant'
+
+  // Get current user from Redux/context
+  const getCurrentUser = () => {
+    return teacherName || 'Unknown Employee'
+  }
 
   useEffect(() => {
     if (initialData) {
       setFormData({
         className: initialData.className || '',
-        academicYear: initialData.academicYear || CURRENT_ACADEMIC_YEAR,
-        totalTerms: initialData.totalTerms?.toString() || '3',
         totalAnnualFee: initialData.totalAnnualFee?.toString() || '',
         description: initialData.description || '',
+        createdBy: initialData.createdBy || '',
+        updatedBy: getCurrentUser()
       })
       setErrors({})
     } else {
       setFormData({
         className: '',
-        academicYear: CURRENT_ACADEMIC_YEAR,
-        totalTerms: '3',
         totalAnnualFee: '',
         description: '',
+        createdBy: getCurrentUser(),
+        updatedBy: getCurrentUser()
       })
       setErrors({})
     }
@@ -131,35 +112,34 @@ const HostelFeeManagement = ({
   const validateForm = () => {
     const newErrors = {}
     
-    if (!formData.className.trim()) {
+    if (!formData.className) {
       newErrors.className = 'Class name is required'
     }
     
-    if (!formData.totalAnnualFee.trim()) {
+    if (!formData.totalAnnualFee) {
       newErrors.totalAnnualFee = 'Annual hostel fee is required'
     } else if (isNaN(formData.totalAnnualFee) || parseFloat(formData.totalAnnualFee) <= 0) {
       newErrors.totalAnnualFee = 'Enter valid annual hostel fee'
     }
     
-    if (!formData.totalTerms.trim()) {
-      newErrors.totalTerms = 'Number of terms is required'
-    } else if (isNaN(formData.totalTerms) || parseInt(formData.totalTerms) <= 0 || parseInt(formData.totalTerms) > 4) {
-      newErrors.totalTerms = 'Enter valid number of terms (1-4)'
-    }
-    
-    // Check for duplicate
+    // Check for duplicate active fee structure
     if (!initialData) {
       const duplicate = existingHostelFees.find(fee => 
-        fee.className.toLowerCase() === formData.className.toLowerCase() &&
-        fee.academicYear === formData.academicYear
+        fee.className === formData.className && 
+        fee.isActive === true
       )
       if (duplicate) {
-        newErrors.className = `Hostel fee already exists for Class ${formData.className} in ${formData.academicYear}`
+        newErrors.className = `Active hostel fee already exists for ${getClassLabel(formData.className)}`
       }
     }
     
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
+  }
+
+  const getClassLabel = (enumValue) => {
+    const found = CLASS_ENUM_OPTIONS.find(opt => opt.value === enumValue)
+    return found ? found.label : enumValue
   }
 
   const handleSubmit = async () => {
@@ -170,36 +150,25 @@ const HostelFeeManagement = ({
     setLoading(true)
     try {
       const payload = {
-        className: formData.className.trim(),
-        academicYear: formData.academicYear,
-        totalTerms: parseInt(formData.totalTerms),
+        className: formData.className,
         totalAnnualFee: parseFloat(formData.totalAnnualFee),
-        description: formData.description.trim()
+        description: formData.description || null,
+        createdBy: formData.createdBy,
+        updatedBy: formData.updatedBy
       }
 
       let response
-      if (initialData && initialData._id) {
-        // Update existing
-        response = await axiosApi.put(`/hostel-fees/${initialData._id}`, payload)
+      if (initialData && initialData.id) {
+        response = await axiosApi.put(`/fee-structure/hostel/${initialData.id}`, payload)
         showToast('Hostel fee updated successfully!', 'success')
       } else {
-        // Create new
-        response = await axiosApi.post('/hostel-fees', payload)
+        response = await axiosApi.post('/fee-structure/hostel', payload)
         showToast('Hostel fee created successfully!', 'success')
       }
 
       if (response.data.success) {
-        const newData = {
-          _id: response.data.data._id || Date.now().toString(),
-          ...response.data.data,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-        
-        onSave(newData)
+        onSave(response.data.data)
         setLoading(false)
-        
-        // Close modal after a delay to show toast
         setTimeout(() => {
           onClose()
         }, 1500)
@@ -215,9 +184,9 @@ const HostelFeeManagement = ({
   const handleDelete = async () => {
     try {
       setLoading(true)
-      await axiosApi.delete(`/hostel-fees/${initialData._id}`)
+      await axiosApi.delete(`/fee-structure/hostel/${initialData.id}`)
       showToast('Hostel fee deleted successfully!', 'success')
-      onSave(null, true) // Pass true to indicate deletion
+      onSave(null, true)
       setShowDeleteModal(false)
       setTimeout(() => {
         onClose()
@@ -231,24 +200,12 @@ const HostelFeeManagement = ({
     }
   }
 
-  const calculateTermAmount = () => {
-    if (!formData.totalAnnualFee || !formData.totalTerms) return 0
-    const annualFee = parseFloat(formData.totalAnnualFee) || 0
-    const terms = parseInt(formData.totalTerms) || 3
-    return terms > 0 ? annualFee / terms : 0
-  }
-
-  const handleSelectClass = (className) => {
-    setFormData(prev => ({ ...prev, className }))
+  const handleSelectClass = (classValue) => {
+    setFormData(prev => ({ ...prev, className: classValue }))
     setShowClassDropdown(false)
     if (errors.className) {
       setErrors(prev => ({ ...prev, className: '' }))
     }
-  }
-
-  const handleSelectYear = (year) => {
-    setFormData(prev => ({ ...prev, academicYear: year }))
-    setShowYearDropdown(false)
   }
 
   const renderDropdownItem = ({ item, onSelect, isSelected }) => (
@@ -257,7 +214,7 @@ const HostelFeeManagement = ({
         styles.dropdownItem,
         isSelected && { backgroundColor: colors.warning + '15' }
       ]}
-      onPress={() => onSelect(item)}
+      onPress={() => onSelect(item.value)}
     >
       <ThemedText 
         style={[
@@ -265,7 +222,7 @@ const HostelFeeManagement = ({
           isSelected && { color: colors.warning, fontFamily: 'Poppins-SemiBold' }
         ]}
       >
-        {item}
+        {item.label}
       </ThemedText>
       {isSelected && (
         <Feather name="check" size={18} color={colors.warning} />
@@ -295,49 +252,12 @@ const HostelFeeManagement = ({
             </TouchableOpacity>
           </View>
           <FlatList
-            data={CLASS_OPTIONS}
-            keyExtractor={(item) => item}
+            data={CLASS_ENUM_OPTIONS}
+            keyExtractor={(item) => item.value}
             renderItem={({ item }) => renderDropdownItem({
               item,
               onSelect: handleSelectClass,
-              isSelected: formData.className === item
-            })}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.dropdownList}
-          />
-        </View>
-      </TouchableOpacity>
-    </Modal>
-  )
-
-  const renderYearDropdown = () => (
-    <Modal
-      transparent
-      visible={showYearDropdown}
-      animationType="fade"
-      onRequestClose={() => setShowYearDropdown(false)}
-    >
-      <TouchableOpacity
-        style={styles.dropdownOverlay}
-        activeOpacity={1}
-        onPress={() => setShowYearDropdown(false)}
-      >
-        <View style={[styles.dropdownContainer, { backgroundColor: colors.cardBackground }]}>
-          <View style={[styles.dropdownHeader, { backgroundColor: colors.warning + '10' }]}>
-            <ThemedText style={[styles.dropdownTitle, { color: colors.warning }]}>
-              Select Academic Year
-            </ThemedText>
-            <TouchableOpacity onPress={() => setShowYearDropdown(false)}>
-              <Feather name="x" size={20} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-          <FlatList
-            data={ACADEMIC_YEARS}
-            keyExtractor={(item) => item}
-            renderItem={({ item }) => renderDropdownItem({
-              item,
-              onSelect: handleSelectYear,
-              isSelected: formData.academicYear === item
+              isSelected: formData.className === item.value
             })}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.dropdownList}
@@ -369,7 +289,7 @@ const HostelFeeManagement = ({
               Are you sure you want to delete hostel fee for
             </ThemedText>
             <ThemedText style={[styles.deleteModalHighlight, { color: colors.warning }]}>
-              Class {formData.className}?
+              {getClassLabel(formData.className)}?
             </ThemedText>
             <ThemedText style={[styles.deleteModalSubText, { color: colors.textSecondary }]}>
               This action cannot be undone.
@@ -422,7 +342,7 @@ const HostelFeeManagement = ({
       width: SCREEN_WIDTH * 0.9,
       backgroundColor: colors.cardBackground,
       borderRadius: 24,
-      maxHeight: SCREEN_HEIGHT * 0.85,
+      maxHeight: SCREEN_HEIGHT * 0.75,
       overflow: 'hidden',
       borderWidth: 1,
       borderColor: colors.border,
@@ -520,14 +440,6 @@ const HostelFeeManagement = ({
       color: '#ef4444',
       marginTop: 6,
       fontFamily: 'Poppins-Medium',
-    },
-    rowContainer: {
-      flexDirection: 'row',
-      gap: 16,
-      marginBottom: 15,
-    },
-    halfContainer: {
-      flex: 1,
     },
     feeSummaryCard: {
       backgroundColor: colors.warning + '08',
@@ -779,8 +691,6 @@ const HostelFeeManagement = ({
 
   if (!visible) return null
 
-  const termAmount = calculateTermAmount()
-
   return (
     <View style={modalStyles.overlay}>
       <View style={modalStyles.modalContainer}>
@@ -832,22 +742,22 @@ const HostelFeeManagement = ({
                     style={[
                       initialData ? modalStyles.lockedInput : modalStyles.dropdownInput,
                       errors.className && modalStyles.errorInput,
-                      !initialData && !errors.className && formData.className.trim() && modalStyles.focusedInput
+                      !initialData && !errors.className && formData.className && modalStyles.focusedInput
                     ]}
                   >
                     <ThemedText
                       style={{
-                        color: formData.className.trim() ? (initialData ? colors.text + '90' : colors.text) : colors.textSecondary,
+                        color: formData.className ? (initialData ? colors.text + '90' : colors.text) : colors.textSecondary,
                         fontSize: 15,
                         fontFamily: 'Poppins-Medium',
                       }}
                     >
-                      {formData.className.trim() || 'Select Class'}
+                      {formData.className ? getClassLabel(formData.className) : 'Select Class'}
                     </ThemedText>
                   </View>
                   {!initialData ? (
                     <Feather 
-                      name={showClassDropdown ? "chevron-up" : "chevron-down"} 
+                      name="chevron-down" 
                       size={18} 
                       color={colors.textSecondary} 
                       style={modalStyles.dropdownIcon}
@@ -867,87 +777,6 @@ const HostelFeeManagement = ({
               )}
             </View>
 
-            <View style={modalStyles.rowContainer}>
-              {/* Academic Year Dropdown */}
-              <View style={modalStyles.halfContainer}>
-                <ThemedText style={modalStyles.label}>Academic Year</ThemedText>
-                <TouchableOpacity
-                  onPress={() => !initialData && setShowYearDropdown(true)}
-                  disabled={!!initialData}
-                >
-                  <View style={modalStyles.inputWrapper}>
-                    <View
-                      style={[
-                        initialData ? modalStyles.lockedInput : modalStyles.dropdownInput,
-                      ]}
-                    >
-                      <ThemedText
-                        style={{
-                          color: initialData ? colors.text + '90' : colors.text,
-                          fontSize: 15,
-                          fontFamily: 'Poppins-Medium',
-                        }}
-                      >
-                        {formData.academicYear}
-                      </ThemedText>
-                    </View>
-                    {!initialData ? (
-                      <Feather 
-                        name={showYearDropdown ? "chevron-up" : "chevron-down"} 
-                        size={18} 
-                        color={colors.textSecondary} 
-                        style={modalStyles.dropdownIcon}
-                      />
-                    ) : (
-                      <Feather 
-                        name="lock" 
-                        size={18} 
-                        color={colors.textSecondary + '90'} 
-                        style={modalStyles.dropdownIcon}
-                      />
-                    )}
-                  </View>
-                </TouchableOpacity>
-              </View>
-              
-              {/* Total Terms Input */}
-              <View style={modalStyles.halfContainer}>
-                <View style={modalStyles.labelRow}>
-                  <ThemedText style={modalStyles.label}>
-                    Total Terms <ThemedText style={modalStyles.requiredStar}>*</ThemedText>
-                  </ThemedText>
-                </View>
-                <View style={modalStyles.inputWrapper}>
-                  <TextInput
-                    style={[
-                      modalStyles.dropdownInput,
-                      errors.totalTerms && modalStyles.errorInput,
-                      !errors.totalTerms && formData.totalTerms.trim() && modalStyles.focusedInput
-                    ]}
-                    value={formData.totalTerms}
-                    onChangeText={(text) => {
-                      setFormData(prev => ({ ...prev, totalTerms: text }))
-                      if (errors.totalTerms) {
-                        setErrors(prev => ({ ...prev, totalTerms: '' }))
-                      }
-                    }}
-                    placeholder="3"
-                    placeholderTextColor={colors.textSecondary}
-                    keyboardType="numeric"
-                  />
-                  <MaterialIcons
-                    name="vertical-split" 
-                    size={18} 
-                    color={colors.textSecondary} 
-                    style={modalStyles.dropdownIcon}
-                  />
-                </View>
-                {errors.totalTerms && (
-                  <ThemedText style={modalStyles.errorText}>{errors.totalTerms}</ThemedText>
-                )}
-              </View>
-            </View>
-
             {/* Total Annual Hostel Fee Input */}
             <View style={modalStyles.inputContainer}>
               <View style={modalStyles.labelRow}>
@@ -960,11 +789,12 @@ const HostelFeeManagement = ({
                   style={[
                     modalStyles.dropdownInput,
                     errors.totalAnnualFee && modalStyles.errorInput,
-                    !errors.totalAnnualFee && formData.totalAnnualFee.trim() && modalStyles.focusedInput
+                    !errors.totalAnnualFee && formData.totalAnnualFee && modalStyles.focusedInput
                   ]}
                   value={formData.totalAnnualFee}
                   onChangeText={(text) => {
-                    setFormData(prev => ({ ...prev, totalAnnualFee: text }))
+                    const cleaned = text.replace(/[^0-9]/g, '')
+                    setFormData(prev => ({ ...prev, totalAnnualFee: cleaned }))
                     if (errors.totalAnnualFee) {
                       setErrors(prev => ({ ...prev, totalAnnualFee: '' }))
                     }
@@ -1005,12 +835,6 @@ const HostelFeeManagement = ({
                 <ThemedText style={modalStyles.summaryLabel}>Annual Hostel Fee:</ThemedText>
                 <ThemedText style={modalStyles.summaryValue}>
                   ₹{(parseFloat(formData.totalAnnualFee) || 0).toLocaleString()}
-                </ThemedText>
-              </View>
-              <View style={modalStyles.summaryItem}>
-                <ThemedText style={modalStyles.summaryLabel}>Per Term ({formData.totalTerms || 3} terms):</ThemedText>
-                <ThemedText style={modalStyles.summaryValue}>
-                  ₹{termAmount.toLocaleString()}
                 </ThemedText>
               </View>
               <View style={modalStyles.totalItem}>
@@ -1077,7 +901,6 @@ const HostelFeeManagement = ({
 
       {/* Dropdown Modals */}
       {renderClassDropdown()}
-      {renderYearDropdown()}
       {renderDeleteModal()}
 
       {/* Toast Notification */}

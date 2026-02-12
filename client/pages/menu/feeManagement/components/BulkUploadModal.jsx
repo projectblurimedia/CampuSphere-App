@@ -27,14 +27,12 @@ const BulkUploadModal = React.memo(({
   uploading,
   uploadProgress,
   uploadResult,
-  onDownloadTemplate,
   onUpload,
   onClose,
   onRefresh,
 }) => {
   const handleFileUpload = async () => {
     try {
-      // Pick Excel file
       const result = await DocumentPicker.getDocumentAsync({
         type: [
           'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -51,7 +49,6 @@ const BulkUploadModal = React.memo(({
 
       const asset = result.assets[0]
       
-      // Validate file
       const validExtensions = ['.xlsx', '.xls']
       const fileExtension = asset.name.toLowerCase().slice(asset.name.lastIndexOf('.'))
       
@@ -65,10 +62,7 @@ const BulkUploadModal = React.memo(({
         return
       }
 
-      // Get the actual file URI
       let fileUri = asset.uri
-      
-      // For iOS, we might need to add file:// prefix
       if (Platform.OS === 'ios' && !fileUri.startsWith('file://')) {
         fileUri = `file://${fileUri}`
       }
@@ -107,11 +101,32 @@ const BulkUploadModal = React.memo(({
   const getRequiredColumns = () => {
     switch(activeTab) {
       case 'class':
-        return ['className', 'academicYear', 'totalAnnualFee', 'totalTerms (optional)']
+        return [
+          'className (PRE_NURSERY, NURSERY, LKG, UKG, CLASS_1 to CLASS_12)',
+          'totalAnnualFee',
+          'tuitionFee (optional)',
+          'examFee (optional)',
+          'activityFee (optional)',
+          'booksFee (optional)',
+          'sportsFee (optional)',
+          'labFee (optional)',
+          'computerFee (optional)',
+          'otherCharges (optional)',
+          'description (optional)'
+        ]
       case 'bus':
-        return ['villageName', 'distance', 'feeAmount', 'academicYear', 'vehicleType (optional)']
+        return [
+          'villageName',
+          'distance',
+          'feeAmount',
+          'description (optional)'
+        ]
       case 'hostel':
-        return ['hostelName', 'hostelType', 'roomType', 'academicYear', 'feeAmount', 'depositAmount (optional)']
+        return [
+          'className (PRE_NURSERY, NURSERY, LKG, UKG, CLASS_1 to CLASS_12)',
+          'totalAnnualFee',
+          'description (optional)'
+        ]
       default:
         return []
     }
@@ -120,6 +135,297 @@ const BulkUploadModal = React.memo(({
   const tabColor = getTabColor()
   const tabName = getTabName()
   const requiredColumns = getRequiredColumns()
+
+  const formatRejectionReason = (reason) => {
+    if (!reason) return 'Unknown error';
+    
+    // Make rejection reasons more readable
+    if (reason.includes('duplicate')) {
+      return 'Duplicate entry - already exists';
+    }
+    if (reason.includes('required')) {
+      return 'Missing required field';
+    }
+    if (reason.includes('invalid')) {
+      return 'Invalid data format';
+    }
+    if (reason.includes('not found')) {
+      return 'Record not found';
+    }
+    if (reason.includes('permission')) {
+      return 'Permission denied';
+    }
+    return reason;
+  };
+
+  const getRejectionCategory = (reason) => {
+    const reasonLower = reason.toLowerCase();
+    if (reasonLower.includes('duplicate')) return 'duplicate';
+    if (reasonLower.includes('required') || reasonLower.includes('missing')) return 'missing';
+    if (reasonLower.includes('invalid') || reasonLower.includes('format')) return 'invalid';
+    if (reasonLower.includes('not found')) return 'not_found';
+    if (reasonLower.includes('permission')) return 'permission';
+    return 'other';
+  };
+
+  const groupRejectionsByReason = (failedItems) => {
+    if (!failedItems || failedItems.length === 0) return {};
+    
+    return failedItems.reduce((acc, item) => {
+      const reason = item.reason || 'Unknown error';
+      const category = getRejectionCategory(reason);
+      
+      if (!acc[category]) {
+        acc[category] = {
+          count: 0,
+          examples: [],
+          mainReason: reason
+        };
+      }
+      
+      acc[category].count++;
+      
+      // Store up to 3 examples for each category
+      if (acc[category].examples.length < 3) {
+        const identifier = item.className || item.villageName || `Row ${item.rowNumber || '?'}`;
+        acc[category].examples.push({
+          identifier,
+          reason: formatRejectionReason(reason)
+        });
+      }
+      
+      return acc;
+    }, {});
+  };
+
+  const renderUploadDetails = () => {
+    if (!uploadResult) return null;
+
+    const totalRecords = uploadResult.totalRecords || 
+      (uploadResult.successful?.length || 0) + (uploadResult.failed?.length || 0);
+    const successCount = uploadResult.successful?.length || 0;
+    const failedCount = uploadResult.failed?.length || 0;
+    const rejectionGroups = groupRejectionsByReason(uploadResult.failed);
+
+    return (
+      <>
+        {/* Summary Stats */}
+        <View style={[styles.summaryCard, { backgroundColor: colors.inputBackground }]}>
+          <View style={styles.summaryHeader}>
+            <MaterialIcons name="analytics" size={20} color={tabColor} />
+            <ThemedText style={[styles.summaryTitle, { color: colors.text }]}>
+              Upload Summary
+            </ThemedText>
+          </View>
+          
+          <View style={styles.summaryStats}>
+            <View style={[styles.summaryStatItem, { backgroundColor: colors.background }]}>
+              <Feather name="database" size={16} color={colors.textSecondary} />
+              <ThemedText style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>
+                Total
+              </ThemedText>
+              <ThemedText style={[styles.summaryStatValue, { color: colors.text }]}>
+                {totalRecords}
+              </ThemedText>
+            </View>
+            
+            <View style={[styles.summaryStatItem, { backgroundColor: colors.success + '10' }]}>
+              <Feather name="check-circle" size={16} color={colors.success} />
+              <ThemedText style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>
+                Success
+              </ThemedText>
+              <ThemedText style={[styles.summaryStatValue, { color: colors.success }]}>
+                {successCount}
+              </ThemedText>
+            </View>
+            
+            <View style={[styles.summaryStatItem, { backgroundColor: colors.error + '10' }]}>
+              <Feather name="x-circle" size={16} color={colors.error} />
+              <ThemedText style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>
+                Failed
+              </ThemedText>
+              <ThemedText style={[styles.summaryStatValue, { color: colors.error }]}>
+                {failedCount}
+              </ThemedText>
+            </View>
+          </View>
+          
+          <View style={[styles.progressBarLarge, { backgroundColor: colors.background }]}>
+            <View 
+              style={[
+                styles.progressFillSuccess,
+                { 
+                  width: `${totalRecords > 0 ? (successCount / totalRecords) * 100 : 0}%`,
+                  backgroundColor: colors.success
+                }
+              ]} 
+            />
+            <View 
+              style={[
+                styles.progressFillError,
+                { 
+                  left: `${totalRecords > 0 ? (successCount / totalRecords) * 100 : 0}%`,
+                  width: `${totalRecords > 0 ? (failedCount / totalRecords) * 100 : 0}%`,
+                  backgroundColor: colors.error
+                }
+              ]} 
+            />
+          </View>
+          
+          <View style={styles.percentageRow}>
+            <ThemedText style={[styles.percentageText, { color: colors.success }]}>
+              {totalRecords > 0 ? ((successCount / totalRecords) * 100).toFixed(1) : 0}% Success
+            </ThemedText>
+            <ThemedText style={[styles.percentageText, { color: colors.error }]}>
+              {totalRecords > 0 ? ((failedCount / totalRecords) * 100).toFixed(1) : 0}% Failed
+            </ThemedText>
+          </View>
+        </View>
+
+        {/* Successful Records Details */}
+        {successCount > 0 && (
+          <View style={[styles.detailsCard, { 
+            backgroundColor: colors.success + '05',
+            borderColor: colors.success + '20'
+          }]}>
+            <View style={styles.detailsHeader}>
+              <View style={[styles.detailsIcon, { backgroundColor: colors.success + '15' }]}>
+                <Feather name="check-circle" size={20} color={colors.success} />
+              </View>
+              <View style={styles.detailsTitleContainer}>
+                <ThemedText style={[styles.detailsTitle, { color: colors.success }]}>
+                  Successfully Uploaded ({successCount})
+                </ThemedText>
+                <ThemedText style={[styles.detailsSubtitle, { color: colors.textSecondary }]}>
+                  Records added/updated successfully
+                </ThemedText>
+              </View>
+            </View>
+            
+            <View style={styles.successList}>
+              {uploadResult.successful.slice(0, 5).map((item, index) => (
+                <View key={index} style={[styles.successItem, { 
+                  backgroundColor: colors.background,
+                  borderColor: colors.border
+                }]}>
+                  <Feather name="check" size={14} color={colors.success} />
+                  <ThemedText style={[styles.successItemText, { color: colors.text }]}>
+                    {activeTab === 'bus' 
+                      ? item.villageName 
+                      : item.className || `Record #${item.id || index + 1}`}
+                  </ThemedText>
+                </View>
+              ))}
+              {successCount > 5 && (
+                <ThemedText style={[styles.moreText, { color: colors.textSecondary }]}>
+                  + {successCount - 5} more records
+                </ThemedText>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Rejected Records Details with Grouped Reasons */}
+        {failedCount > 0 && (
+          <View style={[styles.detailsCard, { 
+            backgroundColor: colors.error + '05',
+            borderColor: colors.error + '20'
+          }]}>
+            <View style={styles.detailsHeader}>
+              <View style={[styles.detailsIcon, { backgroundColor: colors.error + '15' }]}>
+                <Feather name="x-circle" size={20} color={colors.error} />
+              </View>
+              <View style={styles.detailsTitleContainer}>
+                <ThemedText style={[styles.detailsTitle, { color: colors.error }]}>
+                  Failed Uploads ({failedCount})
+                </ThemedText>
+                <ThemedText style={[styles.detailsSubtitle, { color: colors.textSecondary }]}>
+                  Records that could not be processed
+                </ThemedText>
+              </View>
+            </View>
+            
+            {/* Grouped Rejection Reasons */}
+            {Object.entries(rejectionGroups).map(([category, data]) => (
+              <View key={category} style={styles.rejectionGroup}>
+                <View style={styles.rejectionGroupHeader}>
+                  <View style={[styles.rejectionBadge, { 
+                    backgroundColor: 
+                      category === 'duplicate' ? colors.warning + '15' :
+                      category === 'missing' ? colors.error + '15' :
+                      category === 'invalid' ? colors.primary + '15' :
+                      category === 'not_found' ? colors.info + '15' :
+                      colors.textSecondary + '15'
+                  }]}>
+                    <Feather 
+                      name={
+                        category === 'duplicate' ? 'copy' :
+                        category === 'missing' ? 'alert-triangle' :
+                        category === 'invalid' ? 'alert-circle' :
+                        category === 'not_found' ? 'search' :
+                        'help-circle'
+                      } 
+                      size={14} 
+                      color={
+                        category === 'duplicate' ? colors.warning :
+                        category === 'missing' ? colors.error :
+                        category === 'invalid' ? colors.primary :
+                        category === 'not_found' ? colors.info :
+                        colors.textSecondary
+                      } 
+                    />
+                  </View>
+                  <View style={styles.rejectionGroupInfo}>
+                    <ThemedText style={[styles.rejectionGroupTitle, { color: colors.text }]}>
+                      {category === 'duplicate' ? 'Duplicate Entries' :
+                       category === 'missing' ? 'Missing Required Fields' :
+                       category === 'invalid' ? 'Invalid Data Format' :
+                       category === 'not_found' ? 'Records Not Found' :
+                       'Other Errors'} ({data.count})
+                    </ThemedText>
+                    <ThemedText style={[styles.rejectionGroupReason, { color: colors.textSecondary }]}>
+                      {data.mainReason}
+                    </ThemedText>
+                  </View>
+                </View>
+                
+                <View style={styles.rejectionExamples}>
+                  {data.examples.map((example, idx) => (
+                    <View key={idx} style={[styles.rejectionExample, { 
+                      backgroundColor: colors.background,
+                      borderLeftColor: 
+                        category === 'duplicate' ? colors.warning :
+                        category === 'missing' ? colors.error :
+                        category === 'invalid' ? colors.primary :
+                        category === 'not_found' ? colors.info :
+                        colors.textSecondary
+                    }]}>
+                      <ThemedText style={[styles.rejectionExampleIdentifier, { color: colors.text }]}>
+                        {example.identifier}
+                      </ThemedText>
+                      <ThemedText style={[styles.rejectionExampleReason, { color: colors.textSecondary }]}>
+                        {example.reason}
+                      </ThemedText>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ))}
+            
+            {/* Show remaining count if more than examples shown */}
+            {failedCount > Object.values(rejectionGroups).reduce((acc, group) => acc + group.examples.length, 0) && (
+              <View style={styles.moreErrors}>
+                <Feather name="more-horizontal" size={16} color={colors.textSecondary} />
+                <ThemedText style={[styles.moreErrorsText, { color: colors.textSecondary }]}>
+                  {failedCount - Object.values(rejectionGroups).reduce((acc, group) => acc + group.examples.length, 0)} more errors...
+                </ThemedText>
+              </View>
+            )}
+          </View>
+        )}
+      </>
+    );
+  };
 
   return (
     <Modal
@@ -140,7 +446,7 @@ const BulkUploadModal = React.memo(({
               <Feather name="upload" size={24} color={tabColor} />
             </View>
             <View style={styles.titleContainer}>
-              <ThemedText type="title" style={[styles.title, { color: colors.text }]}>
+              <ThemedText type='subtitle' style={[styles.title, { color: colors.text }]}>
                 Bulk Upload {tabName}
               </ThemedText>
               <ThemedText style={[styles.subtitle, { color: colors.textSecondary }]}>
@@ -159,40 +465,30 @@ const BulkUploadModal = React.memo(({
           </View>
           
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-            {/* Template Download */}
-            <View style={[styles.stepCard, { backgroundColor: tabColor + '05', borderColor: tabColor + '20' }]}>
-              <View style={styles.stepHeader}>
-                <View style={[styles.stepIcon, { backgroundColor: tabColor + '15' }]}>
-                  <MaterialCommunityIcons name="file-download" size={20} color={tabColor} />
+            {/* File Upload Section */}
+            <View style={[styles.uploadCard, { backgroundColor: tabColor + '05', borderColor: tabColor + '20' }]}>
+              <View style={styles.uploadHeader}>
+                <View style={[styles.uploadIcon, { backgroundColor: tabColor + '15' }]}>
+                  <Feather name="upload-cloud" size={24} color={tabColor} />
                 </View>
-                <View style={styles.stepTextContainer}>
-                  <ThemedText type="subtitle" style={[styles.stepTitle, { color: tabColor }]}>
-                    Step 1: Download Template
+                <View style={styles.uploadTextContainer}>
+                  <ThemedText style={[styles.uploadTitle, { color: tabColor }]}>
+                    Upload Excel File
                   </ThemedText>
-                  <ThemedText style={[styles.stepDescription, { color: colors.textSecondary }]}>
-                    Download the Excel template with correct column structure
+                  <ThemedText style={[styles.uploadDescription, { color: colors.textSecondary }]}>
+                    Select your prepared Excel file. Existing records will be updated, new ones created.
                   </ThemedText>
                 </View>
               </View>
               
-              <TouchableOpacity
-                style={[styles.downloadButton, { 
-                  backgroundColor: tabColor + '10',
-                  borderColor: tabColor
-                }]}
-                onPress={onDownloadTemplate}
-                disabled={uploading}
-              >
-                <MaterialCommunityIcons name="file-excel" size={20} color={tabColor} />
-                <ThemedText style={[styles.downloadButtonText, { color: tabColor }]}>
-                  Download Excel Template
-                </ThemedText>
-              </TouchableOpacity>
-              
+              {/* Required Columns Info */}
               <View style={[styles.infoContainer, { backgroundColor: colors.inputBackground }]}>
-                <ThemedText type="caption" style={[styles.infoTitle, { color: colors.text }]}>
-                  Required Columns:
-                </ThemedText>
+                <View style={styles.infoHeader}>
+                  <MaterialIcons name="info-outline" size={16} color={colors.textSecondary} />
+                  <ThemedText style={[styles.infoTitle, { color: colors.text }]}>
+                    Required Columns:
+                  </ThemedText>
+                </View>
                 <View style={styles.columnsList}>
                   {requiredColumns.map((column, index) => (
                     <View key={index} style={[styles.columnItem, { 
@@ -200,7 +496,7 @@ const BulkUploadModal = React.memo(({
                       borderColor: colors.border
                     }]}>
                       <Feather 
-                        name={column.includes('(optional)') ? "circle" : "check"} 
+                        name={column.includes('(optional)') ? "circle" : "check-circle"} 
                         size={12} 
                         color={column.includes('(optional)') ? colors.textSecondary : colors.success} 
                       />
@@ -214,50 +510,30 @@ const BulkUploadModal = React.memo(({
                   ))}
                 </View>
               </View>
-            </View>
-
-            {/* File Upload */}
-            <View style={[styles.stepCard, { backgroundColor: tabColor + '05', borderColor: tabColor + '20' }]}>
-              <View style={styles.stepHeader}>
-                <View style={[styles.stepIcon, { backgroundColor: tabColor + '15' }]}>
-                  <Feather name="upload-cloud" size={20} color={tabColor} />
-                </View>
-                <View style={styles.stepTextContainer}>
-                  <ThemedText type="subtitle" style={[styles.stepTitle, { color: tabColor }]}>
-                    Step 2: Upload File
+              
+              {/* File Requirements */}
+              <View style={styles.requirements}>
+                <View style={styles.requirementItem}>
+                  <MaterialIcons name="insert-drive-file" size={16} color={colors.textSecondary} />
+                  <ThemedText style={[styles.requirementText, { color: colors.textSecondary }]}>
+                    Excel (.xlsx, .xls)
                   </ThemedText>
-                  <ThemedText style={[styles.stepDescription, { color: colors.textSecondary }]}>
-                    Select your prepared Excel file. Existing records will be updated, new ones created.
+                </View>
+                <View style={styles.requirementItem}>
+                  <MaterialIcons name="straighten" size={16} color={colors.textSecondary} />
+                  <ThemedText style={[styles.requirementText, { color: colors.textSecondary }]}>
+                    Max: 10MB
+                  </ThemedText>
+                </View>
+                <View style={styles.requirementItem}>
+                  <MaterialIcons name="format-list-bulleted" size={16} color={colors.textSecondary} />
+                  <ThemedText style={[styles.requirementText, { color: colors.textSecondary }]}>
+                    Header row required
                   </ThemedText>
                 </View>
               </View>
               
-              <View style={styles.instructions}>
-                <ThemedText type="caption" style={[styles.instructionsTitle, { color: colors.text }]}>
-                  File Requirements:
-                </ThemedText>
-                <View style={styles.instructionsList}>
-                  <View style={styles.instructionItem}>
-                    <MaterialIcons name="check-circle" size={16} color={colors.success} />
-                    <ThemedText style={[styles.instructionText, { color: colors.textSecondary }]}>
-                      Excel format (.xlsx or .xls)
-                    </ThemedText>
-                  </View>
-                  <View style={styles.instructionItem}>
-                    <MaterialIcons name="check-circle" size={16} color={colors.success} />
-                    <ThemedText style={[styles.instructionText, { color: colors.textSecondary }]}>
-                      Maximum file size: 10MB
-                    </ThemedText>
-                  </View>
-                  <View style={styles.instructionItem}>
-                    <MaterialIcons name="check-circle" size={16} color={colors.success} />
-                    <ThemedText style={[styles.instructionText, { color: colors.textSecondary }]}>
-                      First row should contain headers
-                    </ThemedText>
-                  </View>
-                </View>
-              </View>
-              
+              {/* Upload Button */}
               <TouchableOpacity
                 style={[styles.uploadButton, { 
                   backgroundColor: tabColor + '10',
@@ -284,6 +560,7 @@ const BulkUploadModal = React.memo(({
                 )}
               </TouchableOpacity>
               
+              {/* Upload Progress */}
               {uploading && uploadProgress > 0 && (
                 <View style={styles.progressContainer}>
                   <View style={styles.progressBarContainer}>
@@ -298,131 +575,17 @@ const BulkUploadModal = React.memo(({
                     />
                   </View>
                   <ThemedText style={[styles.progressText, { color: colors.textSecondary }]}>
-                    {uploadProgress}% uploaded
+                    Uploading: {uploadProgress}% complete
                   </ThemedText>
                 </View>
               )}
             </View>
 
-            {/* Upload Results */}
-            {uploadResult && (
-              <View style={[styles.resultCard, { 
-                borderColor: (uploadResult.errors && uploadResult.errors.length > 0) ? colors.warning : colors.success,
-                backgroundColor: (uploadResult.errors && uploadResult.errors.length > 0) ? colors.warning + '10' : colors.success + '10'
-              }]}>
-                <View style={styles.resultHeader}>
-                  <View style={[styles.resultIcon, { 
-                    backgroundColor: (uploadResult.errors && uploadResult.errors.length > 0) ? colors.warning + '20' : colors.success + '20' 
-                  }]}>
-                    <Feather 
-                      name={(uploadResult.errors && uploadResult.errors.length > 0) ? "alert-triangle" : "check-circle"} 
-                      size={24} 
-                      color={(uploadResult.errors && uploadResult.errors.length > 0) ? colors.warning : colors.success} 
-                    />
-                  </View>
-                  <View style={styles.resultTitleContainer}>
-                    <ThemedText type="subtitle" style={[styles.resultTitle, { 
-                      color: (uploadResult.errors && uploadResult.errors.length > 0) ? colors.warning : colors.success
-                    }]}>
-                      {(uploadResult.errors && uploadResult.errors.length > 0) ? 'Upload Completed with Errors' : 'Upload Successful!'}
-                    </ThemedText>
-                    <ThemedText style={[styles.resultSubtitle, { color: colors.textSecondary }]}>
-                      {uploadResult.created || uploadResult.updated ? 'Data processed successfully' : 'No data was processed'}
-                    </ThemedText>
-                  </View>
-                </View>
-                
-                <View style={[styles.resultStats, { backgroundColor: colors.background }]}>
-                  <View style={styles.statItem}>
-                    <ThemedText style={[styles.statValue, { color: colors.text }]}>
-                      {(uploadResult.created || 0) + (uploadResult.updated || 0)}
-                    </ThemedText>
-                    <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
-                      Total Processed
-                    </ThemedText>
-                  </View>
-                  
-                  {uploadResult.created > 0 && (
-                    <View style={styles.statItem}>
-                      <ThemedText style={[styles.statValue, { color: colors.success }]}>
-                        {uploadResult.created}
-                      </ThemedText>
-                      <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
-                        Created
-                      </ThemedText>
-                    </View>
-                  )}
-                  
-                  {uploadResult.updated > 0 && (
-                    <View style={styles.statItem}>
-                      <ThemedText style={[styles.statValue, { color: colors.info }]}>
-                        {uploadResult.updated}
-                      </ThemedText>
-                      <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
-                        Updated
-                      </ThemedText>
-                    </View>
-                  )}
-                  
-                  {uploadResult.errors && uploadResult.errors.length > 0 && (
-                    <View style={styles.statItem}>
-                      <ThemedText style={[styles.statValue, { color: colors.error }]}>
-                        {uploadResult.errors.length}
-                      </ThemedText>
-                      <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
-                        Errors
-                      </ThemedText>
-                    </View>
-                  )}
-                  
-                  {uploadResult.skipped > 0 && (
-                    <View style={styles.statItem}>
-                      <ThemedText style={[styles.statValue, { color: colors.textSecondary }]}>
-                        {uploadResult.skipped}
-                      </ThemedText>
-                      <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
-                        Skipped
-                      </ThemedText>
-                    </View>
-                  )}
-                </View>
-                
-                {uploadResult.errors && uploadResult.errors.length > 0 && (
-                  <View style={styles.errorSection}>
-                    <View style={styles.errorHeader}>
-                      <Feather name="alert-circle" size={16} color={colors.error} />
-                      <ThemedText style={[styles.errorTitle, { color: colors.text }]}>
-                        Errors ({uploadResult.errors.length}):
-                      </ThemedText>
-                    </View>
-                    <ScrollView style={styles.errorsList} showsVerticalScrollIndicator={false}>
-                      {uploadResult.errors.slice(0, 10).map((error, index) => (
-                        <View key={index} style={[styles.errorItem, { 
-                          backgroundColor: colors.error + '10',
-                          borderLeftColor: colors.error
-                        }]}>
-                          <ThemedText style={[styles.errorRow, { color: colors.text }]}>
-                            Row {error.row}: 
-                          </ThemedText>
-                          <ThemedText style={[styles.errorText, { color: colors.error }]}>
-                            {error.message || error.error}
-                          </ThemedText>
-                        </View>
-                      ))}
-                      {uploadResult.errors.length > 10 && (
-                        <View style={styles.moreErrors}>
-                          <ThemedText style={[styles.moreErrorsText, { color: colors.textSecondary }]}>
-                            + {uploadResult.errors.length - 10} more errors...
-                          </ThemedText>
-                        </View>
-                      )}
-                    </ScrollView>
-                  </View>
-                )}
-              </View>
-            )}
+            {/* Upload Results with Detailed Information */}
+            {uploadResult && renderUploadDetails()}
           </ScrollView>
           
+          {/* Footer Buttons */}
           <View style={[styles.footer, { borderTopColor: colors.border }]}>
             <TouchableOpacity
               style={[styles.button, { 
@@ -452,19 +615,19 @@ const BulkUploadModal = React.memo(({
               disabled={uploading && !uploadResult}
             >
               <ThemedText style={[styles.buttonText, { color: colors.text }]}>
-                {uploadResult ? 'Close' : uploading ? 'Cancel' : 'Cancel Upload'}
+                {uploadResult ? 'Close' : uploading ? 'Cancel' : 'Cancel'}
               </ThemedText>
             </TouchableOpacity>
             
             {uploadResult && (
               <TouchableOpacity
-                style={[styles.button, { 
+                style={[styles.button, styles.refreshButton, { 
                   backgroundColor: tabColor,
                   borderColor: tabColor
                 }]}
                 onPress={onRefresh}
               >
-                <Feather name="refresh-cw" size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Feather name="refresh-cw" size={16} color="#FFFFFF" />
                 <ThemedText style={[styles.buttonText, { color: '#FFFFFF' }]}>
                   Refresh Data
                 </ThemedText>
@@ -501,9 +664,9 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e5e5e5',
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -525,58 +688,49 @@ const styles = StyleSheet.create({
     maxHeight: 500,
     padding: 20,
   },
-  stepCard: {
-    borderRadius: 12,
-    padding: 16,
+  uploadCard: {
+    borderRadius: 16,
+    padding: 20,
     marginBottom: 16,
     borderWidth: 1,
   },
-  stepHeader: {
+  uploadHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  stepIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  uploadIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
-  stepTextContainer: {
+  uploadTextContainer: {
     flex: 1,
   },
-  stepTitle: {
-    fontSize: 15,
+  uploadTitle: {
+    fontSize: 16,
     marginBottom: 4,
   },
-  stepDescription: {
+  uploadDescription: {
     fontSize: 12,
     lineHeight: 16,
   },
-  downloadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 14,
+  infoContainer: {
+    padding: 16,
     borderRadius: 12,
-    borderWidth: 1,
     marginBottom: 16,
   },
-  downloadButtonText: {
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
-  },
-  infoContainer: {
-    padding: 12,
-    borderRadius: 8,
+  infoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
   },
   infoTitle: {
-    fontSize: 12,
-    marginBottom: 8,
-    fontFamily: 'Poppins-Medium',
+    fontSize: 13,
   },
   columnsList: {
     flexDirection: 'row',
@@ -586,35 +740,27 @@ const styles = StyleSheet.create({
   columnItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
     borderWidth: 1,
   },
   columnText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
+    fontSize: 11,
   },
-  instructions: {
-    marginBottom: 16,
+  requirements: {
+    flexDirection: 'column',
+    marginBottom: 20,
+    paddingHorizontal: 8,
   },
-  instructionsTitle: {
-    fontSize: 12,
-    marginBottom: 8,
-    fontFamily: 'Poppins-Medium',
-  },
-  instructionsList: {
-    gap: 6,
-  },
-  instructionItem: {
+  requirementItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
-  instructionText: {
+  requirementText: {
     fontSize: 11,
-    fontFamily: 'Poppins-Medium',
   },
   uploadButton: {
     flexDirection: 'row',
@@ -628,10 +774,9 @@ const styles = StyleSheet.create({
   },
   uploadButtonText: {
     fontSize: 15,
-    fontFamily: 'Poppins-SemiBold',
   },
   progressContainer: {
-    marginTop: 8,
+    marginTop: 12,
   },
   progressBarContainer: {
     height: 6,
@@ -647,20 +792,77 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 11,
     textAlign: 'center',
-    fontFamily: 'Poppins-Medium',
   },
-  resultCard: {
+  summaryCard: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  summaryTitle: {
+    fontSize: 15,
+  },
+  summaryStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 8,
+  },
+  summaryStatItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
     borderRadius: 12,
-    padding: 16,
-    marginTop: 8,
+  },
+  summaryStatLabel: {
+    fontSize: 11,
+    marginTop: 4,
+  },
+  summaryStatValue: {
+    fontSize: 20,
+    marginTop: 2,
+  },
+  progressBarLarge: {
+    height: 8,
+    backgroundColor: '#e5e5e5',
+    borderRadius: 4,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  progressFillSuccess: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  progressFillError: {
+    position: 'absolute',
+    height: '100%',
+    borderRadius: 4,
+  },
+  percentageRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  percentageText: {
+    fontSize: 11,
+  },
+  detailsCard: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
     borderWidth: 1,
   },
-  resultHeader: {
+  detailsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
   },
-  resultIcon: {
+  detailsIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -668,73 +870,90 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  resultTitleContainer: {
+  detailsTitleContainer: {
     flex: 1,
   },
-  resultTitle: {
-    fontSize: 16,
+  detailsTitle: {
+    fontSize: 15,
     marginBottom: 2,
   },
-  resultSubtitle: {
-    fontSize: 12,
+  detailsSubtitle: {
+    fontSize: 11,
   },
-  resultStats: {
+  successList: {
+    gap: 8,
+  },
+  successItem: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 16,
-    paddingVertical: 12,
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 8,
+    borderWidth: 1,
   },
-  statItem: {
-    alignItems: 'center',
+  successItemText: {
+    fontSize: 12,
+    flex: 1,
   },
-  statValue: {
-    fontSize: 18,
-    fontFamily: 'Poppins-Bold',
-    marginBottom: 2,
+  rejectionGroup: {
+    marginBottom: 16,
   },
-  statLabel: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
-  },
-  errorSection: {
-    marginTop: 8,
-  },
-  errorHeader: {
+  rejectionGroupHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    alignItems: 'flex-start',
     marginBottom: 8,
   },
-  errorTitle: {
+  rejectionBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  rejectionGroupInfo: {
+    flex: 1,
+  },
+  rejectionGroupTitle: {
     fontSize: 13,
-    fontFamily: 'Poppins-SemiBold',
-  },
-  errorsList: {
-    maxHeight: 150,
-  },
-  errorItem: {
-    borderRadius: 6,
-    padding: 10,
-    marginBottom: 6,
-    borderLeftWidth: 3,
-  },
-  errorRow: {
-    fontSize: 11,
-    fontFamily: 'Poppins-Medium',
     marginBottom: 2,
   },
-  errorText: {
+  rejectionGroupReason: {
     fontSize: 11,
-    fontFamily: 'Poppins-Medium',
+  },
+  rejectionExamples: {
+    marginLeft: 38,
+    gap: 6,
+  },
+  rejectionExample: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+  },
+  rejectionExampleIdentifier: {
+    fontSize: 11,
+    marginBottom: 2,
+  },
+  rejectionExampleReason: {
+    fontSize: 11,
   },
   moreErrors: {
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
+    justifyContent: 'center',
+    gap: 6,
+    padding: 12,
+    marginTop: 4,
   },
   moreErrorsText: {
     fontSize: 11,
-    fontFamily: 'Poppins-Medium',
+  },
+  moreText: {
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 8,
   },
   footer: {
     flexDirection: 'row',
@@ -750,10 +969,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     justifyContent: 'center',
+    gap: 8,
+  },
+  refreshButton: {
+    gap: 8,
   },
   buttonText: {
     fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
   },
 })
 

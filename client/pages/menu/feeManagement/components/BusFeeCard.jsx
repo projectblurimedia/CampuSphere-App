@@ -31,18 +31,14 @@ const BusFeeCard = React.memo(({ item, onPress, colors }) => {
                 {item.distance} km
               </ThemedText>
             </View>
-            <View style={[styles.badge, { backgroundColor: colors.warning + '10' }]}>
-              <MaterialIcons name="directions-car" size={10} color={colors.warning} />
-              <ThemedText style={[styles.badgeText, { color: colors.warning }]}>
-                {item.vehicleType || 'Bus'}
-              </ThemedText>
-            </View>
-            <View style={[styles.badge, { backgroundColor: colors.info + '10' }]}>
-              <Feather name="calendar" size={10} color={colors.info} />
-              <ThemedText style={[styles.badgeText, { color: colors.info }]}>
-                {item.academicYear}
-              </ThemedText>
-            </View>
+            {!item.isActive && (
+              <View style={[styles.badge, { backgroundColor: colors.error + '10' }]}>
+                <Feather name="x-circle" size={10} color={colors.error} />
+                <ThemedText style={[styles.badgeText, { color: colors.error }]}>
+                  Inactive
+                </ThemedText>
+              </View>
+            )}
           </View>
         </View>
         <View style={[styles.editIcon, { backgroundColor: colors.success + '15' }]}>
@@ -57,7 +53,9 @@ const BusFeeCard = React.memo(({ item, onPress, colors }) => {
             Bus Fee:
           </ThemedText>
         </View>
-        <ThemedText style={styles.feeAmount}>₹{item.feeAmount?.toLocaleString() || '0'}</ThemedText>
+        <ThemedText style={[styles.feeAmount, { color: colors.success }]}>
+          ₹{item.feeAmount?.toLocaleString() || '0'}
+        </ThemedText>
       </View>
       
       {item.description && (

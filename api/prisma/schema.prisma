@@ -337,3 +337,71 @@ model Employee {
   @@index([createdAt])
   @@index([hashedPassword])
 }
+
+
+// ================= CLASS FEE STRUCTURE =================
+
+model ClassFeeStructure {
+  id              String   @id @default(uuid())
+  className       Class    
+  totalAnnualFee  Int      
+  tuitionFee      Int      @default(0) 
+  examFee         Int      @default(0) 
+  activityFee     Int      @default(0) 
+  booksFee        Int      @default(0) 
+  sportsFee       Int      @default(0) 
+  labFee          Int      @default(0) 
+  computerFee     Int      @default(0) 
+  otherCharges    Int      @default(0) 
+  description     String?  @db.Text
+  isActive        Boolean  @default(true) 
+  createdBy       String   @db.VarChar(50) 
+  updatedBy       String?  @db.VarChar(50) 
+  createdAt       DateTime @default(now()) 
+  updatedAt       DateTime @updatedAt 
+
+  // Computed field via Prisma
+  // termAmount = totalAnnualFee / totalTerms
+
+  @@index([className])
+  @@index([isActive])
+}
+
+// ================= BUS FEE STRUCTURE =================
+
+model BusFeeStructure {
+  id              String   @id @default(uuid())
+  villageName     String   @db.VarChar(100) 
+  distance        Float    @default(0.0)
+  feeAmount       Int      
+  description     String?  @db.Text
+  isActive        Boolean  @default(true) 
+  createdBy       String   @db.VarChar(50) 
+  updatedBy       String?  @db.VarChar(50) 
+  createdAt       DateTime @default(now()) 
+  updatedAt       DateTime @updatedAt 
+
+  @@index([villageName])
+  @@index([isActive])
+}
+
+// ================= HOSTEL FEE STRUCTURE =================
+
+model HostelFeeStructure {
+  id              String   @id @default(uuid())
+  className       Class    
+  totalAnnualFee  Int      
+  totalTerms      Int      @default(3) 
+  description     String?  @db.Text
+  isActive        Boolean  @default(true) 
+  createdBy       String   @db.VarChar(50) 
+  updatedBy       String?  @db.VarChar(50) 
+  createdAt       DateTime @default(now()) 
+  updatedAt       DateTime @updatedAt 
+
+  // Computed field via Prisma
+  // termAmount = totalAnnualFee / totalTerms
+
+  @@index([className])
+  @@index([isActive])
+}

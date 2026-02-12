@@ -8,20 +8,33 @@ import { ThemedText } from '@/components/ui/themed-text'
 import {
   Feather,
   MaterialIcons,
+  FontAwesome5,
 } from '@expo/vector-icons'
 
+const CLASS_LABELS = {
+  'PRE_NURSERY': 'Pre-Nursery',
+  'NURSERY': 'Nursery',
+  'LKG': 'LKG',
+  'UKG': 'UKG',
+  'CLASS_1': '1',
+  'CLASS_2': '2',
+  'CLASS_3': '3',
+  'CLASS_4': '4',
+  'CLASS_5': '5',
+  'CLASS_6': '6',
+  'CLASS_7': '7',
+  'CLASS_8': '8',
+  'CLASS_9': '9',
+  'CLASS_10': '10',
+  'CLASS_11': '11',
+  'CLASS_12': '12'
+}
+
 const ClassFeeCard = React.memo(({ item, onPress, colors }) => {
-  const termAmount = item.totalAnnualFee / (item.totalTerms || 3)
-  
-  // Format class name display
-  const formatClassName = (className) => {
-    if (!className) return 'Class'
-    
-    const str = className.toString()
-    // Capitalize first letter of each word
-    return str.replace(/\b\w/g, char => char.toUpperCase())
+  const getClassLabel = (className) => {
+    return CLASS_LABELS[className] || className || 'Class'
   }
-  
+
   return (
     <TouchableOpacity
       activeOpacity={.9}
@@ -33,20 +46,18 @@ const ClassFeeCard = React.memo(({ item, onPress, colors }) => {
           <MaterialIcons name="school" size={24} color={colors.primary} />
         </View>
         <View style={styles.info}>
-          <ThemedText style={styles.className}>Class {formatClassName(item.className)}</ThemedText>
+          <ThemedText style={styles.className}>
+            Class {getClassLabel(item.className)}
+          </ThemedText>
           <View style={styles.metaRow}>
-            <View style={[styles.badge, { backgroundColor: colors.primary + '10' }]}>
-              <Feather name="calendar" size={10} color={colors.primary} />
-              <ThemedText style={[styles.badgeText, { color: colors.primary }]}>
-                {item.academicYear}
-              </ThemedText>
-            </View>
-            <View style={[styles.badge, { backgroundColor: colors.info + '10' }]}>
-              <MaterialIcons name="layers" size={10} color={colors.info} />
-              <ThemedText style={[styles.badgeText, { color: colors.info }]}>
-                {item.totalTerms || 3} Terms
-              </ThemedText>
-            </View>
+            {!item.isActive && (
+              <View style={[styles.badge, { backgroundColor: colors.error + '10' }]}>
+                <Feather name="x-circle" size={10} color={colors.error} />
+                <ThemedText style={[styles.badgeText, { color: colors.error }]}>
+                  Inactive
+                </ThemedText>
+              </View>
+            )}
           </View>
         </View>
         <View style={[styles.editIcon, { backgroundColor: colors.primary + '15' }]}>
@@ -55,14 +66,16 @@ const ClassFeeCard = React.memo(({ item, onPress, colors }) => {
       </View>
       
       <View style={styles.feeContainer}>
-        <View style={styles.column}>
-          <ThemedText style={styles.feeLabel}>Annual Fee</ThemedText>
-          <ThemedText style={styles.annualFee}>₹{item.totalAnnualFee?.toLocaleString() || '0'}</ThemedText>
-        </View>
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <View style={styles.column}>
-          <ThemedText style={styles.feeLabel}>Per Term</ThemedText>
-          <ThemedText style={styles.termFee}>₹{termAmount.toLocaleString()}</ThemedText>
+        <View style={[styles.feeMainRow, { backgroundColor: colors.inputBackground }]}>
+          <View style={styles.feeInfoRow}>
+            <FontAwesome5 name="rupee-sign" size={14} color={colors.textSecondary} />
+            <ThemedText style={[styles.feeLabel, { color: colors.textSecondary }]}>
+              Annual Fee:
+            </ThemedText>
+          </View>
+          <ThemedText style={[styles.annualFee, { color: colors.primary }]}>
+            ₹{item.totalAnnualFee?.toLocaleString() || '0'}
+          </ThemedText>
         </View>
       </View>
       
@@ -112,18 +125,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontFamily: 'Poppins-Medium',
-  },
   editIcon: {
     width: 36,
     height: 36,
@@ -132,33 +133,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   feeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.02)',
-    borderRadius: 12,
-    padding: 12,
     marginBottom: 8,
   },
-  column: {
-    flex: 1,
+  feeMainRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  divider: {
-    width: 1,
-    height: 30,
+  feeInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   feeLabel: {
-    fontSize: 11,
+    fontSize: 13,
     fontFamily: 'Poppins-Medium',
-    marginBottom: 4,
   },
   annualFee: {
     fontSize: 16,
     fontFamily: 'Poppins-Bold',
-  },
-  termFee: {
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
   },
   descriptionContainer: {
     flexDirection: 'row',

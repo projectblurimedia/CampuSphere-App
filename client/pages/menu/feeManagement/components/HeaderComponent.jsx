@@ -5,14 +5,15 @@ import {
   TouchableOpacity,
   TextInput,
   Animated,
+  Dimensions
 } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import {
   Feather,
   MaterialIcons,
-  MaterialCommunityIcons,
 } from '@expo/vector-icons'
-import AcademicYearDropdown from './AcademicYearDropdown'
+
+const SCREEN_WIDTH = Dimensions.get('window').width
 
 const HeaderComponent = React.memo(({
   colors,
@@ -20,8 +21,6 @@ const HeaderComponent = React.memo(({
   handleSearch,
   activeTab,
   setActiveTab,
-  selectedAcademicYear,
-  handleYearSelect,
   filteredClassFees,
   filteredBusFees,
   filteredHostelFees,
@@ -231,14 +230,6 @@ const HeaderComponent = React.memo(({
             </TouchableOpacity>
           ) : null}
         </View>
-        
-        <View style={{ flex: .7 }}>
-          <AcademicYearDropdown
-            selectedAcademicYear={selectedAcademicYear}
-            onSelect={handleYearSelect}
-            colors={colors}
-          />
-        </View>
       </View>
       
       {/* Tabs */}
@@ -285,7 +276,7 @@ const HeaderComponent = React.memo(({
               transform: [{
                 translateX: slideAnim.interpolate({
                   inputRange: [0, 1, 2],
-                  outputRange: [0, 126, 252]
+                  outputRange: [0, (SCREEN_WIDTH - 32) / 3 - 4, ((SCREEN_WIDTH - 32) / 3 - 4) * 2]
                 })
               }]
             }

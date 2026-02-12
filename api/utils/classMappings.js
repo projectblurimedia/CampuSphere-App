@@ -222,3 +222,38 @@ export const getSubjectDisplayName = (subject) => {
   
   return displayMap[subjectStr] || subjectStr
 }
+
+export const classOrderMap = {
+  'Pre-Nursery': 1,
+  'Nursery': 2,
+  'LKG': 3,
+  'UKG': 4,
+  '1': 5,
+  '2': 6,
+  '3': 7,
+  '4': 8,
+  '5': 9,
+  '6': 10,
+  '7': 11,
+  '8': 12,
+  '9': 13,
+  '10': 14,
+  '11': 15,
+  '12': 16,
+  'I': 5,
+  'II': 6,
+  'III': 7,
+  'IV': 8,
+  'V': 9,
+  'VI': 10,
+  'VII': 11,
+  'VIII': 12,
+  'IX': 13,
+  'X': 14,
+  'XI': 15,
+  'XII': 16
+}
+
+export function getClassOrder(className) {
+  return classOrderMap[className] || 999
+}

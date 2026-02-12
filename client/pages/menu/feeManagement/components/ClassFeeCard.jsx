@@ -47,7 +47,7 @@ const ClassFeeCard = React.memo(({ item, onPress, colors }) => {
         </View>
         <View style={styles.info}>
           <ThemedText style={styles.className}>
-            Class {getClassLabel(item.className)}
+            {getClassLabel(item.className)}
           </ThemedText>
           <View style={styles.metaRow}>
             {!item.isActive && (

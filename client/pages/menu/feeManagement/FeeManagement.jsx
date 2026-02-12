@@ -99,23 +99,6 @@ export default function FeeManagement({ visible, onClose }) {
     }
   }, [visible])
 
-  // Class order for consistent sorting
-  const classOrder = [
-    'PRE_NURSERY', 'NURSERY', 'LKG', 'UKG',
-    'CLASS_1', 'CLASS_2', 'CLASS_3', 'CLASS_4', 'CLASS_5',
-    'CLASS_6', 'CLASS_7', 'CLASS_8', 'CLASS_9', 'CLASS_10',
-    'CLASS_11', 'CLASS_12'
-  ]
-
-  // Helper function to sort class fees by enum order
-  const sortClassFeesByEnumOrder = (fees) => {
-    return [...fees].sort((a, b) => {
-      const indexA = classOrder.indexOf(a.className)
-      const indexB = classOrder.indexOf(b.className)
-      return indexA - indexB
-    })
-  }
-
   const loadData = async (pageNum = 1, isRefreshing = false) => {
     try {
       if (isRefreshing) {
@@ -160,8 +143,7 @@ export default function FeeManagement({ visible, onClose }) {
       setLoadingStep('Processing fee data...')
 
       if (pageNum === 1) {
-        const rawClassFees = classResponse.data.data || []
-        const sortedClassFees = sortClassFeesByEnumOrder(rawClassFees)
+        const sortedClassFees = classResponse.data.data || []
         
         setClassFees(sortedClassFees)
         setBusFees(busResponse.data.data || [])
@@ -170,12 +152,11 @@ export default function FeeManagement({ visible, onClose }) {
         setFilteredBusFees(busResponse.data.data || [])
         setFilteredHostelFees(hostelResponse.data.data || [])
       } else {
-        const newClassFees = classResponse.data.data || []
-        const sortedNewClassFees = sortClassFeesByEnumOrder(newClassFees)
+        const sortedNewClassFees = classResponse.data.data || [] 
         
         setClassFees(prev => {
           const combined = [...prev, ...sortedNewClassFees]
-          return sortClassFeesByEnumOrder(combined)
+          return combined
         })
         
         setBusFees(prev => [...prev, ...(busResponse.data.data || [])])
@@ -183,7 +164,7 @@ export default function FeeManagement({ visible, onClose }) {
         
         setFilteredClassFees(prev => {
           const combined = [...prev, ...sortedNewClassFees]
-          return sortClassFeesByEnumOrder(combined)
+          return combined
         })
         setFilteredBusFees(prev => [...prev, ...(busResponse.data.data || [])])
         setFilteredHostelFees(prev => [...prev, ...(hostelResponse.data.data || [])])
@@ -234,7 +215,7 @@ export default function FeeManagement({ visible, onClose }) {
     
     if (!query.trim()) {
       if (activeTab === 'class') {
-        setFilteredClassFees(sortClassFeesByEnumOrder(classFees))
+        setFilteredClassFees(classFees)
       } else if (activeTab === 'bus') {
         setFilteredBusFees(busFees)
       } else if (activeTab === 'hostel') {
@@ -250,7 +231,7 @@ export default function FeeManagement({ visible, onClose }) {
         fee.className?.toLowerCase().includes(lowerQuery) ||
         fee.totalAnnualFee?.toString().includes(query)
       )
-      setFilteredClassFees(sortClassFeesByEnumOrder(filtered))
+      setFilteredClassFees(filtered)
     } else if (activeTab === 'bus') {
       let filtered = busFees.filter(fee => 
         fee.villageName?.toLowerCase().includes(lowerQuery) ||
@@ -355,14 +336,21 @@ export default function FeeManagement({ visible, onClose }) {
     try {
       setUploading(true)
       setUploadProgress(0)
+      setUploadResult(null)
 
       const formData = new FormData()
+      
+      // IMPORTANT: Use 'file' as field name to match multer configuration
       formData.append('file', {
         uri: file.uri,
         name: file.name,
-        type: file.mimeType,
+        type: file.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       })
+      
+      // Add createdBy from user context if available
+      formData.append('createdBy', 'system')
 
+      // CORRECT ENDPOINTS - use bulk
       let endpoint
       if (activeTab === 'class') {
         endpoint = '/fee-structure/class/bulk'
@@ -372,33 +360,72 @@ export default function FeeManagement({ visible, onClose }) {
         endpoint = '/fee-structure/hostel/bulk'
       }
 
+      console.log(`Uploading to endpoint: ${endpoint}`)
+      console.log(`File: ${file.name}, Size: ${file.size || 'unknown'}`)
+
       const response = await axiosApi.post(endpoint, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total
+            (progressEvent.loaded * 100) / (progressEvent.total || 100)
           )
           setUploadProgress(percentCompleted)
         },
       })
 
+      console.log('Upload response:', JSON.stringify(response.data, null, 2))
+
       if (response.data.success) {
-        const results = response.data.data
-        setUploadResult(results)
+        // Set the upload result from the response structure
+        setUploadResult({
+          total: response.data.summary?.total || 0,
+          success: response.data.summary?.success || 0,
+          failed: response.data.summary?.failed || 0,
+          skipped: response.data.summary?.skipped || 0,
+          errors: response.data.summary?.errors || []
+        })
         
-        let successMessage = `Bulk upload completed! `
-        if (results.successful) successMessage += `Success: ${results.successful.length}, `
-        if (results.failed) successMessage += `Failed: ${results.failed.length}`
+        // Show detailed toast message with success and failure counts
+        const successCount = response.data.summary?.success || 0
+        const failedCount = response.data.summary?.failed || 0
+        const skippedCount = response.data.summary?.skipped || 0
         
-        showToast(successMessage, 'success')
+        let successMessage = `Bulk upload completed! ✅ ${successCount} imported`
+        if (failedCount > 0) successMessage += `, ❌ ${failedCount} failed`
+        if (skippedCount > 0) successMessage += `, ⏭️ ${skippedCount} skipped`
+        
+        showToast(successMessage, failedCount > 0 ? 'warning' : 'success')
+        
+        // Refresh data to show new fees
         await loadData(1, true)
+      } else {
+        throw new Error(response.data.message || 'Upload failed')
       }
     } catch (error) {
       console.error('Error uploading file:', error)
-      const errorMessage = error.response?.data?.message || 'Failed to upload file. Please try again.'
-      showToast(errorMessage, 'error')
+      
+      // Check if it's a multer field error
+      if (error.response?.data?.error?.includes('LIMIT_UNEXPECTED_FILE')) {
+        showToast('Server expects field name "file". Please update API configuration.', 'error')
+      } else {
+        const errorMessage = error.response?.data?.message || 
+                           error.message || 
+                           'Failed to upload file. Please try again.'
+        showToast(errorMessage, 'error')
+      }
+      
+      setUploadResult({
+        total: 0,
+        success: 0,
+        failed: 0,
+        skipped: 0,
+        errors: [{
+          row: 0,
+          reason: error.response?.data?.message || error.message || 'Upload failed'
+        }]
+      })
     } finally {
       setUploading(false)
       setUploadProgress(0)

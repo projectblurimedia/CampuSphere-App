@@ -1,20 +1,87 @@
 import prisma from '../lib/prisma.js'
 import asyncHandler from 'express-async-handler'
+import multer from 'multer'
+import path from 'path'
+import fs from 'fs'
+import xlsx from 'xlsx'
 import {
   mapClassToEnum,
   mapEnumToDisplayName,
-  validateSection  // Only import what's actually exported
+  getClassOrder
 } from '../utils/classMappings.js'
 
-// ============================================================================
-// CLASS FEE STRUCTURE CONTROLLERS
-// ============================================================================
+const tempStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const tempDir = 'temp/uploads/'
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true })
+    }
+    cb(null, tempDir)
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+    cb(null, uniqueSuffix + path.extname(file.originalname))
+  },
+})
 
-/**
- * @desc    Create new class fee structure
- * @route   POST /api/fee-structure/class
- * @access  Private
- */
+const upload = multer({ 
+  storage: tempStorage,
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|xlsx|xls/
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase())
+    const mimetype = file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+                    file.mimetype === 'application/vnd.ms-excel' ||
+                    file.mimetype.startsWith('image/')
+    
+    if (mimetype && extname) {
+      return cb(null, true)
+    } else {
+      cb(new Error('Only image and Excel files are allowed'))
+    }
+  },
+  limits: { fileSize: 10 * 1024 * 1024 }
+})
+
+const cleanupTempFiles = (files) => {
+  if (!files) return
+  
+  if (Array.isArray(files)) {
+    files.forEach(file => {
+      if (fs.existsSync(file.path)) {
+        fs.unlinkSync(file.path)
+      }
+    })
+  } else if (files.path && fs.existsSync(files.path)) {
+    fs.unlinkSync(files.path)
+  }
+}
+
+const validateFeeValue = (value, fieldName) => {
+  const num = Number(value)
+  if (isNaN(num) || num < 0) {
+    return { valid: false, message: `${fieldName} must be a non-negative number` }
+  }
+  return { valid: true, value: num }
+}
+
+const parseExcelDate = (dateValue) => {
+  if (!dateValue) return null
+  
+  if (typeof dateValue === 'number') {
+    const date = new Date((dateValue - 25569) * 86400 * 1000)
+    return date.toISOString().split('T')[0]
+  }
+  
+  if (typeof dateValue === 'string') {
+    const date = new Date(dateValue)
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0]
+    }
+  }
+  
+  return null
+}
+
 export const createClassFeeStructure = asyncHandler(async (req, res) => {
   const {
     className,
@@ -31,7 +98,6 @@ export const createClassFeeStructure = asyncHandler(async (req, res) => {
     createdBy
   } = req.body
 
-  // Validation
   if (!className || !totalAnnualFee || !createdBy) {
     return res.status(400).json({
       success: false,
@@ -56,7 +122,6 @@ export const createClassFeeStructure = asyncHandler(async (req, res) => {
       })
     }
 
-    // Check if fee structure already exists for this class
     const existingStructure = await prisma.classFeeStructure.findFirst({
       where: {
         className: classEnum,
@@ -71,12 +136,11 @@ export const createClassFeeStructure = asyncHandler(async (req, res) => {
       })
     }
 
-    // Calculate total of all components
-    const calculatedTotal = tuitionFee + examFee + activityFee + 
-                           booksFee + sportsFee + labFee + 
-                           computerFee + otherCharges
+    const calculatedTotal = Number(tuitionFee) + Number(examFee) + Number(activityFee) + 
+                           Number(booksFee) + Number(sportsFee) + Number(labFee) + 
+                           Number(computerFee) + Number(otherCharges)
 
-    if (calculatedTotal !== totalAnnualFee) {
+    if (calculatedTotal !== Number(totalAnnualFee)) {
       return res.status(400).json({
         success: false,
         message: `Component total (${calculatedTotal}) does not match totalAnnualFee (${totalAnnualFee})`,
@@ -87,22 +151,21 @@ export const createClassFeeStructure = asyncHandler(async (req, res) => {
     const feeStructure = await prisma.classFeeStructure.create({
       data: {
         className: classEnum,
-        totalAnnualFee,
-        tuitionFee,
-        examFee,
-        activityFee,
-        booksFee,
-        sportsFee,
-        labFee,
-        computerFee,
-        otherCharges,
+        totalAnnualFee: Number(totalAnnualFee),
+        tuitionFee: Number(tuitionFee),
+        examFee: Number(examFee),
+        activityFee: Number(activityFee),
+        booksFee: Number(booksFee),
+        sportsFee: Number(sportsFee),
+        labFee: Number(labFee),
+        computerFee: Number(computerFee),
+        otherCharges: Number(otherCharges),
         description,
         createdBy,
         updatedBy: createdBy
       }
     })
 
-    // Format response with display class name
     const response = {
       ...feeStructure,
       className: mapEnumToDisplayName(feeStructure.className)
@@ -123,137 +186,250 @@ export const createClassFeeStructure = asyncHandler(async (req, res) => {
   }
 })
 
-/**
- * @desc    Bulk create class fee structures
- * @route   POST /api/fee-structure/class/bulk
- * @access  Private
- */
-export const bulkCreateClassFeeStructures = asyncHandler(async (req, res) => {
-  const { structures, createdBy } = req.body
-
-  if (!structures || !Array.isArray(structures) || structures.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: 'Structures array is required and must not be empty'
-    })
-  }
-
-  if (!createdBy) {
-    return res.status(400).json({
-      success: false,
-      message: 'createdBy is required'
-    })
-  }
-
-  try {
-    const results = {
-      successful: [],
-      failed: []
-    }
-
-    for (const structure of structures) {
-      try {
-        const {
-          className,
-          totalAnnualFee,
-          tuitionFee = 0,
-          examFee = 0,
-          activityFee = 0,
-          booksFee = 0,
-          sportsFee = 0,
-          labFee = 0,
-          computerFee = 0,
-          otherCharges = 0,
-          description
-        } = structure
-
-        const classEnum = mapClassToEnum(className)
-        if (!classEnum) {
-          results.failed.push({ className, reason: 'Invalid class name' })
-          continue
-        }
-
-        // Check if exists
-        const existing = await prisma.classFeeStructure.findFirst({
-          where: { className: classEnum, isActive: true }
-        })
-
-        if (existing) {
-          results.failed.push({ className, reason: 'Active fee structure already exists' })
-          continue
-        }
-
-        const calculatedTotal = tuitionFee + examFee + activityFee + 
-                               booksFee + sportsFee + labFee + 
-                               computerFee + otherCharges
-
-        if (calculatedTotal !== totalAnnualFee) {
-          results.failed.push({ className, reason: 'Component total mismatch' })
-          continue
-        }
-
-        const created = await prisma.classFeeStructure.create({
-          data: {
-            className: classEnum,
-            totalAnnualFee,
-            tuitionFee,
-            examFee,
-            activityFee,
-            booksFee,
-            sportsFee,
-            labFee,
-            computerFee,
-            otherCharges,
-            description,
-            createdBy,
-            updatedBy: createdBy
-          }
-        })
-
-        results.successful.push({
-          ...created,
-          className: mapEnumToDisplayName(created.className)
-        })
-      } catch (error) {
-        results.failed.push({ 
-          className: structure.className, 
-          reason: error.message 
+export const bulkCreateClassFeeStructures = [
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    console.log('=== BULK IMPORT CLASS FEE STRUCTURES STARTED ===')
+    
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: 'No Excel file uploaded. Please select a file.'
         })
       }
+
+      console.log('File received:', req.file.originalname)
+      console.log('File size:', req.file.size, 'bytes')
+      console.log('File path:', req.file.path)
+
+      if (!fs.existsSync(req.file.path)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Uploaded file not found on server'
+        })
+      }
+
+      let workbook, data
+      try {
+        workbook = xlsx.readFile(req.file.path)
+        console.log('Excel sheets:', workbook.SheetNames)
+
+        const sheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+
+        data = xlsx.utils.sheet_to_json(worksheet, {
+          raw: false,
+          defval: '',
+          blankrows: false
+        })
+
+        console.log('Rows found in Excel:', data.length)
+
+      } catch (excelError) {
+        console.error('Excel read error:', excelError)
+        cleanupTempFiles(req.file)
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid Excel file format. Please use the provided template.',
+          error: process.env.NODE_ENV === 'development' ? excelError.message : undefined
+        })
+      }
+
+      if (data.length === 0) {
+        cleanupTempFiles(req.file)
+        return res.status(400).json({
+          success: false,
+          message: 'Excel file is empty. Please add class fee structure data to the template.'
+        })
+      }
+
+      const createdBy = req.body.createdBy || 'system'
+      const updatedBy = createdBy
+
+      console.log('Sample data (first 3 rows):', JSON.stringify(data.slice(0, 3), null, 2))
+
+      const results = {
+        totalRecords: data.length,
+        successful: [],
+        failed: []
+      }
+
+      for (const [index, row] of data.entries()) {
+        const rowNumber = index + 2
+
+        try {
+          console.log(`Processing row ${rowNumber}:`, row.className || 'No class name')
+
+          if (!row.className && !row.tuitionFee && !row.examFee && !row.activityFee && 
+              !row.booksFee && !row.sportsFee && !row.labFee && !row.computerFee && !row.otherCharges) {
+            console.log(`Row ${rowNumber} skipped: Empty row`)
+            continue
+          }
+
+          const missingFields = []
+          if (!row.className || row.className.toString().trim() === '') {
+            missingFields.push('className')
+          }
+
+          if (missingFields.length > 0) {
+            results.failed.push({
+              rowNumber,
+              className: row.className || 'N/A',
+              reason: `Missing required fields: ${missingFields.join(', ')}`
+            })
+            continue
+          }
+
+          const className = row.className.toString().trim()
+          const classEnum = mapClassToEnum(className)
+          
+          if (!classEnum) {
+            results.failed.push({
+              rowNumber,
+              className,
+              reason: `Invalid class name: "${className}". Valid: Nursery, LKG, UKG, 1-12, I-XII`
+            })
+            continue
+          }
+
+          const tuitionFee = validateFeeValue(row.tuitionFee || 0, 'Tuition fee').value
+          const examFee = validateFeeValue(row.examFee || 0, 'Exam fee').value
+          const activityFee = validateFeeValue(row.activityFee || 0, 'Activity fee').value
+          const booksFee = validateFeeValue(row.booksFee || 0, 'Books fee').value
+          const sportsFee = validateFeeValue(row.sportsFee || 0, 'Sports fee').value
+          const labFee = validateFeeValue(row.labFee || 0, 'Lab fee').value
+          const computerFee = validateFeeValue(row.computerFee || 0, 'Computer fee').value
+          const otherCharges = validateFeeValue(row.otherCharges || 0, 'Other charges').value
+
+          const calculatedTotalAnnualFee = tuitionFee + examFee + activityFee + 
+                                          booksFee + sportsFee + labFee + 
+                                          computerFee + otherCharges
+
+          if (calculatedTotalAnnualFee <= 0) {
+            results.failed.push({
+              rowNumber,
+              className,
+              reason: 'Total annual fee must be greater than 0. Please provide at least one fee component.'
+            })
+            continue
+          }
+
+          const existingStructure = await prisma.classFeeStructure.findFirst({
+            where: {
+              className: classEnum,
+              isActive: true
+            }
+          })
+
+          if (existingStructure) {
+            results.failed.push({
+              rowNumber,
+              className,
+              reason: `Active fee structure already exists for ${className}. Please deactivate it first.`
+            })
+            continue
+          }
+
+          const feeStructure = await prisma.classFeeStructure.create({
+            data: {
+              className: classEnum,
+              totalAnnualFee: calculatedTotalAnnualFee,
+              tuitionFee,
+              examFee,
+              activityFee,
+              booksFee,
+              sportsFee,
+              labFee,
+              computerFee,
+              otherCharges,
+              description: row.description ? row.description.toString().trim() : null,
+              createdBy,
+              updatedBy
+            }
+          })
+
+          results.successful.push({
+            id: feeStructure.id,
+            className: mapEnumToDisplayName(feeStructure.className),
+            totalAnnualFee: feeStructure.totalAnnualFee,
+            createdAt: feeStructure.createdAt,
+            feeComponents: {
+              tuitionFee,
+              examFee,
+              activityFee,
+              booksFee,
+              sportsFee,
+              labFee,
+              computerFee,
+              otherCharges
+            }
+          })
+
+          console.log(`✓ Row ${rowNumber} saved: ${className} - Total: ₹${calculatedTotalAnnualFee}`)
+
+        } catch (error) {
+          console.error(`Error processing row ${rowNumber}:`, error)
+          results.failed.push({
+            rowNumber,
+            className: row.className || 'N/A',
+            reason: error.code === 'P2002' ? 'Duplicate entry' : 
+                   error.message || 'Database error. Check data format.'
+          })
+        }
+      }
+
+      cleanupTempFiles(req.file)
+
+      console.log('=== IMPORT SUMMARY ===')
+      console.log(`Total rows processed: ${data.length}`)
+      console.log(`Successfully imported: ${results.successful.length}`)
+      console.log(`Failed: ${results.failed.length}`)
+
+      const response = {
+        success: true,
+        message: `Bulk import completed. ${results.successful.length} class fee structures imported successfully.`,
+        summary: {
+          total: data.length,
+          success: results.successful.length,
+          failed: results.failed.length,
+          errors: results.failed.slice(0, 100)
+        },
+        data: results.successful
+      }
+
+      if (results.failed.length > 0) {
+        response.message += ` ${results.failed.length} records failed.`
+      }
+
+      res.status(200).json(response)
+
+    } catch (error) {
+      console.error('Bulk import overall error:', error)
+      console.error('Error stack:', error.stack)
+      
+      cleanupTempFiles(req.file)
+      
+      res.status(500).json({
+        success: false,
+        message: 'Bulk import failed due to server error',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      })
     }
+  })
+]
 
-    res.status(201).json({
-      success: true,
-      data: results,
-      message: `Bulk creation completed: ${results.successful.length} successful, ${results.failed.length} failed`
-    })
-  } catch (error) {
-    console.error('Error bulk creating class fee structures:', error)
-    res.status(500).json({
-      success: false,
-      message: 'Error bulk creating class fee structures',
-      error: error.message
-    })
-  }
-})
-
-/**
- * @desc    Get all class fee structures with filters
- * @route   GET /api/fee-structure/class
- * @access  Private
- */
 export const getClassFeeStructures = asyncHandler(async (req, res) => {
   const {
     className,
     isActive,
     page = 1,
     limit = 20,
-    sortBy = 'createdAt',
-    sortOrder = 'desc'
+    sortBy = 'className',
+    sortOrder = 'asc'
   } = req.query
 
   try {
-    // Build filter object
     const filter = {}
     
     if (className) {
@@ -263,28 +439,27 @@ export const getClassFeeStructures = asyncHandler(async (req, res) => {
     
     if (isActive !== undefined) filter.isActive = isActive === 'true'
 
-    // Pagination
     const skip = (parseInt(page) - 1) * parseInt(limit)
     const take = parseInt(limit)
 
-    // Get total count for pagination
     const totalCount = await prisma.classFeeStructure.count({ where: filter })
 
-    // Get fee structures
     const feeStructures = await prisma.classFeeStructure.findMany({
       where: filter,
       skip,
       take,
-      orderBy: {
-        [sortBy]: sortOrder
-      }
+      orderBy: [
+        {
+          className: 'asc'
+        }
+      ]
     })
 
-    // Format response with display class names
-    const formattedData = feeStructures.map(structure => ({
-      ...structure,
-      className: mapEnumToDisplayName(structure.className)
-    }))
+    const formattedData = feeStructures
+      .map(structure => ({
+        ...structure,
+        className: mapEnumToDisplayName(structure.className)
+      }))
 
     res.status(200).json({
       success: true,
@@ -306,11 +481,6 @@ export const getClassFeeStructures = asyncHandler(async (req, res) => {
   }
 })
 
-/**
- * @desc    Get class fee structure by ID
- * @route   GET /api/fee-structure/class/:id
- * @access  Private
- */
 export const getClassFeeStructureById = asyncHandler(async (req, res) => {
   const { id } = req.params
 
@@ -345,11 +515,6 @@ export const getClassFeeStructureById = asyncHandler(async (req, res) => {
   }
 })
 
-/**
- * @desc    Get class fee structure by class name
- * @route   GET /api/fee-structure/class/class/:className
- * @access  Private
- */
 export const getClassFeeStructureByClass = asyncHandler(async (req, res) => {
   const { className } = req.params
   const { isActive = true } = req.query
@@ -373,10 +538,16 @@ export const getClassFeeStructureByClass = asyncHandler(async (req, res) => {
       }
     })
 
-    const formattedData = feeStructures.map(structure => ({
-      ...structure,
-      className: mapEnumToDisplayName(structure.className)
-    }))
+    const formattedData = feeStructures
+      .map(structure => ({
+        ...structure,
+        className: mapEnumToDisplayName(structure.className)
+      }))
+      .sort((a, b) => {
+        const orderA = getClassOrder(a.className)
+        const orderB = getClassOrder(b.className)
+        return orderA - orderB
+      })
 
     res.status(200).json({
       success: true,
@@ -393,11 +564,6 @@ export const getClassFeeStructureByClass = asyncHandler(async (req, res) => {
   }
 })
 
-/**
- * @desc    Update class fee structure
- * @route   PUT /api/fee-structure/class/:id
- * @access  Private
- */
 export const updateClassFeeStructure = asyncHandler(async (req, res) => {
   const { id } = req.params
   const {
@@ -438,28 +604,27 @@ export const updateClassFeeStructure = asyncHandler(async (req, res) => {
       updatedAt: new Date()
     }
 
-    // Update fields if provided
     if (totalAnnualFee !== undefined) {
-      if (totalAnnualFee <= 0) {
+      const numValue = Number(totalAnnualFee)
+      if (isNaN(numValue) || numValue <= 0) {
         return res.status(400).json({
           success: false,
           message: 'Total annual fee must be greater than 0'
         })
       }
-      updateData.totalAnnualFee = totalAnnualFee
+      updateData.totalAnnualFee = numValue
     }
 
-    if (tuitionFee !== undefined) updateData.tuitionFee = tuitionFee
-    if (examFee !== undefined) updateData.examFee = examFee
-    if (activityFee !== undefined) updateData.activityFee = activityFee
-    if (booksFee !== undefined) updateData.booksFee = booksFee
-    if (sportsFee !== undefined) updateData.sportsFee = sportsFee
-    if (labFee !== undefined) updateData.labFee = labFee
-    if (computerFee !== undefined) updateData.computerFee = computerFee
-    if (otherCharges !== undefined) updateData.otherCharges = otherCharges
+    if (tuitionFee !== undefined) updateData.tuitionFee = Number(tuitionFee)
+    if (examFee !== undefined) updateData.examFee = Number(examFee)
+    if (activityFee !== undefined) updateData.activityFee = Number(activityFee)
+    if (booksFee !== undefined) updateData.booksFee = Number(booksFee)
+    if (sportsFee !== undefined) updateData.sportsFee = Number(sportsFee)
+    if (labFee !== undefined) updateData.labFee = Number(labFee)
+    if (computerFee !== undefined) updateData.computerFee = Number(computerFee)
+    if (otherCharges !== undefined) updateData.otherCharges = Number(otherCharges)
     if (description !== undefined) updateData.description = description
 
-    // Validate total if totalAnnualFee or any component is updated
     if (updateData.totalAnnualFee || 
         tuitionFee !== undefined || examFee !== undefined || 
         activityFee !== undefined || booksFee !== undefined ||
@@ -476,9 +641,11 @@ export const updateClassFeeStructure = asyncHandler(async (req, res) => {
       const computer = updateData.computerFee ?? existingStructure.computerFee
       const other = updateData.otherCharges ?? existingStructure.otherCharges
 
-      const calculatedTotal = tuition + exam + activity + library + sports + lab + computer + other
+      const calculatedTotal = Number(tuition) + Number(exam) + Number(activity) + 
+                            Number(library) + Number(sports) + Number(lab) + 
+                            Number(computer) + Number(other)
 
-      if (calculatedTotal !== total) {
+      if (calculatedTotal !== Number(total)) {
         return res.status(400).json({
           success: false,
           message: `Component total (${calculatedTotal}) does not match totalAnnualFee (${total})`
@@ -511,11 +678,6 @@ export const updateClassFeeStructure = asyncHandler(async (req, res) => {
   }
 })
 
-/**
- * @desc    Delete class fee structure
- * @route   DELETE /api/fee-structure/class/:id
- * @access  Private
- */
 export const deleteClassFeeStructure = asyncHandler(async (req, res) => {
   const { id } = req.params
 
@@ -549,11 +711,6 @@ export const deleteClassFeeStructure = asyncHandler(async (req, res) => {
   }
 })
 
-/**
- * @desc    Toggle class fee structure active status
- * @route   PATCH /api/fee-structure/class/:id/toggle-status
- * @access  Private
- */
 export const toggleClassFeeStatus = asyncHandler(async (req, res) => {
   const { id } = req.params
   const { updatedBy } = req.body
@@ -606,15 +763,6 @@ export const toggleClassFeeStatus = asyncHandler(async (req, res) => {
   }
 })
 
-// ============================================================================
-// BUS FEE STRUCTURE CONTROLLERS
-// ============================================================================
-
-/**
- * @desc    Create new bus fee structure
- * @route   POST /api/fee-structure/bus
- * @access  Private
- */
 export const createBusFeeStructure = asyncHandler(async (req, res) => {
   const {
     villageName,
@@ -624,7 +772,6 @@ export const createBusFeeStructure = asyncHandler(async (req, res) => {
     createdBy
   } = req.body
 
-  // Validation
   if (!villageName || !feeAmount || !createdBy) {
     return res.status(400).json({
       success: false,
@@ -633,14 +780,17 @@ export const createBusFeeStructure = asyncHandler(async (req, res) => {
     })
   }
 
-  if (feeAmount <= 0) {
+  const numFeeAmount = Number(feeAmount)
+  const numDistance = Number(distance)
+
+  if (isNaN(numFeeAmount) || numFeeAmount <= 0) {
     return res.status(400).json({
       success: false,
       message: 'Fee amount must be greater than 0'
     })
   }
 
-  if (distance < 0) {
+  if (isNaN(numDistance) || numDistance < 0) {
     return res.status(400).json({
       success: false,
       message: 'Distance cannot be negative'
@@ -648,11 +798,10 @@ export const createBusFeeStructure = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Check if fee structure already exists for this village
     const existingStructure = await prisma.busFeeStructure.findFirst({
       where: {
         villageName: {
-          equals: villageName,
+          equals: villageName.trim(),
           mode: 'insensitive'
         },
         isActive: true
@@ -669,8 +818,8 @@ export const createBusFeeStructure = asyncHandler(async (req, res) => {
     const feeStructure = await prisma.busFeeStructure.create({
       data: {
         villageName: villageName.trim(),
-        distance: parseFloat(distance),
-        feeAmount,
+        distance: numDistance,
+        feeAmount: numFeeAmount,
         description,
         createdBy,
         updatedBy: createdBy
@@ -692,103 +841,200 @@ export const createBusFeeStructure = asyncHandler(async (req, res) => {
   }
 })
 
-/**
- * @desc    Bulk create bus fee structures
- * @route   POST /api/fee-structure/bus/bulk
- * @access  Private
- */
-export const bulkCreateBusFeeStructures = asyncHandler(async (req, res) => {
-  const { structures, createdBy } = req.body
-
-  if (!structures || !Array.isArray(structures) || structures.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: 'Structures array is required and must not be empty'
-    })
-  }
-
-  if (!createdBy) {
-    return res.status(400).json({
-      success: false,
-      message: 'createdBy is required'
-    })
-  }
-
-  try {
-    const results = {
-      successful: [],
-      failed: []
-    }
-
-    for (const structure of structures) {
-      try {
-        const {
-          villageName,
-          distance = 0.0,
-          feeAmount,
-          description
-        } = structure
-
-        if (!villageName || !feeAmount) {
-          results.failed.push({ villageName, reason: 'Missing required fields' })
-          continue
-        }
-
-        const existing = await prisma.busFeeStructure.findFirst({
-          where: {
-            villageName: {
-              equals: villageName,
-              mode: 'insensitive'
-            },
-            isActive: true
-          }
-        })
-
-        if (existing) {
-          results.failed.push({ villageName, reason: 'Active fee structure already exists' })
-          continue
-        }
-
-        const created = await prisma.busFeeStructure.create({
-          data: {
-            villageName: villageName.trim(),
-            distance: parseFloat(distance),
-            feeAmount,
-            description,
-            createdBy,
-            updatedBy: createdBy
-          }
-        })
-
-        results.successful.push(created)
-      } catch (error) {
-        results.failed.push({ 
-          villageName: structure.villageName, 
-          reason: error.message 
+export const bulkCreateBusFeeStructures = [
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    console.log('=== BULK IMPORT BUS FEE STRUCTURES STARTED ===')
+    
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: 'No Excel file uploaded. Please select a file.'
         })
       }
+
+      console.log('File received:', req.file.originalname)
+      console.log('File size:', req.file.size, 'bytes')
+
+      if (!fs.existsSync(req.file.path)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Uploaded file not found on server'
+        })
+      }
+
+      let workbook, data
+      try {
+        workbook = xlsx.readFile(req.file.path)
+        const sheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+        data = xlsx.utils.sheet_to_json(worksheet, {
+          raw: false,
+          defval: '',
+          blankrows: false
+        })
+        console.log('Rows found in Excel:', data.length)
+      } catch (excelError) {
+        console.error('Excel read error:', excelError)
+        cleanupTempFiles(req.file)
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid Excel file format.',
+          error: process.env.NODE_ENV === 'development' ? excelError.message : undefined
+        })
+      }
+
+      if (data.length === 0) {
+        cleanupTempFiles(req.file)
+        return res.status(400).json({
+          success: false,
+          message: 'Excel file is empty.'
+        })
+      }
+
+      const createdBy = req.body.createdBy || 'system'
+      const updatedBy = createdBy
+
+      const results = {
+        totalRecords: data.length,
+        successful: [],
+        failed: []
+      }
+
+      for (const [index, row] of data.entries()) {
+        const rowNumber = index + 2
+
+        try {
+          if (!row.villageName && !row.feeAmount && !row.distance) {
+            console.log(`Row ${rowNumber} skipped: Empty row`)
+            continue
+          }
+
+          const missingFields = []
+          if (!row.villageName || row.villageName.toString().trim() === '') {
+            missingFields.push('villageName')
+          }
+
+          if (missingFields.length > 0) {
+            results.failed.push({
+              rowNumber,
+              villageName: row.villageName || 'N/A',
+              reason: `Missing required fields: ${missingFields.join(', ')}`
+            })
+            continue
+          }
+
+          const villageName = row.villageName.toString().trim()
+          
+          let feeAmount = 0
+          if (row.feeAmount) {
+            const feeAmountValidation = validateFeeValue(row.feeAmount, 'Fee amount')
+            if (!feeAmountValidation.valid) {
+              results.failed.push({
+                rowNumber,
+                villageName,
+                reason: feeAmountValidation.message
+              })
+              continue
+            }
+            feeAmount = feeAmountValidation.value
+          }
+
+          const distance = validateFeeValue(row.distance || 0, 'Distance').value
+
+          if (feeAmount <= 0) {
+            results.failed.push({
+              rowNumber,
+              villageName,
+              reason: 'Fee amount must be provided and greater than 0'
+            })
+            continue
+          }
+
+          const existingStructure = await prisma.busFeeStructure.findFirst({
+            where: {
+              villageName: {
+                equals: villageName,
+                mode: 'insensitive'
+              },
+              isActive: true
+            }
+          })
+
+          if (existingStructure) {
+            results.failed.push({
+              rowNumber,
+              villageName,
+              reason: `Active fee structure already exists for village: ${villageName}`
+            })
+            continue
+          }
+
+          const feeStructure = await prisma.busFeeStructure.create({
+            data: {
+              villageName,
+              distance,
+              feeAmount,
+              description: row.description ? row.description.toString().trim() : null,
+              createdBy,
+              updatedBy
+            }
+          })
+
+          results.successful.push({
+            id: feeStructure.id,
+            villageName: feeStructure.villageName,
+            feeAmount: feeStructure.feeAmount,
+            distance: feeStructure.distance,
+            createdAt: feeStructure.createdAt
+          })
+
+          console.log(`✓ Row ${rowNumber} saved: ${villageName} - Fee: ₹${feeAmount}`)
+
+        } catch (error) {
+          console.error(`Error processing row ${rowNumber}:`, error)
+          results.failed.push({
+            rowNumber,
+            villageName: row.villageName || 'N/A',
+            reason: error.code === 'P2002' ? 'Duplicate village name' : 
+                   error.message || 'Database error'
+          })
+        }
+      }
+
+      cleanupTempFiles(req.file)
+
+      const response = {
+        success: true,
+        message: `Bulk import completed. ${results.successful.length} bus fee structures imported successfully.`,
+        summary: {
+          total: data.length,
+          success: results.successful.length,
+          failed: results.failed.length,
+          errors: results.failed.slice(0, 100)
+        },
+        data: results.successful
+      }
+
+      if (results.failed.length > 0) {
+        response.message += ` ${results.failed.length} records failed.`
+      }
+
+      res.status(200).json(response)
+
+    } catch (error) {
+      console.error('Bulk import overall error:', error)
+      cleanupTempFiles(req.file)
+      res.status(500).json({
+        success: false,
+        message: 'Bulk import failed due to server error',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      })
     }
+  })
+]
 
-    res.status(201).json({
-      success: true,
-      data: results,
-      message: `Bulk creation completed: ${results.successful.length} successful, ${results.failed.length} failed`
-    })
-  } catch (error) {
-    console.error('Error bulk creating bus fee structures:', error)
-    res.status(500).json({
-      success: false,
-      message: 'Error bulk creating bus fee structures',
-      error: error.message
-    })
-  }
-})
-
-/**
- * @desc    Get all bus fee structures with filters
- * @route   GET /api/fee-structure/bus
- * @access  Private
- */
 export const getBusFeeStructures = asyncHandler(async (req, res) => {
   const {
     villageName,
@@ -861,11 +1107,6 @@ export const getBusFeeStructures = asyncHandler(async (req, res) => {
   }
 })
 
-/**
- * @desc    Get bus fee structure by ID
- * @route   GET /api/fee-structure/bus/:id
- * @access  Private
- */
 export const getBusFeeStructureById = asyncHandler(async (req, res) => {
   const { id } = req.params
 
@@ -895,11 +1136,6 @@ export const getBusFeeStructureById = asyncHandler(async (req, res) => {
   }
 })
 
-/**
- * @desc    Get bus fee structure by village name
- * @route   GET /api/fee-structure/bus/village/:villageName
- * @access  Private
- */
 export const getBusFeeStructureByVillage = asyncHandler(async (req, res) => {
   const { villageName } = req.params
   const { isActive = true } = req.query
@@ -933,11 +1169,6 @@ export const getBusFeeStructureByVillage = asyncHandler(async (req, res) => {
   }
 })
 
-/**
- * @desc    Update bus fee structure
- * @route   PUT /api/fee-structure/bus/:id
- * @access  Private
- */
 export const updateBusFeeStructure = asyncHandler(async (req, res) => {
   const { id } = req.params
   const {
@@ -973,32 +1204,36 @@ export const updateBusFeeStructure = asyncHandler(async (req, res) => {
     }
 
     if (villageName !== undefined) updateData.villageName = villageName.trim()
+    
     if (distance !== undefined) {
-      if (distance < 0) {
+      const numDistance = Number(distance)
+      if (isNaN(numDistance) || numDistance < 0) {
         return res.status(400).json({
           success: false,
-          message: 'Distance cannot be negative'
+          message: 'Distance must be a non-negative number'
         })
       }
-      updateData.distance = parseFloat(distance)
+      updateData.distance = numDistance
     }
+    
     if (feeAmount !== undefined) {
-      if (feeAmount <= 0) {
+      const numFeeAmount = Number(feeAmount)
+      if (isNaN(numFeeAmount) || numFeeAmount <= 0) {
         return res.status(400).json({
           success: false,
           message: 'Fee amount must be greater than 0'
         })
       }
-      updateData.feeAmount = feeAmount
+      updateData.feeAmount = numFeeAmount
     }
+    
     if (description !== undefined) updateData.description = description
 
-    // If village name is being updated, check for duplicates
     if (villageName && villageName.toLowerCase() !== existingStructure.villageName.toLowerCase()) {
       const duplicate = await prisma.busFeeStructure.findFirst({
         where: {
           villageName: {
-            equals: villageName,
+            equals: villageName.trim(),
             mode: 'insensitive'
           },
           isActive: true,
@@ -1034,11 +1269,6 @@ export const updateBusFeeStructure = asyncHandler(async (req, res) => {
   }
 })
 
-/**
- * @desc    Delete bus fee structure
- * @route   DELETE /api/fee-structure/bus/:id
- * @access  Private
- */
 export const deleteBusFeeStructure = asyncHandler(async (req, res) => {
   const { id } = req.params
 
@@ -1072,11 +1302,6 @@ export const deleteBusFeeStructure = asyncHandler(async (req, res) => {
   }
 })
 
-/**
- * @desc    Toggle bus fee structure active status
- * @route   PATCH /api/fee-structure/bus/:id/toggle-status
- * @access  Private
- */
 export const toggleBusFeeStatus = asyncHandler(async (req, res) => {
   const { id } = req.params
   const { updatedBy } = req.body
@@ -1124,15 +1349,6 @@ export const toggleBusFeeStatus = asyncHandler(async (req, res) => {
   }
 })
 
-// ============================================================================
-// HOSTEL FEE STRUCTURE CONTROLLERS
-// ============================================================================
-
-/**
- * @desc    Create new hostel fee structure
- * @route   POST /api/fee-structure/hostel
- * @access  Private
- */
 export const createHostelFeeStructure = asyncHandler(async (req, res) => {
   const {
     className,
@@ -1142,7 +1358,6 @@ export const createHostelFeeStructure = asyncHandler(async (req, res) => {
     createdBy
   } = req.body
 
-  // Validation
   if (!className || !totalAnnualFee || !createdBy) {
     return res.status(400).json({
       success: false,
@@ -1151,14 +1366,17 @@ export const createHostelFeeStructure = asyncHandler(async (req, res) => {
     })
   }
 
-  if (totalAnnualFee <= 0) {
+  const numTotalAnnualFee = Number(totalAnnualFee)
+  const numTotalTerms = Number(totalTerms)
+
+  if (isNaN(numTotalAnnualFee) || numTotalAnnualFee <= 0) {
     return res.status(400).json({
       success: false,
       message: 'Total annual fee must be greater than 0'
     })
   }
 
-  if (totalTerms < 1 || totalTerms > 4) {
+  if (isNaN(numTotalTerms) || numTotalTerms < 1 || numTotalTerms > 4) {
     return res.status(400).json({
       success: false,
       message: 'Total terms must be between 1 and 4'
@@ -1174,7 +1392,6 @@ export const createHostelFeeStructure = asyncHandler(async (req, res) => {
       })
     }
 
-    // Check if fee structure already exists for this class
     const existingStructure = await prisma.hostelFeeStructure.findFirst({
       where: {
         className: classEnum,
@@ -1192,15 +1409,14 @@ export const createHostelFeeStructure = asyncHandler(async (req, res) => {
     const feeStructure = await prisma.hostelFeeStructure.create({
       data: {
         className: classEnum,
-        totalAnnualFee,
-        totalTerms,
+        totalAnnualFee: numTotalAnnualFee,
+        totalTerms: numTotalTerms,
         description,
         createdBy,
         updatedBy: createdBy
       }
     })
 
-    // Format response with display class name and term amount
     const response = {
       ...feeStructure,
       className: mapEnumToDisplayName(feeStructure.className),
@@ -1222,110 +1438,237 @@ export const createHostelFeeStructure = asyncHandler(async (req, res) => {
   }
 })
 
-/**
- * @desc    Bulk create hostel fee structures
- * @route   POST /api/fee-structure/hostel/bulk
- * @access  Private
- */
-export const bulkCreateHostelFeeStructures = asyncHandler(async (req, res) => {
-  const { structures, createdBy } = req.body
-
-  if (!structures || !Array.isArray(structures) || structures.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: 'Structures array is required and must not be empty'
-    })
-  }
-
-  if (!createdBy) {
-    return res.status(400).json({
-      success: false,
-      message: 'createdBy is required'
-    })
-  }
-
-  try {
-    const results = {
-      successful: [],
-      failed: []
-    }
-
-    for (const structure of structures) {
-      try {
-        const {
-          className,
-          totalAnnualFee,
-          totalTerms = 3,
-          description
-        } = structure
-
-        const classEnum = mapClassToEnum(className)
-        if (!classEnum) {
-          results.failed.push({ className, reason: 'Invalid class name' })
-          continue
-        }
-
-        const existing = await prisma.hostelFeeStructure.findFirst({
-          where: { className: classEnum, isActive: true }
-        })
-
-        if (existing) {
-          results.failed.push({ className, reason: 'Active fee structure already exists' })
-          continue
-        }
-
-        const created = await prisma.hostelFeeStructure.create({
-          data: {
-            className: classEnum,
-            totalAnnualFee,
-            totalTerms,
-            description,
-            createdBy,
-            updatedBy: createdBy
-          }
-        })
-
-        results.successful.push({
-          ...created,
-          className: mapEnumToDisplayName(created.className),
-          termAmount: created.totalAnnualFee / created.totalTerms
-        })
-      } catch (error) {
-        results.failed.push({ 
-          className: structure.className, 
-          reason: error.message 
+export const bulkCreateHostelFeeStructures = [
+  upload.single('file'),
+  asyncHandler(async (req, res) => {
+    console.log('=== BULK IMPORT HOSTEL FEE STRUCTURES STARTED ===')
+    
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: 'No Excel file uploaded. Please select a file.'
         })
       }
+
+      console.log('File received:', req.file.originalname)
+      console.log('File size:', req.file.size, 'bytes')
+
+      if (!fs.existsSync(req.file.path)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Uploaded file not found on server'
+        })
+      }
+
+      let workbook, data
+      try {
+        workbook = xlsx.readFile(req.file.path)
+        const sheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+        data = xlsx.utils.sheet_to_json(worksheet, {
+          raw: false,
+          defval: '',
+          blankrows: false
+        })
+        console.log('Rows found in Excel:', data.length)
+      } catch (excelError) {
+        console.error('Excel read error:', excelError)
+        cleanupTempFiles(req.file)
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid Excel file format.',
+          error: process.env.NODE_ENV === 'development' ? excelError.message : undefined
+        })
+      }
+
+      if (data.length === 0) {
+        cleanupTempFiles(req.file)
+        return res.status(400).json({
+          success: false,
+          message: 'Excel file is empty.'
+        })
+      }
+
+      const createdBy = req.body.createdBy || 'system'
+      const updatedBy = createdBy
+
+      const results = {
+        totalRecords: data.length,
+        successful: [],
+        failed: []
+      }
+
+      for (const [index, row] of data.entries()) {
+        const rowNumber = index + 2
+
+        try {
+          if (!row.className && !row.totalAnnualFee) {
+            console.log(`Row ${rowNumber} skipped: Empty row`)
+            continue
+          }
+
+          const missingFields = []
+          if (!row.className || row.className.toString().trim() === '') {
+            missingFields.push('className')
+          }
+
+          if (missingFields.length > 0) {
+            results.failed.push({
+              rowNumber,
+              className: row.className || 'N/A',
+              reason: `Missing required fields: ${missingFields.join(', ')}`
+            })
+            continue
+          }
+
+          const className = row.className.toString().trim()
+          const classEnum = mapClassToEnum(className)
+          
+          if (!classEnum) {
+            results.failed.push({
+              rowNumber,
+              className,
+              reason: `Invalid class name: "${className}". Valid: Nursery, LKG, UKG, 1-12, I-XII`
+            })
+            continue
+          }
+
+          let totalAnnualFee = 0
+          if (row.totalAnnualFee) {
+            const totalAnnualFeeValidation = validateFeeValue(row.totalAnnualFee, 'Total annual fee')
+            if (!totalAnnualFeeValidation.valid) {
+              results.failed.push({
+                rowNumber,
+                className,
+                reason: totalAnnualFeeValidation.message
+              })
+              continue
+            }
+            totalAnnualFee = totalAnnualFeeValidation.value
+          }
+
+          if (totalAnnualFee <= 0) {
+            results.failed.push({
+              rowNumber,
+              className,
+              reason: 'Total annual fee must be provided and greater than 0'
+            })
+            continue
+          }
+
+          let totalTerms = 3
+          if (row.totalTerms) {
+            const termsValidation = validateFeeValue(row.totalTerms, 'Total terms')
+            if (!termsValidation.valid) {
+              results.failed.push({
+                rowNumber,
+                className,
+                reason: termsValidation.message
+              })
+              continue
+            }
+            totalTerms = termsValidation.value
+          }
+
+          if (totalTerms < 1 || totalTerms > 4) {
+            results.failed.push({
+              rowNumber,
+              className,
+              reason: 'Total terms must be between 1 and 4'
+            })
+            continue
+          }
+
+          const existingStructure = await prisma.hostelFeeStructure.findFirst({
+            where: {
+              className: classEnum,
+              isActive: true
+            }
+          })
+
+          if (existingStructure) {
+            results.failed.push({
+              rowNumber,
+              className,
+              reason: `Active hostel fee structure already exists for ${className}`
+            })
+            continue
+          }
+
+          const feeStructure = await prisma.hostelFeeStructure.create({
+            data: {
+              className: classEnum,
+              totalAnnualFee,
+              totalTerms,
+              description: row.description ? row.description.toString().trim() : null,
+              createdBy,
+              updatedBy
+            }
+          })
+
+          results.successful.push({
+            id: feeStructure.id,
+            className: mapEnumToDisplayName(feeStructure.className),
+            totalAnnualFee: feeStructure.totalAnnualFee,
+            totalTerms: feeStructure.totalTerms,
+            termAmount: feeStructure.totalAnnualFee / feeStructure.totalTerms,
+            createdAt: feeStructure.createdAt
+          })
+
+          console.log(`✓ Row ${rowNumber} saved: ${className} - Total: ₹${totalAnnualFee}`)
+
+        } catch (error) {
+          console.error(`Error processing row ${rowNumber}:`, error)
+          results.failed.push({
+            rowNumber,
+            className: row.className || 'N/A',
+            reason: error.code === 'P2002' ? 'Duplicate entry' : 
+                   error.message || 'Database error'
+          })
+        }
+      }
+
+      cleanupTempFiles(req.file)
+
+      const response = {
+        success: true,
+        message: `Bulk import completed. ${results.successful.length} hostel fee structures imported successfully.`,
+        summary: {
+          total: data.length,
+          success: results.successful.length,
+          failed: results.failed.length,
+          errors: results.failed.slice(0, 100)
+        },
+        data: results.successful
+      }
+
+      if (results.failed.length > 0) {
+        response.message += ` ${results.failed.length} records failed.`
+      }
+
+      res.status(200).json(response)
+
+    } catch (error) {
+      console.error('Bulk import overall error:', error)
+      cleanupTempFiles(req.file)
+      res.status(500).json({
+        success: false,
+        message: 'Bulk import failed due to server error',
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      })
     }
+  })
+]
 
-    res.status(201).json({
-      success: true,
-      data: results,
-      message: `Bulk creation completed: ${results.successful.length} successful, ${results.failed.length} failed`
-    })
-  } catch (error) {
-    console.error('Error bulk creating hostel fee structures:', error)
-    res.status(500).json({
-      success: false,
-      message: 'Error bulk creating hostel fee structures',
-      error: error.message
-    })
-  }
-})
-
-/**
- * @desc    Get all hostel fee structures with filters
- * @route   GET /api/fee-structure/hostel
- * @access  Private
- */
 export const getHostelFeeStructures = asyncHandler(async (req, res) => {
   const {
     className,
     isActive,
     page = 1,
     limit = 20,
-    sortBy = 'createdAt',
-    sortOrder = 'desc'
+    sortBy = 'className',
+    sortOrder = 'asc'
   } = req.query
 
   try {
@@ -1347,16 +1690,24 @@ export const getHostelFeeStructures = asyncHandler(async (req, res) => {
       where: filter,
       skip,
       take,
-      orderBy: {
-        [sortBy]: sortOrder
-      }
+      orderBy: [
+        {
+          className: 'asc'
+        }
+      ]
     })
 
-    const formattedData = feeStructures.map(structure => ({
-      ...structure,
-      className: mapEnumToDisplayName(structure.className),
-      termAmount: structure.totalAnnualFee / structure.totalTerms
-    }))
+    const formattedData = feeStructures
+      .map(structure => ({
+        ...structure,
+        className: mapEnumToDisplayName(structure.className),
+        termAmount: structure.totalAnnualFee / structure.totalTerms
+      }))
+      .sort((a, b) => {
+        const orderA = getClassOrder(a.className)
+        const orderB = getClassOrder(b.className)
+        return orderA - orderB
+      })
 
     res.status(200).json({
       success: true,
@@ -1378,11 +1729,6 @@ export const getHostelFeeStructures = asyncHandler(async (req, res) => {
   }
 })
 
-/**
- * @desc    Get hostel fee structure by ID
- * @route   GET /api/fee-structure/hostel/:id
- * @access  Private
- */
 export const getHostelFeeStructureById = asyncHandler(async (req, res) => {
   const { id } = req.params
 
@@ -1418,11 +1764,6 @@ export const getHostelFeeStructureById = asyncHandler(async (req, res) => {
   }
 })
 
-/**
- * @desc    Get hostel fee structure by class name
- * @route   GET /api/fee-structure/hostel/class/:className
- * @access  Private
- */
 export const getHostelFeeStructureByClass = asyncHandler(async (req, res) => {
   const { className } = req.params
   const { isActive = true } = req.query
@@ -1446,11 +1787,17 @@ export const getHostelFeeStructureByClass = asyncHandler(async (req, res) => {
       }
     })
 
-    const formattedData = feeStructures.map(structure => ({
-      ...structure,
-      className: mapEnumToDisplayName(structure.className),
-      termAmount: structure.totalAnnualFee / structure.totalTerms
-    }))
+    const formattedData = feeStructures
+      .map(structure => ({
+        ...structure,
+        className: mapEnumToDisplayName(structure.className),
+        termAmount: structure.totalAnnualFee / structure.totalTerms
+      }))
+      .sort((a, b) => {
+        const orderA = getClassOrder(a.className)
+        const orderB = getClassOrder(b.className)
+        return orderA - orderB
+      })
 
     res.status(200).json({
       success: true,
@@ -1467,11 +1814,6 @@ export const getHostelFeeStructureByClass = asyncHandler(async (req, res) => {
   }
 })
 
-/**
- * @desc    Update hostel fee structure
- * @route   PUT /api/fee-structure/hostel/:id
- * @access  Private
- */
 export const updateHostelFeeStructure = asyncHandler(async (req, res) => {
   const { id } = req.params
   const {
@@ -1506,23 +1848,25 @@ export const updateHostelFeeStructure = asyncHandler(async (req, res) => {
     }
 
     if (totalAnnualFee !== undefined) {
-      if (totalAnnualFee <= 0) {
+      const numValue = Number(totalAnnualFee)
+      if (isNaN(numValue) || numValue <= 0) {
         return res.status(400).json({
           success: false,
           message: 'Total annual fee must be greater than 0'
         })
       }
-      updateData.totalAnnualFee = totalAnnualFee
+      updateData.totalAnnualFee = numValue
     }
 
     if (totalTerms !== undefined) {
-      if (totalTerms < 1 || totalTerms > 4) {
+      const numValue = Number(totalTerms)
+      if (isNaN(numValue) || numValue < 1 || numValue > 4) {
         return res.status(400).json({
           success: false,
           message: 'Total terms must be between 1 and 4'
         })
       }
-      updateData.totalTerms = totalTerms
+      updateData.totalTerms = numValue
     }
 
     if (description !== undefined) updateData.description = description
@@ -1553,11 +1897,6 @@ export const updateHostelFeeStructure = asyncHandler(async (req, res) => {
   }
 })
 
-/**
- * @desc    Delete hostel fee structure
- * @route   DELETE /api/fee-structure/hostel/:id
- * @access  Private
- */
 export const deleteHostelFeeStructure = asyncHandler(async (req, res) => {
   const { id } = req.params
 
@@ -1591,11 +1930,6 @@ export const deleteHostelFeeStructure = asyncHandler(async (req, res) => {
   }
 })
 
-/**
- * @desc    Toggle hostel fee structure active status
- * @route   PATCH /api/fee-structure/hostel/:id/toggle-status
- * @access  Private
- */
 export const toggleHostelFeeStatus = asyncHandler(async (req, res) => {
   const { id } = req.params
   const { updatedBy } = req.body

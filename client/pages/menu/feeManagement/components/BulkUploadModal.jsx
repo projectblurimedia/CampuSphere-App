@@ -102,8 +102,8 @@ const BulkUploadModal = React.memo(({
     switch(activeTab) {
       case 'class':
         return [
-          'className (PRE_NURSERY, NURSERY, LKG, UKG, CLASS_1 to CLASS_12)',
-          'totalAnnualFee',
+          'className* (PRE_NURSERY, NURSERY, LKG, UKG, CLASS_1 to CLASS_12)',
+          'totalAnnualFee*',
           'tuitionFee (optional)',
           'examFee (optional)',
           'activityFee (optional)',
@@ -116,15 +116,16 @@ const BulkUploadModal = React.memo(({
         ]
       case 'bus':
         return [
-          'villageName',
-          'distance',
-          'feeAmount',
+          'villageName*',
+          'feeAmount*',
+          'distance (optional)',
           'description (optional)'
         ]
       case 'hostel':
         return [
-          'className (PRE_NURSERY, NURSERY, LKG, UKG, CLASS_1 to CLASS_12)',
-          'totalAnnualFee',
+          'className* (PRE_NURSERY, NURSERY, LKG, UKG, CLASS_1 to CLASS_12)',
+          'totalAnnualFee*',
+          'totalTerms (optional, default: 3)',
           'description (optional)'
         ]
       default:
@@ -136,6 +137,7 @@ const BulkUploadModal = React.memo(({
   const tabName = getTabName()
   const requiredColumns = getRequiredColumns()
 
+  // Format rejection reason for display
   const formatRejectionReason = (reason) => {
     if (!reason) return 'Unknown error';
     
@@ -143,11 +145,14 @@ const BulkUploadModal = React.memo(({
     if (reason.includes('duplicate')) {
       return 'Duplicate entry - already exists';
     }
-    if (reason.includes('required')) {
+    if (reason.includes('required') || reason.includes('Missing')) {
       return 'Missing required field';
     }
-    if (reason.includes('invalid')) {
+    if (reason.includes('Invalid') || reason.includes('invalid')) {
       return 'Invalid data format';
+    }
+    if (reason.includes('not match') || reason.includes('does not match')) {
+      return 'Component total does not match total annual fee';
     }
     if (reason.includes('not found')) {
       return 'Record not found';
@@ -155,31 +160,37 @@ const BulkUploadModal = React.memo(({
     if (reason.includes('permission')) {
       return 'Permission denied';
     }
+    if (reason.includes('Active fee structure already exists')) {
+      return 'Active fee structure already exists for this class/village';
+    }
     return reason;
   };
 
+  // Get category for grouping errors
   const getRejectionCategory = (reason) => {
     const reasonLower = reason.toLowerCase();
-    if (reasonLower.includes('duplicate')) return 'duplicate';
+    if (reasonLower.includes('duplicate') || reasonLower.includes('already exists')) return 'duplicate';
     if (reasonLower.includes('required') || reasonLower.includes('missing')) return 'missing';
     if (reasonLower.includes('invalid') || reasonLower.includes('format')) return 'invalid';
+    if (reasonLower.includes('not match') || reasonLower.includes('does not match')) return 'mismatch';
     if (reasonLower.includes('not found')) return 'not_found';
     if (reasonLower.includes('permission')) return 'permission';
     return 'other';
   };
 
-  const groupRejectionsByReason = (failedItems) => {
-    if (!failedItems || failedItems.length === 0) return {};
+  // Group rejections by reason category
+  const groupRejectionsByReason = (errors) => {
+    if (!errors || errors.length === 0) return {};
     
-    return failedItems.reduce((acc, item) => {
-      const reason = item.reason || 'Unknown error';
+    return errors.reduce((acc, item) => {
+      const reason = item.reason || item.error || 'Unknown error';
       const category = getRejectionCategory(reason);
       
       if (!acc[category]) {
         acc[category] = {
           count: 0,
           examples: [],
-          mainReason: reason
+          mainReason: formatRejectionReason(reason)
         };
       }
       
@@ -187,10 +198,11 @@ const BulkUploadModal = React.memo(({
       
       // Store up to 3 examples for each category
       if (acc[category].examples.length < 3) {
-        const identifier = item.className || item.villageName || `Row ${item.rowNumber || '?'}`;
+        const identifier = item.className || item.villageName || `Row ${item.rowNumber || item.row || '?'}`;
         acc[category].examples.push({
           identifier,
-          reason: formatRejectionReason(reason)
+          reason: formatRejectionReason(reason),
+          rowNumber: item.rowNumber || item.row
         });
       }
       
@@ -198,14 +210,28 @@ const BulkUploadModal = React.memo(({
     }, {});
   };
 
+  // Render upload details with proper response structure
   const renderUploadDetails = () => {
     if (!uploadResult) return null;
 
-    const totalRecords = uploadResult.totalRecords || 
-      (uploadResult.successful?.length || 0) + (uploadResult.failed?.length || 0);
-    const successCount = uploadResult.successful?.length || 0;
-    const failedCount = uploadResult.failed?.length || 0;
-    const rejectionGroups = groupRejectionsByReason(uploadResult.failed);
+    // Handle different response structures
+    const summary = uploadResult.summary || uploadResult;
+    
+    const totalRecords = summary.total || 
+      (summary.success || 0) + (summary.failed || 0) + (summary.skipped || 0);
+    
+    const successCount = summary.success || uploadResult.data?.length || 0;
+    const failedCount = summary.failed || 0;
+    const skippedCount = summary.skipped || 0;
+    
+    // Get errors array from summary
+    const errors = summary.errors || [];
+    
+    // Get successful records from data array
+    const successfulRecords = uploadResult.data || [];
+
+    // Group errors by reason
+    const rejectionGroups = groupRejectionsByReason(errors);
 
     return (
       <>
@@ -239,6 +265,18 @@ const BulkUploadModal = React.memo(({
               </ThemedText>
             </View>
             
+            {skippedCount > 0 && (
+              <View style={[styles.summaryStatItem, { backgroundColor: colors.warning + '10' }]}>
+                <Feather name="skip-forward" size={16} color={colors.warning} />
+                <ThemedText style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>
+                  Skipped
+                </ThemedText>
+                <ThemedText style={[styles.summaryStatValue, { color: colors.warning }]}>
+                  {skippedCount}
+                </ThemedText>
+              </View>
+            )}
+            
             <View style={[styles.summaryStatItem, { backgroundColor: colors.error + '10' }]}>
               <Feather name="x-circle" size={16} color={colors.error} />
               <ThemedText style={[styles.summaryStatLabel, { color: colors.textSecondary }]}>
@@ -250,40 +288,61 @@ const BulkUploadModal = React.memo(({
             </View>
           </View>
           
-          <View style={[styles.progressBarLarge, { backgroundColor: colors.background }]}>
-            <View 
-              style={[
-                styles.progressFillSuccess,
-                { 
-                  width: `${totalRecords > 0 ? (successCount / totalRecords) * 100 : 0}%`,
-                  backgroundColor: colors.success
-                }
-              ]} 
-            />
-            <View 
-              style={[
-                styles.progressFillError,
-                { 
-                  left: `${totalRecords > 0 ? (successCount / totalRecords) * 100 : 0}%`,
-                  width: `${totalRecords > 0 ? (failedCount / totalRecords) * 100 : 0}%`,
-                  backgroundColor: colors.error
-                }
-              ]} 
-            />
-          </View>
-          
-          <View style={styles.percentageRow}>
-            <ThemedText style={[styles.percentageText, { color: colors.success }]}>
-              {totalRecords > 0 ? ((successCount / totalRecords) * 100).toFixed(1) : 0}% Success
-            </ThemedText>
-            <ThemedText style={[styles.percentageText, { color: colors.error }]}>
-              {totalRecords > 0 ? ((failedCount / totalRecords) * 100).toFixed(1) : 0}% Failed
-            </ThemedText>
-          </View>
+          {totalRecords > 0 && (
+            <>
+              <View style={[styles.progressBarLarge, { backgroundColor: colors.background }]}>
+                <View 
+                  style={[
+                    styles.progressFillSuccess,
+                    { 
+                      width: `${(successCount / totalRecords) * 100}%`,
+                      backgroundColor: colors.success
+                    }
+                  ]} 
+                />
+                {skippedCount > 0 && (
+                  <View 
+                    style={[
+                      styles.progressFillSkipped,
+                      { 
+                        left: `${(successCount / totalRecords) * 100}%`,
+                        width: `${(skippedCount / totalRecords) * 100}%`,
+                        backgroundColor: colors.warning
+                      }
+                    ]} 
+                  />
+                )}
+                <View 
+                  style={[
+                    styles.progressFillError,
+                    { 
+                      left: `${((successCount + skippedCount) / totalRecords) * 100}%`,
+                      width: `${(failedCount / totalRecords) * 100}%`,
+                      backgroundColor: colors.error
+                    }
+                  ]} 
+                />
+              </View>
+              
+              <View style={styles.percentageRow}>
+                <ThemedText style={[styles.percentageText, { color: colors.success }]}>
+                  {((successCount / totalRecords) * 100).toFixed(1)}% Success
+                </ThemedText>
+                {skippedCount > 0 && (
+                  <ThemedText style={[styles.percentageText, { color: colors.warning }]}>
+                    {((skippedCount / totalRecords) * 100).toFixed(1)}% Skipped
+                  </ThemedText>
+                )}
+                <ThemedText style={[styles.percentageText, { color: colors.error }]}>
+                  {((failedCount / totalRecords) * 100).toFixed(1)}% Failed
+                </ThemedText>
+              </View>
+            </>
+          )}
         </View>
 
         {/* Successful Records Details */}
-        {successCount > 0 && (
+        {successCount > 0 && successfulRecords.length > 0 && (
           <View style={[styles.detailsCard, { 
             backgroundColor: colors.success + '05',
             borderColor: colors.success + '20'
@@ -303,7 +362,7 @@ const BulkUploadModal = React.memo(({
             </View>
             
             <View style={styles.successList}>
-              {uploadResult.successful.slice(0, 5).map((item, index) => (
+              {successfulRecords.slice(0, 5).map((item, index) => (
                 <View key={index} style={[styles.successItem, { 
                   backgroundColor: colors.background,
                   borderColor: colors.border
@@ -312,8 +371,13 @@ const BulkUploadModal = React.memo(({
                   <ThemedText style={[styles.successItemText, { color: colors.text }]}>
                     {activeTab === 'bus' 
                       ? item.villageName 
-                      : item.className || `Record #${item.id || index + 1}`}
+                      : item.className || `Record #${item.id?.substring(0, 8) || index + 1}`}
                   </ThemedText>
+                  {item.totalAnnualFee && (
+                    <ThemedText style={[styles.successItemAmount, { color: colors.textSecondary }]}>
+                      ₹{item.totalAnnualFee.toLocaleString()}
+                    </ThemedText>
+                  )}
                 </View>
               ))}
               {successCount > 5 && (
@@ -326,7 +390,7 @@ const BulkUploadModal = React.memo(({
         )}
 
         {/* Rejected Records Details with Grouped Reasons */}
-        {failedCount > 0 && (
+        {failedCount > 0 && errors.length > 0 && (
           <View style={[styles.detailsCard, { 
             backgroundColor: colors.error + '05',
             borderColor: colors.error + '20'
@@ -354,6 +418,7 @@ const BulkUploadModal = React.memo(({
                       category === 'duplicate' ? colors.warning + '15' :
                       category === 'missing' ? colors.error + '15' :
                       category === 'invalid' ? colors.primary + '15' :
+                      category === 'mismatch' ? colors.primary + '15' :
                       category === 'not_found' ? colors.info + '15' :
                       colors.textSecondary + '15'
                   }]}>
@@ -362,6 +427,7 @@ const BulkUploadModal = React.memo(({
                         category === 'duplicate' ? 'copy' :
                         category === 'missing' ? 'alert-triangle' :
                         category === 'invalid' ? 'alert-circle' :
+                        category === 'mismatch' ? 'slash' :
                         category === 'not_found' ? 'search' :
                         'help-circle'
                       } 
@@ -370,6 +436,7 @@ const BulkUploadModal = React.memo(({
                         category === 'duplicate' ? colors.warning :
                         category === 'missing' ? colors.error :
                         category === 'invalid' ? colors.primary :
+                        category === 'mismatch' ? colors.primary :
                         category === 'not_found' ? colors.info :
                         colors.textSecondary
                       } 
@@ -380,6 +447,7 @@ const BulkUploadModal = React.memo(({
                       {category === 'duplicate' ? 'Duplicate Entries' :
                        category === 'missing' ? 'Missing Required Fields' :
                        category === 'invalid' ? 'Invalid Data Format' :
+                       category === 'mismatch' ? 'Fee Component Mismatch' :
                        category === 'not_found' ? 'Records Not Found' :
                        'Other Errors'} ({data.count})
                     </ThemedText>
@@ -397,12 +465,20 @@ const BulkUploadModal = React.memo(({
                         category === 'duplicate' ? colors.warning :
                         category === 'missing' ? colors.error :
                         category === 'invalid' ? colors.primary :
+                        category === 'mismatch' ? colors.primary :
                         category === 'not_found' ? colors.info :
                         colors.textSecondary
                     }]}>
-                      <ThemedText style={[styles.rejectionExampleIdentifier, { color: colors.text }]}>
-                        {example.identifier}
-                      </ThemedText>
+                      <View style={styles.rejectionExampleHeader}>
+                        <ThemedText style={[styles.rejectionExampleIdentifier, { color: colors.text }]}>
+                          {example.identifier}
+                        </ThemedText>
+                        {example.rowNumber && (
+                          <ThemedText style={[styles.rejectionExampleRow, { color: colors.textSecondary }]}>
+                            Row {example.rowNumber}
+                          </ThemedText>
+                        )}
+                      </View>
                       <ThemedText style={[styles.rejectionExampleReason, { color: colors.textSecondary }]}>
                         {example.reason}
                       </ThemedText>
@@ -496,13 +572,13 @@ const BulkUploadModal = React.memo(({
                       borderColor: colors.border
                     }]}>
                       <Feather 
-                        name={column.includes('(optional)') ? "circle" : "check-circle"} 
+                        name={column.includes('*') ? "check-circle" : "circle"} 
                         size={12} 
-                        color={column.includes('(optional)') ? colors.textSecondary : colors.success} 
+                        color={column.includes('*') ? colors.success : colors.textSecondary} 
                       />
                       <ThemedText style={[
                         styles.columnText, 
-                        { color: column.includes('(optional)') ? colors.textSecondary : colors.text }
+                        { color: column.includes('*') ? colors.text : colors.textSecondary }
                       ]}>
                         {column}
                       </ThemedText>
@@ -834,8 +910,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     flexDirection: 'row',
     marginBottom: 8,
+    position: 'relative',
   },
   progressFillSuccess: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  progressFillSkipped: {
+    position: 'absolute',
     height: '100%',
     borderRadius: 4,
   },
@@ -896,6 +978,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     flex: 1,
   },
+  successItemAmount: {
+    fontSize: 12,
+  },
   rejectionGroup: {
     marginBottom: 16,
   },
@@ -932,9 +1017,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderLeftWidth: 3,
   },
+  rejectionExampleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
   rejectionExampleIdentifier: {
     fontSize: 11,
-    marginBottom: 2,
+  },
+  rejectionExampleRow: {
+    fontSize: 10,
   },
   rejectionExampleReason: {
     fontSize: 11,

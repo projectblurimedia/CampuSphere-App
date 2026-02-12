@@ -47,7 +47,7 @@ const HostelFeeCard = React.memo(({ item, onPress, colors }) => {
         </View>
         <View style={styles.info}>
           <ThemedText style={styles.hostelName}>
-            Class {getClassLabel(item.className)} Hostel
+            {getClassLabel(item.className)} Hostel
           </ThemedText>
           <View style={styles.metaRow}>
             {!item.isActive && (

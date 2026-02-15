@@ -64,11 +64,21 @@ const cleanupTempFiles = (files) => {
   }
 }
 
-// Create student
+const calculateDiscountedFees = (originalAmount, discountPercent) => {
+  if (!originalAmount || originalAmount <= 0) return 0
+  const discountAmount = Math.floor((originalAmount * discountPercent) / 100)
+  return originalAmount - discountAmount
+}
+
+/**
+ * @desc    Create a new student with automatic fee details creation
+ * @route   POST /api/students
+ */
 export const createStudent = [
   upload.single('profilePic'),
   async (req, res) => {
     let uploadedProfilePic = false
+    let profilePicPublicId = null
     
     try {
       const {
@@ -126,7 +136,6 @@ export const createStudent = [
 
       // Upload profile picture if provided
       let profilePicUrl = null
-      let profilePicPublicId = null
       if (req.file) {
         try {
           const uploadResult = await cloudinaryUtils.uploadToCloudinary(
@@ -155,6 +164,117 @@ export const createStudent = [
         }
       }
 
+      // ========== CALCULATE ORIGINAL FEES ==========
+      
+      // Get class fee structure
+      const classFeeStructure = await prisma.classFeeStructure.findFirst({
+        where: {
+          className: classEnum,
+          isActive: true
+        }
+      })
+
+      // Calculate transport fee if applicable
+      let transportFee = 0
+      const usesTransport = studentType === 'DAY_SCHOLAR' && 
+        (isUsingSchoolTransport === true || isUsingSchoolTransport === 'true')
+      
+      if (usesTransport && village) {
+        const busFeeStructure = await prisma.busFeeStructure.findFirst({
+          where: {
+            villageName: { contains: village, mode: 'insensitive' },
+            isActive: true
+          }
+        })
+        transportFee = busFeeStructure?.feeAmount || 0
+      }
+
+      // Calculate hostel fee if applicable
+      let hostelFee = 0
+      if (studentType === 'HOSTELLER') {
+        const hostelFeeStructure = await prisma.hostelFeeStructure.findFirst({
+          where: {
+            className: classEnum,
+            isActive: true
+          }
+        })
+        hostelFee = hostelFeeStructure?.totalAnnualFee || 0
+      }
+
+      // Parse discount percentages
+      const schoolFeeDiscountPercent = parseDiscount(schoolFeeDiscount)
+      const transportFeeDiscountPercent = parseDiscount(transportFeeDiscount)
+      const hostelFeeDiscountPercent = parseDiscount(hostelFeeDiscount)
+
+      // Calculate original amounts
+      const originalSchoolFee = classFeeStructure?.totalAnnualFee || 0
+      const originalTransportFee = transportFee
+      const originalHostelFee = hostelFee
+      const originalTotalFee = originalSchoolFee + originalTransportFee + originalHostelFee
+
+      // Calculate discounted amounts
+      const discountedSchoolFee = calculateDiscountedFees(originalSchoolFee, schoolFeeDiscountPercent)
+      const discountedTransportFee = calculateDiscountedFees(originalTransportFee, transportFeeDiscountPercent)
+      const discountedHostelFee = calculateDiscountedFees(originalHostelFee, hostelFeeDiscountPercent)
+      const discountedTotalFee = discountedSchoolFee + discountedTransportFee + discountedHostelFee
+
+      // ========== CALCULATE TERM DISTRIBUTION ==========
+      const terms = 3
+      
+      // Calculate term distribution with efficient splitting including remainders
+      const termDistribution = {}
+      
+      // Calculate base amounts per term (floor division)
+      const baseSchoolFee = Math.floor(discountedSchoolFee / terms)
+      const baseTransportFee = Math.floor(discountedTransportFee / terms)
+      const baseHostelFee = Math.floor(discountedHostelFee / terms)
+      
+      // Calculate remainders
+      const remainderSchool = discountedSchoolFee - (baseSchoolFee * terms)
+      const remainderTransport = discountedTransportFee - (baseTransportFee * terms)
+      const remainderHostel = discountedHostelFee - (baseHostelFee * terms)
+      
+      // Calculate term due dates
+      const now = new Date()
+      const termDueDates = {
+        term1DueDate: new Date(new Date(now).setMonth(now.getMonth() + 4)),
+        term2DueDate: new Date(new Date(now).setMonth(now.getMonth() + 8)),
+        term3DueDate: new Date(new Date(now).setMonth(now.getMonth() + 12))
+      }
+      
+      // Initialize term amounts for backward compatibility
+      let term1Due = 0
+      let term2Due = 0
+      let term3Due = 0
+      
+      for (let i = 1; i <= terms; i++) {
+        // Add remainder to the first term(s) - distribute remainders across first few terms
+        const schoolFee = baseSchoolFee + (i <= remainderSchool ? 1 : 0)
+        const transportFee = baseTransportFee + (i <= remainderTransport ? 1 : 0)
+        const hostelFee = baseHostelFee + (i <= remainderHostel ? 1 : 0)
+        const termTotal = schoolFee + transportFee + hostelFee
+        
+        termDistribution[i] = {
+          schoolFee,
+          transportFee,
+          hostelFee,
+          total: termTotal,
+          // Initialize payment tracking fields
+          schoolFeePaid: 0,
+          transportFeePaid: 0,
+          hostelFeePaid: 0,
+          totalPaid: 0,
+          status: 'Unpaid'
+        }
+        
+        // Set term due amounts for backward compatibility
+        if (i === 1) term1Due = termTotal
+        if (i === 2) term2Due = termTotal
+        if (i === 3) term3Due = termTotal
+      }
+
+      // ========== CREATE STUDENT WITH FEE DETAILS ==========
+
       // Create student with Prisma
       const student = await prisma.student.create({
         data: {
@@ -169,11 +289,10 @@ export const createStudent = [
           address: address ? address.trim() : null,
           village: village ? village.trim() : null,
           studentType: studentType.toUpperCase(),
-          isUsingSchoolTransport: studentType === 'DAY_SCHOLAR' ? 
-            (isUsingSchoolTransport === true || isUsingSchoolTransport === 'true') : false,
-          schoolFeeDiscount: parseDiscount(schoolFeeDiscount),
-          transportFeeDiscount: parseDiscount(transportFeeDiscount),
-          hostelFeeDiscount: parseDiscount(hostelFeeDiscount),
+          isUsingSchoolTransport: usesTransport,
+          schoolFeeDiscount: schoolFeeDiscountPercent,
+          transportFeeDiscount: transportFeeDiscountPercent,
+          hostelFeeDiscount: hostelFeeDiscountPercent,
           parentName: parentName ? parentName.trim() : null,
           parentPhone: formatPhoneNumber(parentPhone),
           parentPhone2: parentPhone2 ? formatPhoneNumber(parentPhone2) : null,
@@ -182,22 +301,53 @@ export const createStudent = [
           profilePicPublicId,
           isActive: true,
           
-          // Create fee details
+          // Create fee details with original and discounted values
           feeDetails: {
             create: {
-              schoolFee: 0,
-              transportFee: 0,
-              hostelFee: 0,
-              totalFee: 0,
-              terms: 3,
+              // Original amounts
+              originalSchoolFee,
+              originalTransportFee,
+              originalHostelFee,
+              originalTotalFee,
+              
+              // Discounted amounts
+              discountedSchoolFee,
+              discountedTransportFee,
+              discountedHostelFee,
+              discountedTotalFee,
+              
+              // Paid amounts (initial zero)
               schoolFeePaid: 0,
               transportFeePaid: 0,
               hostelFeePaid: 0,
               totalPaid: 0,
-              totalDue: 0,
-              schoolFeeDiscountApplied: parseDiscount(schoolFeeDiscount),
-              transportFeeDiscountApplied: parseDiscount(transportFeeDiscount),
-              hostelFeeDiscountApplied: parseDiscount(hostelFeeDiscount),
+              
+              // Term distribution JSON - THIS IS CRITICAL
+              termDistribution,
+              
+              // Term amounts (for backward compatibility)
+              term1Due,
+              term2Due,
+              term3Due,
+              
+              // Term due dates
+              term1DueDate: termDueDates.term1DueDate,
+              term2DueDate: termDueDates.term2DueDate,
+              term3DueDate: termDueDates.term3DueDate,
+              
+              // Term paid amounts (initial zero) - for backward compatibility
+              term1Paid: 0,
+              term2Paid: 0,
+              term3Paid: 0,
+              
+              // Discounts applied
+              schoolFeeDiscountApplied: schoolFeeDiscountPercent,
+              transportFeeDiscountApplied: transportFeeDiscountPercent,
+              hostelFeeDiscountApplied: hostelFeeDiscountPercent,
+              
+              // Total due equals discounted total fee initially
+              totalDue: discountedTotalFee,
+              
               isFullyPaid: false,
               updatedBy: 'system'
             }
@@ -219,26 +369,90 @@ export const createStudent = [
       // Add display class to response
       const studentWithDisplay = addDisplayClassToStudent(student)
 
-      // Prepare response
+      // Prepare fee summary
+      const feeRecord = student.feeDetails[0]
+      const feeSummary = feeRecord ? {
+        original: {
+          schoolFee: feeRecord.originalSchoolFee,
+          transportFee: feeRecord.originalTransportFee,
+          hostelFee: feeRecord.originalHostelFee,
+          totalFee: feeRecord.originalTotalFee
+        },
+        discounted: {
+          schoolFee: feeRecord.discountedSchoolFee,
+          transportFee: feeRecord.discountedTransportFee,
+          hostelFee: feeRecord.discountedHostelFee,
+          totalFee: feeRecord.discountedTotalFee
+        },
+        termWise: {
+          term1: {
+            due: feeRecord.termDistribution[1]?.total || 0,
+            dueDate: feeRecord.term1DueDate,
+            components: {
+              schoolFee: feeRecord.termDistribution[1]?.schoolFee || 0,
+              transportFee: feeRecord.termDistribution[1]?.transportFee || 0,
+              hostelFee: feeRecord.termDistribution[1]?.hostelFee || 0
+            }
+          },
+          term2: {
+            due: feeRecord.termDistribution[2]?.total || 0,
+            dueDate: feeRecord.term2DueDate,
+            components: {
+              schoolFee: feeRecord.termDistribution[2]?.schoolFee || 0,
+              transportFee: feeRecord.termDistribution[2]?.transportFee || 0,
+              hostelFee: feeRecord.termDistribution[2]?.hostelFee || 0
+            }
+          },
+          term3: {
+            due: feeRecord.termDistribution[3]?.total || 0,
+            dueDate: feeRecord.term3DueDate,
+            components: {
+              schoolFee: feeRecord.termDistribution[3]?.schoolFee || 0,
+              transportFee: feeRecord.termDistribution[3]?.transportFee || 0,
+              hostelFee: feeRecord.termDistribution[3]?.hostelFee || 0
+            }
+          }
+        },
+        discounts: {
+          schoolFee: schoolFeeDiscountPercent,
+          transportFee: transportFeeDiscountPercent,
+          hostelFee: hostelFeeDiscountPercent,
+          totalDiscount: feeRecord.originalTotalFee - feeRecord.discountedTotalFee,
+          discountPercentage: feeRecord.originalTotalFee > 0 
+            ? (((feeRecord.originalTotalFee - feeRecord.discountedTotalFee) / feeRecord.originalTotalFee) * 100).toFixed(2)
+            : 0
+        },
+        paymentStatus: feeRecord.totalDue === 0 ? 'Paid' : 
+                      feeRecord.totalDue === feeRecord.discountedTotalFee ? 'Unpaid' : 'Partial'
+      } : null
+
       const response = {
         success: true,
         message: 'Student created successfully',
         data: {
           ...studentWithDisplay,
-          feeSummary: student.feeDetails[0] || null
+          feeSummary,
+          feeStructureSource: {
+            classFee: classFeeStructure ? 'Found' : 'Not found - using default 0',
+            transportFee: usesTransport ? (transportFee > 0 ? 'Calculated' : 'Not found - using 0') : 'Not applicable',
+            hostelFee: studentType === 'HOSTELLER' ? (hostelFee > 0 ? 'Calculated' : 'Not found - using 0') : 'Not applicable'
+          }
         }
       }
 
       res.status(201).json(response)
 
     } catch (error) {
-      if (uploadedProfilePic && req.file) {
+      // Clean up uploaded file if there was an error
+      if (uploadedProfilePic && req.file && profilePicPublicId) {
         try {
-          cleanupTempFiles(req.file)
+          await cloudinaryUtils.deleteFromCloudinary(profilePicPublicId)
         } catch (cleanupError) {
-          console.error('Error cleaning up temp files:', cleanupError)
+          console.error('Error cleaning up Cloudinary:', cleanupError)
         }
-      } else if (req.file) {
+      }
+      
+      if (req.file) {
         cleanupTempFiles(req.file)
       }
 

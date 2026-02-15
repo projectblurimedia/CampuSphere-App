@@ -812,10 +812,10 @@ export default function ClassWiseFeePending({ visible, onClose }) {
           <SafeAreaView edges={['top']}>
             <View style={styles.headerRow}>
               <TouchableOpacity activeOpacity={0.9} style={styles.backButton} onPress={onClose}>
-                <FontAwesome5 name="chevron-left" size={20} color="#FFFFFF" />
+                <FontAwesome5 name="chevron-left" style={{ marginLeft: -2 }}  size={20} color="#FFFFFF" />
               </TouchableOpacity>
               <View style={{ flex: 1, alignItems: 'center' }}>
-                <ThemedText style={styles.title}>Class-Wise Fee Pending</ThemedText>
+                <ThemedText style={styles.title}>Class-Wise</ThemedText>
                 <ThemedText style={styles.subtitle}>View pending fees by class and section</ThemedText>
               </View>
               <View style={{ width: 44 }} />

@@ -16,17 +16,21 @@ import { useTheme } from '@/hooks/useTheme'
 import axiosApi from '@/utils/axiosApi'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import FeePaymentModal from './FeePaymentModal'
+import StudentPaymentHistory from './StudentPaymentHistory'
 
-export default function StudentFeeDetails({ visible, onClose, student }) {
+export default function StudentFeeDetails({ visible, onClose, student, onPaymentSuccess }) {
   const { colors } = useTheme()
   const [feeDetails, setFeeDetails] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' })
   const [selectedTerm, setSelectedTerm] = useState('all')
-  const [expandedTerms, setExpandedTerms] = useState({})
+  const [expandedComponents, setExpandedComponents] = useState({})
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [paymentData, setPaymentData] = useState(null)
+  const [showStudentPaymentHistory, setShowStudentPaymentHistory] = useState(false)
+  const [paymentHistory, setPaymentHistory] = useState([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
 
   const showToast = (message, type = 'info') => {
     setToast({ visible: true, message, type })
@@ -38,48 +42,41 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
 
   useEffect(() => {
     if (visible && student) {
-      fetchStudentFeeDetails()
+      fetchStudentFeeDetails(student.id || student._id)
     } else {
       setFeeDetails(null)
       setError(null)
       setSelectedTerm('all')
-      setExpandedTerms({})
+      setExpandedComponents({})
       setShowPaymentModal(false)
       setPaymentData(null)
+      setPaymentHistory([])
     }
   }, [visible, student])
 
-  const fetchStudentFeeDetails = async () => {
-    if (!student?._id) return
-    
+  const fetchStudentFeeDetails = async (studentId) => {
     setLoading(true)
     setError(null)
-    
+
     try {
-      const response = await axiosApi.get(`/payments/students/${student._id}/fee-details`, {
-        params: {
-          academicYear: student.academicYear || '2024-2025'
-        }
-      })
+      const response = await axiosApi.get(`/fees/students/${studentId}/fee-details`)
 
       if (response.data.success) {
         setFeeDetails(response.data.data)
       } else {
-        setError(response.data.message || 'Failed to load fee details')
-        showToast(response.data.message || 'Failed to load fee details', 'error')
+        setError(response.data.message || 'Failed to fetch fee details')
+        showToast(response.data.message || 'Failed to fetch fee details', 'error')
       }
     } catch (error) {
       console.error('Fetch fee details error:', error)
       
-      let errorMessage = 'Failed to load fee details'
+      let errorMessage = 'Failed to fetch fee details'
       
       if (error.response) {
-        if (error.response.status === 401) {
+        if (error.response.status === 404) {
+          errorMessage = 'Fee details not found for this student'
+        } else if (error.response.status === 401) {
           errorMessage = 'Authentication required'
-        } else if (error.response.status === 403) {
-          errorMessage = 'Access denied'
-        } else if (error.response.status === 404) {
-          errorMessage = 'Student not found'
         } else if (error.response.status >= 500) {
           errorMessage = 'Server error, please try again later'
         } else if (error.response.data?.message) {
@@ -87,8 +84,6 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
         }
       } else if (error.request) {
         errorMessage = 'No response from server. Check your connection.'
-      } else {
-        errorMessage = error.message || 'Network error'
       }
 
       setError(errorMessage)
@@ -98,97 +93,94 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
     }
   }
 
-  const handlePayNow = (termNumber = null, componentKey = null) => {
+  const fetchPaymentHistory = async () => {
+    if (!student?.id) return
+    
+    setLoadingHistory(true)
+    try {
+      const response = await axiosApi.get(`/fees/students/${student.id}/payment-history`)
+      
+      if (response.data.success) {
+        setPaymentHistory(response.data.data.payments || [])
+        setShowStudentPaymentHistory(true)
+      } else {
+        showToast(response.data.message || 'Failed to fetch payment history', 'error')
+      }
+    } catch (error) {
+      console.error('Fetch payment history error:', error)
+      showToast('Failed to fetch payment history', 'error')
+    } finally {
+      setLoadingHistory(false)
+    }
+  }
+
+  const handlePayNow = (termNumber = null) => {
     if (!feeDetails) return
     
-    let paymentDetails = {
-      studentId: student._id,
-      studentName: student.name,
-      academicYear: student.academicYear || '2024-2025',
-      term: termNumber,
-      components: {},
-      defaultAmounts: {}
+    const { summary, feeBreakdown, termWiseBreakdown, termDistribution } = feeDetails
+    
+    // Calculate due amounts for each component
+    let schoolFeeDue = feeBreakdown?.schoolFee?.due || 0
+    let transportFeeDue = feeBreakdown?.transportFee?.due || 0
+    let hostelFeeDue = feeBreakdown?.hostelFee?.due || 0
+    
+    // If term is specified, get component-wise due amounts from termDistribution
+    if (termNumber && termDistribution && termDistribution[termNumber]) {
+      const termData = termDistribution[termNumber]
+      schoolFeeDue = Math.max(0, (termData.schoolFee || 0) - (termData.schoolFeePaid || 0))
+      transportFeeDue = Math.max(0, (termData.transportFee || 0) - (termData.transportFeePaid || 0))
+      hostelFeeDue = Math.max(0, (termData.hostelFee || 0) - (termData.hostelFeePaid || 0))
     }
     
-    const { components } = feeDetails.feeBreakdown
-    
-    if (termNumber) {
-      // Pay for specific term
-      paymentDetails.description = `Term ${termNumber} Payment`
-      
-      // Calculate remaining due for each component in this term
-      Object.entries(components || {}).forEach(([key, component]) => {
-        if (component && component.total > 0) {
-          const remainingDue = calculateRemainingDueForComponent(key, termNumber)
-          if (remainingDue > 0) {
-            paymentDetails.defaultAmounts[key] = remainingDue
-          }
-        }
-      })
-    } else {
-      // Pay all remaining for academic year
-      paymentDetails.description = 'Full Academic Year Payment'
-      
-      // Calculate remaining due for each component across all terms
-      Object.entries(components || {}).forEach(([key, component]) => {
-        if (component && component.due > 0) {
-          paymentDetails.defaultAmounts[key] = component.due
-        }
-      })
+    const paymentDetails = {
+      studentId: student.id || student._id,
+      studentName: student.name,
+      academicYear: '2024-2025',
+      term: termNumber,
+      description: termNumber ? `Term ${termNumber} Payment` : 'Full Academic Year Payment',
+      defaultAmounts: {
+        schoolFee: schoolFeeDue,
+        transportFee: transportFeeDue,
+        hostelFee: hostelFeeDue
+      }
     }
     
     setPaymentData(paymentDetails)
     setShowPaymentModal(true)
   }
 
-  const calculateRemainingDueForComponent = (componentKey, termNumber = null) => {
-    if (!feeDetails?.feeBreakdown?.components) return 0
+  const handlePaymentComplete = (paymentResult) => {
+    // Refresh fee details after payment
+    fetchStudentFeeDetails(student.id || student._id)
     
-    const component = feeDetails.feeBreakdown.components[componentKey]
-    if (!component) return 0
-    
-    if (termNumber) {
-      // For specific term, calculate remaining using efficient distribution
-      const termDistribution = component.termDistribution || {}
-      const termDue = termDistribution[termNumber] || 0
-      
-      // Calculate paid amount for this term from payment history
-      const componentLowerKey = componentKey.replace('Fee', '').toLowerCase()
-      const paidThisTerm = feeDetails.paymentHistory
-        ?.filter(p => {
-          const description = p.description || ''
-          return (
-            description.includes(`Term ${termNumber}`) && 
-            p[`${componentLowerKey}FeePaid`] > 0
-          )
-        })
-        ?.reduce((sum, p) => sum + p[`${componentLowerKey}FeePaid`], 0) || 0
-      
-      return Math.max(0, termDue - paidThisTerm)
-    } else {
-      // For full year, return total due
-      return component.due || 0
+    // Notify parent component
+    if (onPaymentSuccess) {
+      onPaymentSuccess(paymentResult)
     }
+    
+    showToast('Payment processed successfully', 'success')
   }
 
-  const toggleTermExpansion = (termNumber) => {
-    setExpandedTerms(prev => ({
+  const toggleComponentExpansion = (componentKey) => {
+    setExpandedComponents(prev => ({
       ...prev,
-      [termNumber]: !prev[termNumber]
+      [componentKey]: !prev[componentKey]
     }))
   }
 
   const getTermOptions = () => {
-    if (!feeDetails?.feeTerms?.termDetails) return []
+    if (!feeDetails?.termWiseBreakdown) return []
     
     const options = [
       { label: 'Overview', value: 'all', icon: 'grid-view' }
     ]
     
-    feeDetails.feeTerms.termDetails.forEach(term => {
+    Object.keys(feeDetails.termWiseBreakdown).forEach(termKey => {
+      const term = feeDetails.termWiseBreakdown[termKey]
+      const termNumber = termKey.replace('term', '')
       options.push({
-        label: `Term ${term.term}`,
-        value: term.term.toString(),
+        label: `Term ${termNumber}`,
+        value: termNumber,
         status: term.status
       })
     })
@@ -203,22 +195,6 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
       case 'Unpaid': return colors.danger
       default: return colors.textSecondary
     }
-  }
-
-  const calculatePaidForTermComponent = (componentKey, termNumber) => {
-    if (!feeDetails?.paymentHistory) return 0
-    
-    const componentLowerKey = componentKey.replace('Fee', '').toLowerCase()
-    
-    return feeDetails.paymentHistory
-      .filter(p => {
-        const description = p.description || ''
-        return (
-          description.includes(`Term ${termNumber}`) && 
-          p[`${componentLowerKey}FeePaid`] > 0
-        )
-      })
-      .reduce((sum, p) => sum + p[`${componentLowerKey}FeePaid`], 0) || 0
   }
 
   const renderTermSelector = () => {
@@ -289,21 +265,96 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
     )
   }
 
-  const renderAllTermsOverview = () => {
-    if (!feeDetails?.feeBreakdown || !feeDetails?.feeTerms) return null
+  const renderComponentTermBreakdown = (componentKey, componentName, termData, termNumber) => {
+    const status = termData.status
+    const statusColor = getStatusColor(status)
     
-    const { components, summary } = feeDetails.feeBreakdown
-    const { termDetails } = feeDetails.feeTerms
+    // Get component-specific data for this term
+    const componentDue = termData.components?.[componentKey]?.due || 0
+    const componentPaid = termData.components?.[componentKey]?.paid || 0
+    const componentRemaining = termData.components?.[componentKey]?.remaining || 0
+    const componentDiscount = termData.components?.[componentKey]?.discount || 0
+    
+    if (componentDue === 0 && componentPaid === 0) return null
+    
+    return (
+      <View key={componentKey} style={styles.termComponentCard}>
+        <View style={styles.termComponentHeader}>
+          <View style={styles.termComponentInfo}>
+            <View style={styles.termComponentTitleRow}>
+              <ThemedText style={styles.termComponentName}>{componentName}</ThemedText>
+              {componentDiscount > 0 && (
+                <View style={[styles.discountBadge, { backgroundColor: colors.warning + '20' }]}>
+                  <Feather name="tag" size={10} color={colors.warning} />
+                  <ThemedText style={[styles.discountText, { color: colors.warning }]}>
+                    {componentDiscount}% off
+                  </ThemedText>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+        
+        <View style={styles.termComponentSummary}>
+          <View style={styles.termComponentAmounts}>
+            <View style={styles.termComponentAmount}>
+              <ThemedText style={styles.termComponentAmountLabel}>Due</ThemedText>
+              <ThemedText style={[styles.termComponentAmountValue, { color: colors.danger }]}>
+                ₹{componentDue.toLocaleString()}
+              </ThemedText>
+            </View>
+            <View style={styles.termDividerVertical} />
+            <View style={styles.termComponentAmount}>
+              <ThemedText style={styles.termComponentAmountLabel}>Paid</ThemedText>
+              <ThemedText style={[styles.termComponentAmountValue, { color: colors.success }]}>
+                ₹{componentPaid.toLocaleString()}
+              </ThemedText>
+            </View>
+            <View style={styles.termDividerVertical} />
+            <View style={styles.termComponentAmount}>
+              <ThemedText style={styles.termComponentAmountLabel}>Remaining</ThemedText>
+              <ThemedText style={[styles.termComponentAmountValue, { color: colors.danger }]}>
+                ₹{componentRemaining.toLocaleString()}
+              </ThemedText>
+            </View>
+          </View>
+          
+          <View style={styles.termComponentProgress}>
+            <View style={[styles.termComponentProgressBar, { backgroundColor: colors.border }]}>
+              <View 
+                style={[
+                  styles.termComponentProgressFill, 
+                  { 
+                    width: componentDue > 0 ? `${(componentPaid / componentDue * 100)}%` : '0%',
+                    backgroundColor: statusColor 
+                  }
+                ]} 
+              />
+            </View>
+            <ThemedText style={styles.termComponentProgressText}>
+              {componentDue > 0 ? `${((componentPaid / componentDue * 100)).toFixed(1)}%` : '0%'} Paid
+            </ThemedText>
+          </View>
+        </View>
+      </View>
+    )
+  }
+
+  const renderAllTermsOverview = () => {
+    if (!feeDetails) return null
+    
+    const { summary, feeBreakdown, termWiseBreakdown } = feeDetails
+    const components = feeBreakdown || {}
     
     return (
       <View style={styles.overviewContainer}>
-        {/* Academic Year Summary */}
+        {/* Fee Summary Card */}
         <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
           <View style={styles.cardHeader}>
             <Ionicons name="calendar-outline" size={20} color={colors.primary} />
-            <ThemedText style={styles.cardTitle}>Academic Year Summary</ThemedText>
+            <ThemedText style={styles.cardTitle}>Fee Summary</ThemedText>
             <View style={styles.totalTermsBadge}>
-              <ThemedText style={styles.totalTermsText}>{termDetails?.length || 3} Terms</ThemedText>
+              <ThemedText style={styles.totalTermsText}>{summary?.terms || 3} Terms</ThemedText>
             </View>
           </View>
           
@@ -314,7 +365,7 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
               </View>
               <View style={styles.summaryItemContent}>
                 <ThemedText style={styles.summaryLabel}>Total Fee</ThemedText>
-                <ThemedText style={styles.summaryValue}>₹{summary?.totalFee?.toLocaleString() || 0}</ThemedText>
+                <ThemedText style={styles.summaryValue}>₹{summary?.discountedTotalFee?.toLocaleString() || 0}</ThemedText>
               </View>
             </View>
             
@@ -397,21 +448,23 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
           </View>
           
           <View style={styles.termsStatusContainer}>
-            {termDetails?.map((term) => {
+            {termWiseBreakdown && Object.keys(termWiseBreakdown).map((termKey) => {
+              const term = termWiseBreakdown[termKey]
+              const termNumber = termKey.replace('term', '')
               const statusColor = getStatusColor(term.status)
               
               return (
                 <TouchableOpacity
-                  key={term.term}
+                  key={termKey}
                   style={styles.termStatusItem}
-                  onPress={() => setSelectedTerm(term.term.toString())}
+                  onPress={() => setSelectedTerm(termNumber)}
                   activeOpacity={0.9}
                 >
                   <View style={styles.termStatusHeader}>
                     <View style={styles.termStatusInfo}>
-                      <ThemedText style={styles.termStatusTitle}>Term {term.term}</ThemedText>
+                      <ThemedText style={styles.termStatusTitle}>Term {termNumber}</ThemedText>
                       <ThemedText style={styles.termStatusDate}>
-                        Due Amount: ₹{term.dueAmount?.toLocaleString() || 0}
+                        Due Date: {term.dueDate ? new Date(term.dueDate).toLocaleDateString('en-IN') : 'N/A'}
                       </ThemedText>
                     </View>
                     <View style={[styles.termStatusBadgeLarge, { backgroundColor: statusColor + '20' }]}>
@@ -460,7 +513,7 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
                   {term.remainingAmount > 0 && (
                     <TouchableOpacity 
                       style={[styles.termPayButton, { backgroundColor: statusColor }]}
-                      onPress={() => handlePayNow(term.term)}
+                      onPress={() => handlePayNow(parseInt(termNumber))}
                       activeOpacity={0.9}
                     >
                       <Feather name="credit-card" size={14} color="#FFFFFF" />
@@ -476,101 +529,211 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
         </View>
 
         {/* Fee Components Breakdown */}
-        <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border, marginTop: 12 }]}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="receipt-outline" size={20} color={colors.primary} />
-            <ThemedText style={styles.cardTitle}>Fee Components</ThemedText>
-          </View>
-          
-          {Object.entries(components || {}).map(([key, component]) => {
-            if (!component || component.total === 0) return null
+        {components && Object.keys(components).length > 0 && (
+          <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border, marginTop: 12 }]}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="receipt-outline" size={20} color={colors.primary} />
+              <ThemedText style={styles.cardTitle}>Fee Components</ThemedText>
+            </View>
             
-            const termAmount = component.termAmount || 0
-            
-            return (
-              <View key={key} style={styles.componentCard}>
-                <View style={styles.componentHeader}>
-                  <ThemedText style={styles.componentName}>
-                    {key.replace('Fee', ' Fee')}
-                  </ThemedText>
-                  {component.discount > 0 && (
-                    <View style={[styles.discountBadge, { backgroundColor: colors.warning + '20' }]}>
-                      <Feather name="tag" size={12} color={colors.warning} />
-                      <ThemedText style={[styles.discountText, { color: colors.warning }]}>
-                        {component.discount}% off
+            {Object.entries(components).map(([key, component]) => {
+              if (!component || component.discounted === 0) return null
+              
+              const componentName = key === 'schoolFee' ? 'School Fee' :
+                                   key === 'transportFee' ? 'Transport Fee' :
+                                   key === 'hostelFee' ? 'Hostel Fee' : key
+              const status = component.due === 0 ? 'Paid' : component.paid > 0 ? 'Partial' : 'Unpaid'
+              const statusColor = getStatusColor(status)
+              
+              return (
+                <TouchableOpacity
+                  key={key}
+                  style={[
+                    styles.componentCard,
+                    { backgroundColor: colors.inputBackground }
+                  ]}
+                  activeOpacity={0.9}
+                  onPress={() => toggleComponentExpansion(key)}
+                >
+                  <View style={styles.componentHeader}>
+                    <View style={styles.componentTitleRow}>
+                      <ThemedText style={styles.componentName}>
+                        {componentName}
                       </ThemedText>
+                      <View style={styles.componentStatusArrowContainer}>
+                        <View style={[styles.componentStatusBadge, { backgroundColor: statusColor + '20' }]}>
+                          <ThemedText style={[styles.componentStatusText, { color: statusColor }]}>
+                            {status}
+                          </ThemedText>
+                        </View>
+                        <MaterialIcons 
+                          name={expandedComponents[key] ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} 
+                          size={24} 
+                          color={colors.textSecondary} 
+                        />
+                      </View>
+                    </View>
+                    
+                    {component.discount > 0 && (
+                      <View style={[styles.discountBadge, { backgroundColor: colors.warning + '20' }]}>
+                        <Feather name="tag" size={12} color={colors.warning} />
+                        <ThemedText style={[styles.discountText, { color: colors.warning }]}>
+                          {component.discount}% off (₹{component.discountAmount?.toLocaleString()})
+                        </ThemedText>
+                      </View>
+                    )}
+                  </View>
+                  
+                  <View style={styles.componentSummary}>
+                    <View style={styles.componentAmountRow}>
+                      <View style={styles.componentAmountItem}>
+                        <ThemedText style={styles.componentAmountLabel}>Original</ThemedText>
+                        <ThemedText style={styles.componentAmountValue}>
+                          ₹{component.original?.toLocaleString()}
+                        </ThemedText>
+                      </View>
+                      <View style={styles.componentAmountItem}>
+                        <ThemedText style={styles.componentAmountLabel}>Discounted</ThemedText>
+                        <ThemedText style={[styles.componentAmountValue, { color: colors.success }]}>
+                          ₹{component.discounted?.toLocaleString()}
+                        </ThemedText>
+                      </View>
+                    </View>
+                    
+                    <View style={styles.componentProgress}>
+                      <View style={styles.componentProgressInfo}>
+                        <ThemedText style={styles.componentProgressLabel}>Payment Progress</ThemedText>
+                        <ThemedText style={styles.componentProgressPercentage}>
+                          {component.percentagePaid || 0}%
+                        </ThemedText>
+                      </View>
+                      <View style={[styles.componentProgressBar, { backgroundColor: colors.border }]}>
+                        <View 
+                          style={[
+                            styles.componentProgressFill, 
+                            { 
+                              width: `${component.percentagePaid || 0}%`,
+                              backgroundColor: component.percentagePaid == 100 ? colors.success : colors.primary 
+                            }
+                          ]} 
+                        />
+                      </View>
+                    </View>
+                    
+                    <View style={styles.componentPaymentBreakdown}>
+                      <View style={styles.componentPaymentItem}>
+                        <Feather name="check" size={14} color={colors.success} />
+                        <ThemedText style={styles.componentPaymentText}>
+                          Paid: ₹{component.paid?.toLocaleString() || 0}
+                        </ThemedText>
+                      </View>
+                      <View style={styles.componentPaymentItem}>
+                        <Feather name="clock" size={14} color={colors.danger} />
+                        <ThemedText style={styles.componentPaymentText}>
+                          Due: ₹{component.due?.toLocaleString() || 0}
+                        </ThemedText>
+                      </View>
+                    </View>
+                  </View>
+                  
+                  {expandedComponents[key] && (
+                    <View style={styles.componentExpanded}>
+                      <ThemedText style={styles.expandedTitle}>Term-wise Breakdown</ThemedText>
+                      {feeDetails.termDistribution && Object.keys(feeDetails.termDistribution).map(termNum => {
+                        const termData = feeDetails.termDistribution[termNum]
+                        const termComponentDue = termData?.[key] || 0
+                        const termComponentPaid = termData?.[`${key}Paid`] || 0
+                        
+                        if (termComponentDue === 0) return null
+                        
+                        const termStatus = termComponentPaid >= termComponentDue ? 'Paid' : 
+                                          termComponentPaid > 0 ? 'Partial' : 'Unpaid'
+                        const termStatusColor = getStatusColor(termStatus)
+                        
+                        return (
+                          <View key={termNum} style={styles.termBreakdownItem}>
+                            <View style={styles.termBreakdownHeader}>
+                              <ThemedText style={styles.termBreakdownTitle}>Term {termNum}</ThemedText>
+                              <View style={[styles.termBreakdownStatus, { backgroundColor: termStatusColor + '20' }]}>
+                                <ThemedText style={[styles.termBreakdownStatusText, { color: termStatusColor }]}>
+                                  {termStatus}
+                                </ThemedText>
+                              </View>
+                            </View>
+                            
+                            <View style={styles.termBreakdownAmounts}>
+                              <View style={styles.termBreakdownAmount}>
+                                <ThemedText style={styles.termBreakdownAmountLabel}>Due</ThemedText>
+                                <ThemedText style={styles.termBreakdownAmountValue}>
+                                  ₹{termComponentDue.toLocaleString()}
+                                </ThemedText>
+                              </View>
+                              <View style={styles.termBreakdownAmount}>
+                                <ThemedText style={styles.termBreakdownAmountLabel}>Paid</ThemedText>
+                                <ThemedText style={[styles.termBreakdownAmountValue, { color: colors.success }]}>
+                                  ₹{termComponentPaid.toLocaleString()}
+                                </ThemedText>
+                              </View>
+                              <View style={styles.termBreakdownAmount}>
+                                <ThemedText style={styles.termBreakdownAmountLabel}>Remaining</ThemedText>
+                                <ThemedText style={[styles.termBreakdownAmountValue, { color: colors.danger }]}>
+                                  ₹{(termComponentDue - termComponentPaid).toLocaleString()}
+                                </ThemedText>
+                              </View>
+                            </View>
+                            
+                            <View style={styles.termBreakdownProgress}>
+                              <View style={[styles.termBreakdownProgressBar, { backgroundColor: colors.border }]}>
+                                <View 
+                                  style={[
+                                    styles.termBreakdownProgressFill, 
+                                    { 
+                                      width: termComponentDue > 0 ? `${(termComponentPaid / termComponentDue * 100)}%` : '0%',
+                                      backgroundColor: termStatusColor 
+                                    }
+                                  ]} 
+                                />
+                              </View>
+                              <ThemedText style={styles.termBreakdownProgressText}>
+                                {termComponentDue > 0 ? `${((termComponentPaid / termComponentDue * 100)).toFixed(1)}%` : '0%'} Paid
+                              </ThemedText>
+                            </View>
+                            
+                            {termComponentDue - termComponentPaid > 0 && (
+                              <TouchableOpacity 
+                                style={[styles.termBreakdownPayButton, { backgroundColor: colors.primary }]}
+                                onPress={() => handlePayNow(parseInt(termNum))}
+                              >
+                                <Feather name="credit-card" size={12} color="#FFFFFF" />
+                                <ThemedText style={styles.termBreakdownPayText}>
+                                  Pay Term {termNum}
+                                </ThemedText>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        )
+                      })}
                     </View>
                   )}
-                </View>
-                
-                <View style={styles.componentDetails}>
-                  <View style={styles.componentAmountRow}>
-                    <View style={styles.componentAmountItem}>
-                      <ThemedText style={styles.componentAmountLabel}>Total</ThemedText>
-                      <ThemedText style={styles.componentAmountValue}>
-                        ₹{component.total.toLocaleString()}
-                      </ThemedText>
-                    </View>
-                    <View style={styles.componentAmountItem}>
-                      <ThemedText style={styles.componentAmountLabel}>Per Term</ThemedText>
-                      <ThemedText style={[styles.componentAmountValue, { color: colors.primary }]}>
-                        ₹{termAmount.toLocaleString()}
-                      </ThemedText>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.componentProgress}>
-                    <View style={styles.componentProgressInfo}>
-                      <ThemedText style={styles.componentProgressLabel}>Payment Progress</ThemedText>
-                      <ThemedText style={styles.componentProgressPercentage}>
-                        {component.percentagePaid || 0}%
-                      </ThemedText>
-                    </View>
-                    <View style={[styles.componentProgressBar, { backgroundColor: colors.border }]}>
-                      <View 
-                        style={[
-                          styles.componentProgressFill, 
-                          { 
-                            width: `${component.percentagePaid || 0}%`,
-                            backgroundColor: component.percentagePaid == 100 ? colors.success : colors.primary 
-                          }
-                        ]} 
-                      />
-                    </View>
-                  </View>
-                  
-                  <View style={styles.componentPaymentBreakdown}>
-                    <View style={styles.componentPaymentItem}>
-                      <Feather name="check" size={14} color={colors.success} />
-                      <ThemedText style={styles.componentPaymentText}>
-                        Paid: ₹{component.paid?.toLocaleString() || 0}
-                      </ThemedText>
-                    </View>
-                    <View style={styles.componentPaymentItem}>
-                      <Feather name="clock" size={14} color={colors.danger} />
-                      <ThemedText style={styles.componentPaymentText}>
-                        Due: ₹{component.due?.toLocaleString() || 0}
-                      </ThemedText>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            )
-          })}
-        </View>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+        )}
       </View>
     )
   }
 
   const renderSingleTermDetails = (termNumber) => {
-    if (!feeDetails?.feeBreakdown || !feeDetails?.feeTerms?.termDetails) return null
+    if (!feeDetails?.termWiseBreakdown) return null
     
-    const termData = feeDetails.feeTerms.termDetails.find(t => t.term === termNumber)
+    const termKey = `term${termNumber}`
+    const termData = feeDetails.termWiseBreakdown[termKey]
+    const termDistribution = feeDetails.termDistribution?.[termNumber] || {}
+    
     if (!termData) return null
     
-    const { components } = feeDetails.feeBreakdown
-    const status = termData.status
-    const statusColor = getStatusColor(status)
+    const statusColor = getStatusColor(termData.status)
     
     return (
       <View style={styles.termDetailsContainer}>
@@ -586,11 +749,11 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
               <View style={styles.termTitleContainer}>
                 <ThemedText style={styles.termTitle}>Term {termNumber}</ThemedText>
                 <ThemedText style={styles.termDueDate}>
-                  Due Amount: ₹{termData.dueAmount?.toLocaleString() || 0}
+                  Due Date: {termData.dueDate ? new Date(termData.dueDate).toLocaleDateString('en-IN') : 'N/A'}
                 </ThemedText>
               </View>
               <View style={[styles.termStatusIndicator, { backgroundColor: statusColor }]}>
-                <ThemedText style={styles.termStatusIndicatorText}>{status}</ThemedText>
+                <ThemedText style={styles.termStatusIndicatorText}>{termData.status}</ThemedText>
               </View>
             </View>
             
@@ -635,7 +798,7 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
             {termData.remainingAmount > 0 && (
               <TouchableOpacity 
                 style={[styles.payNowButton, { backgroundColor: colors.primary, marginTop: 0 }]}
-                onPress={() => handlePayNow(termNumber)}
+                onPress={() => handlePayNow(parseInt(termNumber))}
                 activeOpacity={0.9}
               >
                 <Feather name="credit-card" size={18} color="#FFFFFF" />
@@ -645,166 +808,134 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
           </View>
         </View>
 
-        {/* Term Components */}
+        {/* Component-wise breakdown for this term */}
         <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border, marginTop: 12 }]}>
           <View style={styles.cardHeader}>
-            <Feather name="layers" size={18} color={colors.primary} />
-            <ThemedText style={styles.cardTitle}>Fee Components - Term {termNumber}</ThemedText>
+            <Feather name="pie-chart" size={18} color={colors.primary} />
+            <ThemedText style={styles.cardTitle}>Term {termNumber} - Fee Components</ThemedText>
           </View>
           
-          {Object.entries(components || {}).map(([key, component]) => {
-            if (!component || component.total === 0) return null
-            
-            // Get efficient distribution for this component
-            const termDistribution = component.termDistribution || {}
-            const termAmount = termDistribution[termNumber] || 0
-            const paidThisTerm = calculatePaidForTermComponent(key, termNumber)
-            const dueThisTerm = Math.max(0, termAmount - paidThisTerm)
-            const percentagePaid = termAmount > 0 ? (paidThisTerm / termAmount * 100) : 0
-            const componentStatus = paidThisTerm >= termAmount ? 'Paid' : paidThisTerm > 0 ? 'Partial' : 'Unpaid'
-            const componentStatusColor = getStatusColor(componentStatus)
-            
-            return (
-              <TouchableOpacity 
-                key={key}
-                style={[
-                  styles.termComponentCard,
-                  { backgroundColor: colors.inputBackground }
-                ]}
-                activeOpacity={0.9}
-                onPress={() => toggleTermExpansion(`term-${termNumber}-${key}`)}
-              >
-                <View style={styles.termComponentHeader}>
-                  <View style={styles.termComponentInfo}>
-                    <View style={styles.termComponentTitleRow}>
-                      <ThemedText style={styles.termComponentName}>
-                        {key.replace('Fee', ' Fee')}
-                      </ThemedText>
-                      <View style={styles.componentStatusArrowContainer}>
-                        <View style={[styles.componentStatusBadge, { backgroundColor: componentStatusColor + '20' }]}>
-                          <ThemedText style={[styles.componentStatusText, { color: componentStatusColor }]}>
-                            {componentStatus}
-                          </ThemedText>
-                        </View>
-                        <MaterialIcons 
-                          name={expandedTerms[`term-${termNumber}-${key}`] ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} 
-                          size={24} 
-                          color={colors.textSecondary} 
-                        />
-                      </View>
-                    </View>
-                    
-                    <View style={styles.termComponentDetails}>
-                      <View style={styles.termComponentDetail}>
-                        <FontAwesome5 name="rupee-sign" size={12} color={colors.textSecondary} />
-                        <ThemedText style={styles.termComponentDetailText}>
-                          Term Amount: ₹{termAmount.toLocaleString()}
-                        </ThemedText>
-                      </View>
-                      {component.discount > 0 && (
-                        <View style={styles.termComponentDetail}>
-                          <Feather name="tag" size={12} color={colors.warning} />
-                          <ThemedText style={[styles.termComponentDetailText, { color: colors.warning }]}>
-                            Discount: {component.discount}%
-                          </ThemedText>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                </View>
-                
-                <View style={styles.termComponentSummary}>
-                  <View style={styles.termComponentAmounts}>
-                    <View style={styles.termComponentAmount}>
-                      <ThemedText style={styles.termComponentAmountLabel}>Paid</ThemedText>
-                      <ThemedText style={[styles.termComponentAmountValue, { color: paidThisTerm > 0 ? colors.success : colors.textSecondary }]}>
-                        ₹{paidThisTerm.toLocaleString()}
-                      </ThemedText>
-                    </View>
-                    <View style={styles.termDividerVertical} />
-                    <View style={styles.termComponentAmount}>
-                      <ThemedText style={styles.termComponentAmountLabel}>Due</ThemedText>
-                      <ThemedText style={[styles.termComponentAmountValue, { color: dueThisTerm > 0 ? colors.danger : colors.success }]}>
-                        ₹{dueThisTerm.toLocaleString()}
-                      </ThemedText>
-                    </View>
-                  </View>
-                  
-                  <View style={styles.termComponentProgress}>
-                    <View style={[styles.termComponentProgressBar, { backgroundColor: colors.border }]}>
-                      <View 
-                        style={[
-                          styles.termComponentProgressFill, 
-                          { 
-                            width: `${percentagePaid}%`,
-                            backgroundColor: componentStatusColor 
-                          }
-                        ]} 
-                      />
-                    </View>
-                    <ThemedText style={styles.termComponentProgressText}>
-                      {percentagePaid.toFixed(1)}% Paid
-                    </ThemedText>
-                  </View>
-                </View>
-                
-                {expandedTerms[`term-${termNumber}-${key}`] && (
-                  <View style={styles.termComponentExpanded}>
-                    <ThemedText style={styles.expandedTitle}>Payment Details</ThemedText>
-                    
-                    {feeDetails.paymentHistory
-                      ?.filter(p => {
-                        const componentLowerKey = key.replace('Fee', '').toLowerCase()
-                        const description = p.description || ''
-                        return (
-                          description.includes(`Term ${termNumber}`) && 
-                          p[`${componentLowerKey}FeePaid`] > 0
-                        )
-                      })
-                      .map((payment, index) => (
-                        <View key={payment.paymentId} style={styles.paymentDetailRow}>
-                          <View style={styles.paymentDetailInfo}>
-                            <View style={styles.paymentDetailHeader}>
-                              <Feather name="credit-card" size={14} color={colors.text} />
-                              <ThemedText style={styles.paymentDetailDate}>
-                                {new Date(payment.date).toLocaleDateString('en-IN', { 
-                                  day: 'numeric', 
-                                  month: 'short', 
-                                  year: 'numeric' 
-                                })}
-                              </ThemedText>
-                            </View>
-                            <ThemedText style={styles.paymentDetailReceipt}>
-                              Receipt: {payment.receiptNo}
-                            </ThemedText>
-                          </View>
-                          <ThemedText style={[styles.paymentDetailAmount, { color: colors.success }]}>
-                            ₹{payment[`${key.replace('Fee', '').toLowerCase()}FeePaid`]?.toLocaleString() || 0}
-                          </ThemedText>
-                        </View>
-                      ))}
-                    
-                    {feeDetails.paymentHistory
-                      ?.filter(p => {
-                        const componentLowerKey = key.replace('Fee', '').toLowerCase()
-                        const description = p.description || ''
-                        return (
-                          description.includes(`Term ${termNumber}`) && 
-                          p[`${componentLowerKey}FeePaid`] > 0
-                        )
-                      }).length === 0 && (
-                      <View style={styles.noPaymentsContainer}>
-                        <Feather name="info" size={16} color={colors.textSecondary} />
-                        <ThemedText style={styles.noPaymentsText}>
-                          No payments recorded for this component
-                        </ThemedText>
-                      </View>
-                    )}
-                  </View>
-                )}
-              </TouchableOpacity>
-            )
-          })}
+          {/* School Fee Component */}
+          {termDistribution.schoolFee > 0 && (
+            renderComponentTermBreakdown('schoolFee', 'School Fee', {
+              status: termData.status,
+              components: termData.components || {}
+            }, termNumber)
+          )}
+          
+          {/* Transport Fee Component */}
+          {termDistribution.transportFee > 0 && (
+            renderComponentTermBreakdown('transportFee', 'Transport Fee', {
+              status: termData.status,
+              components: termData.components || {}
+            }, termNumber)
+          )}
+          
+          {/* Hostel Fee Component */}
+          {termDistribution.hostelFee > 0 && (
+            renderComponentTermBreakdown('hostelFee', 'Hostel Fee', {
+              status: termData.status,
+              components: termData.components || {}
+            }, termNumber)
+          )}
+        </View>
+
+        {/* Quick Pay Options */}
+        <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border, marginTop: 12 }]}>
+          <View style={styles.cardHeader}>
+            <Feather name="zap" size={18} color={colors.primary} />
+            <ThemedText style={styles.cardTitle}>Quick Pay Options</ThemedText>
+          </View>
+          
+          {termDistribution.schoolFee - (termDistribution.schoolFeePaid || 0) > 0 && (
+            <TouchableOpacity 
+              style={[styles.quickPayOption, { backgroundColor: colors.inputBackground }]}
+              onPress={() => {
+                const paymentDetails = {
+                  studentId: student.id || student._id,
+                  studentName: student.name,
+                  academicYear: '2024-2025',
+                  term: termNumber,
+                  description: `Term ${termNumber} - School Fee`,
+                  defaultAmounts: {
+                    schoolFee: termDistribution.schoolFee - (termDistribution.schoolFeePaid || 0),
+                    transportFee: 0,
+                    hostelFee: 0
+                  }
+                }
+                setPaymentData(paymentDetails)
+                setShowPaymentModal(true)
+              }}
+            >
+              <View style={styles.quickPayInfo}>
+                <ThemedText style={styles.quickPayLabel}>Pay School Fee</ThemedText>
+                <ThemedText style={styles.quickPayAmount}>
+                  ₹{(termDistribution.schoolFee - (termDistribution.schoolFeePaid || 0)).toLocaleString()}
+                </ThemedText>
+              </View>
+              <Feather name="arrow-right-circle" size={20} color={colors.primary} />
+            </TouchableOpacity>
+          )}
+          
+          {termDistribution.transportFee - (termDistribution.transportFeePaid || 0) > 0 && (
+            <TouchableOpacity 
+              style={[styles.quickPayOption, { backgroundColor: colors.inputBackground }]}
+              onPress={() => {
+                const paymentDetails = {
+                  studentId: student.id || student._id,
+                  studentName: student.name,
+                  academicYear: '2024-2025',
+                  term: termNumber,
+                  description: `Term ${termNumber} - Transport Fee`,
+                  defaultAmounts: {
+                    schoolFee: 0,
+                    transportFee: termDistribution.transportFee - (termDistribution.transportFeePaid || 0),
+                    hostelFee: 0
+                  }
+                }
+                setPaymentData(paymentDetails)
+                setShowPaymentModal(true)
+              }}
+            >
+              <View style={styles.quickPayInfo}>
+                <ThemedText style={styles.quickPayLabel}>Pay Transport Fee</ThemedText>
+                <ThemedText style={styles.quickPayAmount}>
+                  ₹{(termDistribution.transportFee - (termDistribution.transportFeePaid || 0)).toLocaleString()}
+                </ThemedText>
+              </View>
+              <Feather name="arrow-right-circle" size={20} color={colors.primary} />
+            </TouchableOpacity>
+          )}
+          
+          {termDistribution.hostelFee - (termDistribution.hostelFeePaid || 0) > 0 && (
+            <TouchableOpacity 
+              style={[styles.quickPayOption, { backgroundColor: colors.inputBackground }]}
+              onPress={() => {
+                const paymentDetails = {
+                  studentId: student.id || student._id,
+                  studentName: student.name,
+                  academicYear: '2024-2025',
+                  term: termNumber,
+                  description: `Term ${termNumber} - Hostel Fee`,
+                  defaultAmounts: {
+                    schoolFee: 0,
+                    transportFee: 0,
+                    hostelFee: termDistribution.hostelFee - (termDistribution.hostelFeePaid || 0)
+                  }
+                }
+                setPaymentData(paymentDetails)
+                setShowPaymentModal(true)
+              }}
+            >
+              <View style={styles.quickPayInfo}>
+                <ThemedText style={styles.quickPayLabel}>Pay Hostel Fee</ThemedText>
+                <ThemedText style={styles.quickPayAmount}>
+                  ₹{(termDistribution.hostelFee - (termDistribution.hostelFeePaid || 0)).toLocaleString()}
+                </ThemedText>
+              </View>
+              <Feather name="arrow-right-circle" size={20} color={colors.primary} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     )
@@ -823,13 +954,12 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
     if (error) {
       return (
         <View style={styles.errorContainer}>
-          <Ionicons name="error-outline" size={48} color={colors.danger} />
+          <Ionicons name="alert-circle" size={48} color={colors.danger} />
           <ThemedText style={styles.errorTitle}>Failed to Load Details</ThemedText>
           <ThemedText style={styles.errorSubtitle}>{error}</ThemedText>
           <TouchableOpacity 
-            style={styles.retryButton}
-            onPress={fetchStudentFeeDetails}
-            activeOpacity={0.9}
+            style={[styles.retryButton, { backgroundColor: colors.primary }]}
+            onPress={() => fetchStudentFeeDetails(student.id || student._id)}
           >
             <ThemedText style={styles.retryButtonText}>Retry</ThemedText>
           </TouchableOpacity>
@@ -863,30 +993,26 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
                 {feeDetails.studentInfo?.name || student.name}
               </ThemedText>
               <ThemedText style={styles.studentClass}>
-                {feeDetails.studentInfo?.displayClass || student.displayClass || student.class} • {feeDetails.studentInfo?.section || student.section}
+                {feeDetails.studentInfo?.displayClass || student.displayClass || student.class} - {feeDetails.studentInfo?.section || student.section}
               </ThemedText>
             </View>
           </View>
           
           <View style={styles.studentDetailsGrid}>
             <View style={styles.detailItem}>
-              <Feather name="hash" size={14} color={colors.textSecondary} />
-              <ThemedText style={styles.detailText}>
-                {feeDetails.studentInfo?.admissionNo || student.admissionNo}
-              </ThemedText>
-            </View>
-            <View style={styles.detailItem}>
-              <Feather name="tag" size={14} color={colors.textSecondary} />
-              <ThemedText style={styles.detailText}>
-                Roll: {feeDetails.studentInfo?.rollNo || student.rollNo || 'N/A'}
-              </ThemedText>
-            </View>
-            <View style={styles.detailItem}>
               <Feather name="home" size={14} color={colors.textSecondary} />
               <ThemedText style={styles.detailText}>
                 {feeDetails.studentInfo?.studentType || student.studentType || 'Day Scholar'}
               </ThemedText>
             </View>
+            {feeDetails.studentInfo?.usesTransport && (
+              <View style={styles.detailItem}>
+                <Feather name="truck" size={14} color={colors.textSecondary} />
+                <ThemedText style={styles.detailText}>
+                  {feeDetails.studentInfo?.village || 'Transport'}
+                </ThemedText>
+              </View>
+            )}
           </View>
         </View>
         
@@ -895,19 +1021,6 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
         
         {/* Selected Term Content */}
         {selectedTerm === 'all' ? renderAllTermsOverview() : renderSingleTermDetails(parseInt(selectedTerm))}
-        
-        {/* Academic Year Info */}
-        <View style={[styles.academicYearCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-          <View style={styles.academicYearHeader}>
-            <Feather name="calendar" size={16} color={colors.primary} />
-            <ThemedText style={styles.academicYearTitle}>
-              Academic Year: {feeDetails.currentAcademicYear}
-            </ThemedText>
-          </View>
-          <ThemedText style={styles.academicYearInfo}>
-            Last updated: {new Date(feeDetails.feeRecordUpdatedAt).toLocaleDateString('en-IN')}
-          </ThemedText>
-        </View>
         
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -923,8 +1036,22 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
       borderBottomLeftRadius: 24,
       borderBottomRightRadius: 24,
     },
-    headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    headerRow: { 
+      flexDirection: 'row', 
+      alignItems: 'center', 
+      justifyContent: 'space-between' 
+    },
     backButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'rgba(255, 255, 255, 0.18)',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.4)',
+    },
+    historyButton: {
       width: 44,
       height: 44,
       borderRadius: 22,
@@ -938,7 +1065,7 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
     subtitle: { marginTop: 4, fontSize: 11, color: 'rgba(255,255,255,0.9)' },
     
     scrollView: { flex: 1 },
-    scrollContent: { paddingBottom: 100 },
+    scrollContent: { paddingBottom: 40 },
     
     // Student Info
     studentInfoCard: {
@@ -955,9 +1082,9 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
       marginBottom: 12,
     },
     studentAvatar: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
+      width: 50,
+      height: 50,
+      borderRadius: 20,
       justifyContent: 'center',
       alignItems: 'center',
       marginRight: 12,
@@ -969,7 +1096,7 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
       fontSize: 16,
       fontFamily: 'Poppins-SemiBold',
       color: colors.text,
-      marginBottom: 4,
+      marginBottom: 2,
     },
     studentClass: {
       fontSize: 14,
@@ -984,8 +1111,10 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
       gap: 6,
     },
     detailItem: {
+      flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'center',
       backgroundColor: colors.inputBackground,
       paddingHorizontal: 10,
       paddingVertical: 6,
@@ -1048,7 +1177,7 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
     cardHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: 16,
+      marginBottom: 12,
     },
     cardTitle: {
       fontSize: 15,
@@ -1245,21 +1374,37 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
     
     // Component Card
     componentCard: {
-      backgroundColor: colors.inputBackground,
       borderRadius: 10,
       padding: 12,
       marginBottom: 12,
     },
     componentHeader: {
+      marginBottom: 12,
+    },
+    componentTitleRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 12,
+      marginBottom: 8,
     },
     componentName: {
       fontSize: 15,
       fontFamily: 'Poppins-SemiBold',
       color: colors.text,
+    },
+    componentStatusArrowContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    componentStatusBadge: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 12,
+      marginRight: 8,
+    },
+    componentStatusText: {
+      fontSize: 11,
+      fontFamily: 'Poppins-SemiBold',
     },
     discountBadge: {
       flexDirection: 'row',
@@ -1268,12 +1413,13 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
       paddingVertical: 4,
       borderRadius: 6,
       gap: 4,
+      alignSelf: 'flex-start',
     },
     discountText: {
       fontSize: 11,
       fontFamily: 'Poppins-SemiBold',
     },
-    componentDetails: {
+    componentSummary: {
       gap: 12,
     },
     componentAmountRow: {
@@ -1337,6 +1483,99 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
       fontSize: 12,
       color: colors.text,
       fontFamily: 'Poppins-Medium',
+    },
+    componentExpanded: {
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.border + '30',
+      gap: 12,
+    },
+    expandedTitle: {
+      fontSize: 13,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+      marginBottom: 8,
+    },
+    
+    // Term Breakdown
+    termBreakdownItem: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 8,
+      padding: 12,
+      marginBottom: 8,
+    },
+    termBreakdownHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    termBreakdownTitle: {
+      fontSize: 13,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+    },
+    termBreakdownStatus: {
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 8,
+    },
+    termBreakdownStatusText: {
+      fontSize: 10,
+      fontFamily: 'Poppins-SemiBold',
+    },
+    termBreakdownAmounts: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    termBreakdownAmount: {
+      alignItems: 'center',
+      flex: 1,
+    },
+    termBreakdownAmountLabel: {
+      fontSize: 10,
+      color: colors.textSecondary,
+      fontFamily: 'Poppins-Medium',
+      marginBottom: 2,
+    },
+    termBreakdownAmountValue: {
+      fontSize: 12,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+    },
+    termBreakdownProgress: {
+      marginBottom: 8,
+    },
+    termBreakdownProgressBar: {
+      height: 4,
+      borderRadius: 2,
+      overflow: 'hidden',
+      marginBottom: 2,
+    },
+    termBreakdownProgressFill: {
+      height: '100%',
+      borderRadius: 2,
+    },
+    termBreakdownProgressText: {
+      fontSize: 9,
+      color: colors.textSecondary,
+      fontFamily: 'Poppins-Medium',
+      textAlign: 'right',
+    },
+    termBreakdownPayButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 6,
+      borderRadius: 6,
+      gap: 4,
+    },
+    termBreakdownPayText: {
+      color: '#FFFFFF',
+      fontSize: 11,
+      fontFamily: 'Poppins-SemiBold',
     },
     
     // Term Details
@@ -1416,59 +1655,29 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
     
     // Term Component
     termComponentCard: {
-      borderRadius: 10,
+      borderRadius: 8,
       padding: 12,
       marginBottom: 8,
+      backgroundColor: colors.inputBackground,
     },
     termComponentHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+      marginBottom: 8,
     },
     termComponentInfo: {
       flex: 1,
-      marginRight: 12,
     },
     termComponentTitleRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: 8,
+      marginBottom: 4,
     },
     termComponentName: {
-      fontSize: 15,
+      fontSize: 14,
       fontFamily: 'Poppins-SemiBold',
       color: colors.text,
-    },
-    componentStatusArrowContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    componentStatusBadge: {
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      borderRadius: 12,
-      marginRight: 8,
-    },
-    componentStatusText: {
-      fontSize: 11,
-      fontFamily: 'Poppins-SemiBold',
-    },
-    termComponentDetails: {
-      gap: 8,
-    },
-    termComponentDetail: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-    },
-    termComponentDetailText: {
-      fontSize: 12,
-      color: colors.text,
-      fontFamily: 'Poppins-Medium',
     },
     termComponentSummary: {
-      marginTop: 12,
       gap: 8,
     },
     termComponentAmounts: {
@@ -1481,17 +1690,17 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
       flex: 1,
     },
     termComponentAmountLabel: {
-      fontSize: 11,
+      fontSize: 10,
       color: colors.textSecondary,
       fontFamily: 'Poppins-Medium',
-      marginBottom: 4,
+      marginBottom: 2,
     },
     termComponentAmountValue: {
-      fontSize: 14,
+      fontSize: 13,
       fontFamily: 'Poppins-SemiBold',
     },
     termComponentProgress: {
-      gap: 4,
+      gap: 2,
     },
     termComponentProgressBar: {
       height: 4,
@@ -1503,92 +1712,47 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
       borderRadius: 2,
     },
     termComponentProgressText: {
-      fontSize: 11,
+      fontSize: 10,
       color: colors.textSecondary,
       fontFamily: 'Poppins-Medium',
       textAlign: 'right',
     },
-    termComponentExpanded: {
-      marginTop: 12,
-      paddingTop: 12,
-      borderTopWidth: 1,
-      borderTopColor: colors.border + '30',
-      gap: 8,
-    },
-    expandedTitle: {
-      fontSize: 13,
-      fontFamily: 'Poppins-SemiBold',
-      color: colors.text,
-      marginBottom: 8,
-    },
-    paymentDetailRow: {
+    
+    // Quick Pay
+    quickPayOption: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border + '20',
+      justifyContent: 'space-between',
+      padding: 12,
+      borderRadius: 8,
+      marginBottom: 4,
     },
-    paymentDetailInfo: {
+    quickPayInfo: {
       flex: 1,
     },
-    paymentDetailHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
+    quickPayLabel: {
+      fontSize: 13,
+      fontFamily: 'Poppins-Medium',
+      color: colors.text,
       marginBottom: 4,
     },
-    paymentDetailDate: {
-      fontSize: 12,
-      color: colors.text,
-      fontFamily: 'Poppins-Medium',
-    },
-    paymentDetailReceipt: {
-      fontSize: 11,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
-    },
-    paymentDetailAmount: {
+    quickPayAmount: {
       fontSize: 14,
       fontFamily: 'Poppins-SemiBold',
-    },
-    noPaymentsContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 16,
-      gap: 8,
-    },
-    noPaymentsText: {
-      fontSize: 13,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
-      fontStyle: 'italic',
+      color: colors.primary,
     },
     
-    // Academic Year Card
-    academicYearCard: {
-      marginHorizontal: 16,
+    // Retry Button
+    retryButton: {
+      paddingHorizontal: 20,
+      paddingVertical: 10,
+      borderRadius: 8,
       marginTop: 12,
-      padding: 12,
-      borderRadius: 10,
-      borderWidth: 1,
     },
-    academicYearHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 4,
-      gap: 8,
-    },
-    academicYearTitle: {
-      fontSize: 13,
-      fontFamily: 'Poppins-SemiBold',
-      color: colors.text,
-    },
-    academicYearInfo: {
-      fontSize: 11,
-      color: colors.textSecondary,
+    retryButtonText: {
+      color: '#FFFFFF',
       fontFamily: 'Poppins-Medium',
+      fontSize: 14,
     },
     
     // Loading & Error States
@@ -1624,20 +1788,9 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
       textAlign: 'center',
       marginBottom: 24,
     },
-    retryButton: {
-      paddingHorizontal: 20,
-      paddingVertical: 12,
-      borderRadius: 8,
-      backgroundColor: colors.primary,
-    },
-    retryButtonText: {
-      color: '#FFFFFF',
-      fontFamily: 'Poppins-Medium',
-      fontSize: 14,
-    },
     
     bottomSpacer: {
-      height: 60,
+      height: 20,
     },
   })
 
@@ -1645,7 +1798,7 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
 
   return (
     <>
-      <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+      <Modal visible={visible} animationType="fade" onRequestClose={onClose} statusBarTranslucent>
         <View style={styles.container}>
           <LinearGradient 
             colors={[colors.gradientStart, colors.gradientEnd]} 
@@ -1663,13 +1816,26 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
                     style={{ marginLeft: -2 }}
                   />
                 </TouchableOpacity>
+                
                 <View style={{ flex: 1, alignItems: 'center' }}>
                   <ThemedText style={styles.title}>Fee Details</ThemedText>
                   <ThemedText style={styles.subtitle}>
-                    {student?.name || 'Student'} • {student.academicYear || '2024-2025'}
+                    {student?.name || 'Student'}
                   </ThemedText>
                 </View>
-                <View style={{ width: 44 }} />
+                
+                <TouchableOpacity 
+                  activeOpacity={0.9} 
+                  style={styles.historyButton} 
+                  onPress={fetchPaymentHistory}
+                  disabled={loadingHistory}
+                >
+                  {loadingHistory ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <MaterialIcons name="history" size={22} color="#FFFFFF" />
+                  )}
+                </TouchableOpacity>
               </View>
             </SafeAreaView>
           </LinearGradient>
@@ -1693,11 +1859,15 @@ export default function StudentFeeDetails({ visible, onClose, student }) {
         paymentData={paymentData}
         student={student}
         feeDetails={feeDetails}
-        onPaymentSuccess={(paymentResult) => {
-          showToast('Payment processed successfully', 'success')
-          fetchStudentFeeDetails() 
-        }}
+        onPaymentSuccess={handlePaymentComplete}
+      />
+
+      <StudentPaymentHistory
+        visible={showStudentPaymentHistory}
+        onClose={() => setShowStudentPaymentHistory(false)}
+        student={student}
+        paymentHistory={paymentHistory}
       />
     </>
-  ) 
+  )
 }

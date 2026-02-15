@@ -204,10 +204,15 @@ model FeeDetails {
   id                          String        @id @default(uuid())
   studentId                   String
   student                     Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  schoolFee                   Int           @default(0)
-  transportFee                Int           @default(0)
-  hostelFee                   Int           @default(0)
-  totalFee                    Int           @default(0)
+  originalSchoolFee           Int           @default(0)
+  originalTransportFee        Int           @default(0)
+  originalHostelFee           Int           @default(0)
+  originalTotalFee            Int           @default(0)
+
+  discountedSchoolFee         Int           @default(0)
+  discountedTransportFee      Int           @default(0)
+  discountedHostelFee         Int           @default(0)
+  discountedTotalFee          Int           @default(0)
 
   terms                       Int           @default(3)  
   schoolFeePaid               Int           @default(0)
@@ -216,15 +221,15 @@ model FeeDetails {
   totalPaid                   Int           @default(0)
   totalDue                    Int           @default(0)
 
+  termDistribution            Json          @default("{}") // Stores { "1": { "school": 10000, "transport": 5000, "hostel": 0 } }
+
   term1Due                    Int           @default(0)
   term2Due                    Int           @default(0)
   term3Due                    Int           @default(0)
-  term4Due                    Int           @default(0)
   
   term1Paid                   Int           @default(0)
   term2Paid                   Int           @default(0)
   term3Paid                   Int           @default(0)
-  term4Paid                   Int           @default(0)
 
   schoolFeeDiscountApplied    Int           @default(0)
   transportFeeDiscountApplied Int           @default(0)
@@ -234,7 +239,6 @@ model FeeDetails {
   term1DueDate                DateTime?
   term2DueDate                DateTime?
   term3DueDate                DateTime?
-  term4DueDate                DateTime?
 
   isFullyPaid                 Boolean       @default(false)
   createdAt                   DateTime      @default(now())

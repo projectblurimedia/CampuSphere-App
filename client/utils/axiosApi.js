@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 const axiosApi = axios.create({
   baseURL: 'http://192.168.31.232:8080/api', 
   // baseURL: 'https://campusphere-app-backend.onrender.com/server', 
-  timeout: 10000,
+  timeout: 50000,
   headers: {
     'Content-Type': 'application/json',
   },

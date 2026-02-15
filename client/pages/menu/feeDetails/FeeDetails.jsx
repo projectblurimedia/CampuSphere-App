@@ -18,6 +18,7 @@ import { useTheme } from '@/hooks/useTheme'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import StudentFeeDetails from './StudentFeeDetails'
 import ClassWiseFeePending from './ClassWiseFeePending'
+import PaymentHistory from './PaymentHistory'
 import { useDebounce } from '@/utils/useDebounce'
 import axiosApi from '@/utils/axiosApi'
 
@@ -31,6 +32,7 @@ export default function FeeDetails({ visible, onClose }) {
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [showStudentModal, setShowStudentModal] = useState(false)
   const [showClassWiseModal, setShowClassWiseModal] = useState(false)
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   const [searchError, setSearchError] = useState(null)
   const searchInputRef = useRef(null)
@@ -84,7 +86,6 @@ export default function FeeDetails({ visible, onClose }) {
       let errorMessage = 'Failed to search students'
       
       if (error.response) {
-        // Server responded with error status
         if (error.response.status === 401) {
           errorMessage = 'Authentication required'
         } else if (error.response.status === 403) {
@@ -97,10 +98,8 @@ export default function FeeDetails({ visible, onClose }) {
           errorMessage = error.response.data.message
         }
       } else if (error.request) {
-        // Request made but no response
         errorMessage = 'No response from server. Check your connection.'
       } else {
-        // Something else happened
         errorMessage = error.message || 'Network error'
       }
 
@@ -153,39 +152,47 @@ export default function FeeDetails({ visible, onClose }) {
     }
   }, [searchQuery, searchStudents])
 
+  const handleStudentSelect = (student) => {
+    setSelectedStudent(student)
+    setShowStudentModal(true)
+  }
+
   const renderStudentItem = useCallback(
     ({ item }) => (
       <TouchableOpacity
         activeOpacity={0.9}
         style={[styles.studentCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
-        onPress={() => {
-          setSelectedStudent(item)
-          setShowStudentModal(true)
-        }}
+        onPress={() => handleStudentSelect(item)}
       >
         <View style={styles.studentHeader}>
+          {/* Profile Icon */}
           <View style={[styles.studentIcon, { backgroundColor: colors.primary + '20' }]}>
             <MaterialIcons name="person" size={24} color={colors.primary} />
           </View>
+          
+          {/* Two-line content */}
           <View style={styles.studentInfo}>
-            <ThemedText style={styles.studentName}>{item.name}</ThemedText>
-            <ThemedText style={styles.studentClass}>
-              {item.displayClass || item.class} - {item.section}
+            {/* First line: Name */}
+            <ThemedText style={styles.studentName} numberOfLines={1}>
+              {item.name}
             </ThemedText>
-            {item.feeSummary && (
-              <View style={styles.feeSummary}>
-                <ThemedText style={[styles.feeStatus, { 
-                  color: item.feeSummary.paymentStatus === 'Paid' ? colors.success : 
-                         item.feeSummary.paymentStatus === 'Unpaid' ? colors.danger : 
-                         colors.warning 
-                }]}>
-                  {item.feeSummary.paymentStatus}
+            
+            {/* Second line: Class with dot separator and Due */}
+            <View style={styles.classDueRow}>
+              <ThemedText style={styles.studentClass} numberOfLines={1}>
+                {item.displayClass || item.class} - {item.section}
+              </ThemedText>
+              
+              {/* Dot separator */}
+              <View style={[styles.dot, { backgroundColor: colors.textSecondary }]} />
+              
+              {/* Due amount */}
+              {item.feeSummary && (
+                <ThemedText style={[styles.dueAmount, { color: item.feeSummary.totalDue?.toLocaleString() === '0' ? colors.success : colors.danger }]}>
+                  Due: ₹{item.feeSummary.totalDue?.toLocaleString() || 0}
                 </ThemedText>
-                <ThemedText style={styles.feeAmount}>
-                  Due: ₹{item.feeSummary.totalDue}
-                </ThemedText>
-              </View>
-            )}
+              )}
+            </View>
           </View>
         </View>
       </TouchableOpacity>
@@ -238,6 +245,19 @@ export default function FeeDetails({ visible, onClose }) {
     )
   }, [searchQuery, isSearching, searchError, colors, searchStudents])
 
+  const handleCloseStudentModal = useCallback(() => {
+    setShowStudentModal(false)
+    setSelectedStudent(null)
+  }, [])
+
+  const handlePaymentSuccess = useCallback((paymentResult) => {
+    // Refresh the search results to update fee summary
+    if (searchQuery) {
+      searchStudents(searchQuery)
+    }
+    showToast('Payment processed successfully', 'success')
+  }, [searchQuery, searchStudents])
+
   // Styles
   const styles = StyleSheet.create({
     container: { 
@@ -282,13 +302,7 @@ export default function FeeDetails({ visible, onClose }) {
       borderBottomWidth: 1, 
       borderBottomColor: colors.border 
     },
-    searchRow: { 
-      flexDirection: 'row', 
-      alignItems: 'center', 
-      gap: 8 
-    },
     searchInputContainer: {
-      flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       borderWidth: 1,
@@ -311,28 +325,36 @@ export default function FeeDetails({ visible, onClose }) {
     clearButton: { 
       padding: 4 
     },
-    classWiseButton: {
+    // Floating Action Button for Class-wise
+    fab: {
+      position: 'absolute',
+      bottom: 24,
+      right: 20,
+      height: 46,
+      borderRadius: 28,
+      backgroundColor: colors.primary,
       flexDirection: 'row',
-      alignItems: 'center',
       justifyContent: 'center',
-      height: 52,
-      borderRadius: 14,
+      alignItems: 'center',
       paddingHorizontal: 16,
-      backgroundColor: colors.primary + '10',
-      borderWidth: 1,
-      borderColor: colors.primary + '40',
       gap: 8,
+      elevation: 8,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4.65,
+      zIndex: 1000,
     },
-    classWiseButtonText: {
-      fontSize: 14,
-      fontFamily: 'Poppins-Medium',
-      color: colors.primary,
+    fabText: {
+      color: '#FFFFFF',
+      fontSize: 13,
+      fontFamily: 'Poppins-SemiBold',
     },
     studentCard: {
       borderRadius: 16,
-      padding: 16,
+      padding: 12,
       marginHorizontal: 16,
-      marginVertical: 4,
+      marginVertical: 6,
       borderWidth: 1,
       ...Platform.select({ 
         ios: { 
@@ -351,45 +373,43 @@ export default function FeeDetails({ visible, onClose }) {
       alignItems: 'center' 
     },
     studentIcon: { 
-      width: 48, 
-      height: 48, 
-      borderRadius: 24, 
+      width: 44, 
+      height: 44, 
+      borderRadius: 22, 
       justifyContent: 'center', 
       alignItems: 'center', 
       marginRight: 12 
     },
     studentInfo: { 
-      flex: 1 
+      flex: 1,
+      justifyContent: 'center',
     },
     studentName: { 
       fontSize: 16, 
       color: colors.text, 
-      fontFamily: 'Poppins-SemiBold' 
+      fontFamily: 'Poppins-SemiBold',
+      marginBottom: 4,
     },
-    studentClass: { 
-      fontSize: 12, 
-      color: colors.textSecondary, 
-      fontFamily: 'Poppins-Medium',
-      marginTop: 2,
-    },
-    feeSummary: {
+    classDueRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginTop: 4,
-      gap: 8,
+      gap: 6,
     },
-    feeStatus: {
-      fontSize: 12,
-      fontFamily: 'Poppins-SemiBold',
-      paddingHorizontal: 8,
-      paddingVertical: 2,
-      borderRadius: 4,
-      backgroundColor: colors.background,
-    },
-    feeAmount: {
-      fontSize: 12,
+    studentClass: { 
+      fontSize: 13, 
+      color: colors.textSecondary, 
       fontFamily: 'Poppins-Medium',
-      color: colors.textSecondary,
+      flexShrink: 1,
+    },
+    dot: {
+      width: 4,
+      height: 4,
+      borderRadius: 2,
+    },
+    dueAmount: {
+      fontSize: 13,
+      fontFamily: 'Poppins-SemiBold',
+      flexShrink: 1,
     },
     emptyContainer: {
       paddingHorizontal: 20,
@@ -485,63 +505,63 @@ export default function FeeDetails({ visible, onClose }) {
                   onClose()
                 }}
               >
-                <FontAwesome5 name="chevron-left" size={20} color="#FFFFFF" />
+                <FontAwesome5 name="chevron-left" style={{ marginLeft: -2 }} size={20} color="#FFFFFF" />
               </TouchableOpacity>
+              
               <View style={{ flex: 1, alignItems: 'center' }}>
                 <ThemedText style={styles.title}>Fee Details</ThemedText>
-                <ThemedText style={styles.subtitle}>Search student or view class-wise pending fees</ThemedText>
+                <ThemedText style={styles.subtitle}>Search student to view fee details</ThemedText>
               </View>
-              <View style={{ width: 44 }} />
+              
+              {/* History Icon Button */}
+              <TouchableOpacity 
+                activeOpacity={0.9} 
+                style={[styles.backButton, { marginLeft: 8 }]} 
+                onPress={() => setShowPaymentHistory(true)}
+              >
+                <MaterialIcons name="history" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
             </View>
           </SafeAreaView>
         </LinearGradient>
+        
         <View style={styles.searchContainer}>
-          <View style={styles.searchRow}>
-            <View style={styles.searchInputContainer}>
-              <Feather 
-                name={searchError ? "alert-circle" : "search"} 
-                size={20} 
-                color={searchError ? colors.danger : colors.primary} 
-                style={styles.searchIcon} 
-              />
-              <TextInput
-                ref={searchInputRef}
-                placeholder="Search by name..."
-                placeholderTextColor={colors.textSecondary}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                onSubmitEditing={handleSearchSubmit}
-                style={styles.searchInput}
-                returnKeyType="search"
-                clearButtonMode="while-editing"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              {searchQuery ? (
-                <TouchableOpacity activeOpacity={0.9} onPress={handleClearSearch} style={styles.clearButton}>
-                  <Feather name="x-circle" size={18} color={colors.textSecondary} />
-                </TouchableOpacity>
-              ) : null}
-            </View>
-            <TouchableOpacity 
-              activeOpacity={0.9} 
-              style={styles.classWiseButton} 
-              onPress={() => setShowClassWiseModal(true)}
-              disabled={isSearching}
-            >
-              <MaterialIcons name="school" size={20} color={colors.primary} />
-              <ThemedText style={styles.classWiseButtonText}>Class-wise</ThemedText>
-            </TouchableOpacity>
+          <View style={styles.searchInputContainer}>
+            <Feather 
+              name={searchError ? "alert-circle" : "search"} 
+              size={20} 
+              color={searchError ? colors.danger : colors.primary} 
+              style={styles.searchIcon} 
+            />
+            <TextInput
+              ref={searchInputRef}
+              placeholder="Search by name, class, or section..."
+              placeholderTextColor={colors.textSecondary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onSubmitEditing={handleSearchSubmit}
+              style={styles.searchInput}
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {searchQuery ? (
+              <TouchableOpacity activeOpacity={0.9} onPress={handleClearSearch} style={styles.clearButton}>
+                <Feather name="x-circle" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            ) : null}
           </View>
           {searchError && (
             <ThemedText style={styles.searchErrorText}>{searchError}</ThemedText>
           )}
         </View>
+
         <FlatList
           ref={flatListRef}
           data={filteredStudents}
           renderItem={renderStudentItem}
-          keyExtractor={(item) => item._id || item.id}
+          keyExtractor={(item) => item.id || item._id}
           refreshControl={
             <RefreshControl 
               refreshing={refreshing} 
@@ -554,21 +574,32 @@ export default function FeeDetails({ visible, onClose }) {
           showsVerticalScrollIndicator={true}
           contentContainerStyle={{ 
             flexGrow: 1, 
-            paddingBottom: 20 
+            paddingVertical: 12,
+            paddingBottom: 80
           }}
           keyboardShouldPersistTaps="handled"
           removeClippedSubviews={false}
           ListEmptyComponent={renderEmptyComponent}
-          onScrollToTop={() => {
-            flatListRef.current?.scrollToOffset({ offset: 0, animated: true })
-          }}
         />
+
+        {/* Floating Action Button for Class-wise */}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={styles.fab}
+          onPress={() => setShowClassWiseModal(true)}
+          disabled={isSearching}
+        >
+          <MaterialIcons name="school" size={22} color="#FFFFFF" />
+          <ThemedText style={styles.fabText}>Class-wise</ThemedText>
+        </TouchableOpacity>
+
         {loading && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
             <ThemedText style={styles.loadingText}>Loading...</ThemedText>
           </View>
         )}
+
         <ToastNotification 
           visible={toast.visible} 
           type={toast.type} 
@@ -577,14 +608,22 @@ export default function FeeDetails({ visible, onClose }) {
           onHide={hideToast} 
           position="top-center" 
         />
+
         <StudentFeeDetails 
           visible={showStudentModal} 
-          onClose={() => setShowStudentModal(false)} 
-          student={selectedStudent} 
+          onClose={handleCloseStudentModal} 
+          student={selectedStudent}
+          onPaymentSuccess={handlePaymentSuccess}
         />
+
         <ClassWiseFeePending 
           visible={showClassWiseModal} 
           onClose={() => setShowClassWiseModal(false)} 
+        />
+
+        <PaymentHistory 
+          visible={showPaymentHistory} 
+          onClose={() => setShowPaymentHistory(false)} 
         />
       </View>
     </Modal>

@@ -17,6 +17,7 @@ import {
   searchStudentsForFee,
 
   getAllPaymentHistory,
+  getClassWiseFeePending,
 } from '../controllers/feeController.js'
 
 const router = express.Router()
@@ -37,5 +38,6 @@ router.get('/defaulters', getFeeDefaulters)
 
 // ========== PAYMENT HISTORY (NEW) ==========
 router.get('/payment-history', getAllPaymentHistory)
+router.get('/class-wise-pending', getClassWiseFeePending)
 
 export default router

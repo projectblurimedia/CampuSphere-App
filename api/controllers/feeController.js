@@ -2171,7 +2171,7 @@ export const getFeeDefaulters = async (req, res) => {
 
 
 /**
- * @desc    Get all payment history with date range filtering
+ * @desc    Get all payment history with date range, class, and section filters only
  * @route   GET /api/fee/payment-history
  */
 export const getAllPaymentHistory = async (req, res) => {
@@ -2179,17 +2179,10 @@ export const getAllPaymentHistory = async (req, res) => {
     const {
       startDate,
       endDate,
-      studentId,
       class: classFilter,
       section,
-      paymentMode,
-      termNumber,
-      minAmount,
-      maxAmount,
       page = 1,
-      limit = 50,
-      sortBy = 'date',
-      sortOrder = 'desc'
+      limit = 50
     } = req.query
 
     // Build where clause
@@ -2198,45 +2191,38 @@ export const getAllPaymentHistory = async (req, res) => {
     // Date range filter
     if (startDate || endDate) {
       where.date = {}
-      if (startDate) where.date.gte = new Date(startDate)
+      if (startDate) {
+        const startDateTime = new Date(startDate)
+        startDateTime.setHours(0, 0, 0, 0)
+        where.date.gte = startDateTime
+      }
       if (endDate) {
-        // Set end date to end of the day
         const endDateTime = new Date(endDate)
         endDateTime.setHours(23, 59, 59, 999)
         where.date.lte = endDateTime
       }
     }
 
-    // Student filter
-    if (studentId) {
-      where.studentId = studentId
-    }
-
-    // Payment mode filter
-    if (paymentMode) {
-      where.paymentMode = paymentMode.toUpperCase()
-    }
-
-    // Term filter
-    if (termNumber) {
-      where.termNumber = parseInt(termNumber)
-    }
-
-    // Amount range filter
-    if (minAmount || maxAmount) {
-      where.totalAmount = {}
-      if (minAmount) where.totalAmount.gte = parseFloat(minAmount)
-      if (maxAmount) where.totalAmount.lte = parseFloat(maxAmount)
-    }
-
     // Class and section filters (through student relation)
     const studentWhere = {}
-    if (classFilter) {
-      const classEnum = mapClassToEnum(classFilter)
-      if (classEnum) studentWhere.class = classEnum
+    
+    if (classFilter && classFilter !== 'ALL') {
+      // Convert class value to enum format expected by database
+      // Handle special class names
+      let classEnum = classFilter
+      if (classFilter === 'Pre-Nursery' || classFilter === 'Nursery' || 
+          classFilter === 'LKG' || classFilter === 'UKG') {
+        // Keep as is for special classes
+        classEnum = classFilter
+      } else if (classFilter.match(/^\d+$/)) {
+        // If it's just a number, format as CLASS_X
+        classEnum = `CLASS_${classFilter}`
+      }
+      studentWhere.class = classEnum
     }
-    if (section) {
-      studentWhere.section = section.toUpperCase()
+    
+    if (section && section !== 'ALL') {
+      studentWhere.section = section
     }
 
     // If class or section filters are provided, add student condition
@@ -2248,10 +2234,6 @@ export const getAllPaymentHistory = async (req, res) => {
     const pageNum = parseInt(page)
     const limitNum = parseInt(limit)
     const skip = (pageNum - 1) * limitNum
-
-    // Sorting
-    const orderBy = {}
-    orderBy[sortBy] = sortOrder
 
     // Execute query with student details
     const [payments, total] = await Promise.all([
@@ -2274,7 +2256,7 @@ export const getAllPaymentHistory = async (req, res) => {
             }
           }
         },
-        orderBy,
+        orderBy: { date: 'desc' },
         skip,
         take: limitNum
       }),
@@ -2334,29 +2316,8 @@ export const getAllPaymentHistory = async (req, res) => {
         term1: formattedPayments.filter(p => p.termNumber === 1).reduce((sum, p) => sum + p.totalAmount, 0),
         term2: formattedPayments.filter(p => p.termNumber === 2).reduce((sum, p) => sum + p.totalAmount, 0),
         term3: formattedPayments.filter(p => p.termNumber === 3).reduce((sum, p) => sum + p.totalAmount, 0)
-      },
-      dateRange: {
-        startDate: startDate || null,
-        endDate: endDate || null
       }
     }
-
-    // Group by date if needed for charts
-    const paymentsByDate = formattedPayments.reduce((acc, payment) => {
-      const dateStr = new Date(payment.date).toISOString().split('T')[0]
-      if (!acc[dateStr]) {
-        acc[dateStr] = {
-          date: dateStr,
-          count: 0,
-          total: 0,
-          payments: []
-        }
-      }
-      acc[dateStr].count++
-      acc[dateStr].total += payment.totalAmount
-      acc[dateStr].payments.push(payment.id)
-      return acc
-    }, {})
 
     res.status(200).json({
       success: true,
@@ -2371,19 +2332,11 @@ export const getAllPaymentHistory = async (req, res) => {
       },
       data: formattedPayments,
       summary,
-      charts: {
-        paymentsByDate: Object.values(paymentsByDate).sort((a, b) => a.date.localeCompare(b.date))
-      },
       filters: {
         startDate: startDate || null,
         endDate: endDate || null,
-        studentId: studentId || null,
         class: classFilter || null,
-        section: section || null,
-        paymentMode: paymentMode || null,
-        termNumber: termNumber || null,
-        minAmount: minAmount || null,
-        maxAmount: maxAmount || null
+        section: section || null
       }
     })
   } catch (error) {
@@ -2391,179 +2344,6 @@ export const getAllPaymentHistory = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to get payment history'
-    })
-  }
-}
-
-/**
- * @desc    Export payment history as CSV/Excel
- * @route   GET /api/fee/payment-history/export
- */
-export const exportPaymentHistory = async (req, res) => {
-  try {
-    const {
-      startDate,
-      endDate,
-      studentId,
-      class: classFilter,
-      section,
-      paymentMode,
-      termNumber,
-      format = 'csv' // csv or json
-    } = req.query
-
-    // Build where clause (same as getAllPaymentHistory)
-    const where = {}
-
-    if (startDate || endDate) {
-      where.date = {}
-      if (startDate) where.date.gte = new Date(startDate)
-      if (endDate) {
-        const endDateTime = new Date(endDate)
-        endDateTime.setHours(23, 59, 59, 999)
-        where.date.lte = endDateTime
-      }
-    }
-
-    if (studentId) {
-      where.studentId = studentId
-    }
-
-    if (paymentMode) {
-      where.paymentMode = paymentMode.toUpperCase()
-    }
-
-    if (termNumber) {
-      where.termNumber = parseInt(termNumber)
-    }
-
-    const studentWhere = {}
-    if (classFilter) {
-      const classEnum = mapClassToEnum(classFilter)
-      if (classEnum) studentWhere.class = classEnum
-    }
-    if (section) {
-      studentWhere.section = section.toUpperCase()
-    }
-
-    if (Object.keys(studentWhere).length > 0) {
-      where.student = studentWhere
-    }
-
-    // Get all payments without pagination
-    const payments = await prisma.paymentHistory.findMany({
-      where,
-      include: {
-        student: {
-          select: {
-            firstName: true,
-            lastName: true,
-            admissionNo: true,
-            rollNo: true,
-            class: true,
-            section: true,
-            parentName: true,
-            parentPhone: true,
-            village: true,
-            studentType: true
-          }
-        }
-      },
-      orderBy: { date: 'desc' }
-    })
-
-    if (format === 'json') {
-      // Return as JSON
-      const formattedData = payments.map(p => ({
-        receiptNo: p.receiptNo,
-        date: p.date,
-        studentName: `${p.student.firstName} ${p.student.lastName}`,
-        admissionNo: p.student.admissionNo,
-        class: mapEnumToDisplayName(p.student.class),
-        section: p.student.section,
-        termNumber: p.termNumber,
-        paymentMode: p.paymentMode,
-        schoolFeePaid: p.schoolFeePaid,
-        transportFeePaid: p.transportFeePaid,
-        hostelFeePaid: p.hostelFeePaid,
-        totalAmount: p.totalAmount,
-        transactionId: p.transactionId,
-        chequeNo: p.chequeNo,
-        bankName: p.bankName,
-        referenceNo: p.referenceNo,
-        description: p.description,
-        receivedBy: p.receivedBy,
-        createdAt: p.createdAt
-      }))
-
-      return res.status(200).json({
-        success: true,
-        count: formattedData.length,
-        data: formattedData
-      })
-    } else {
-      // Generate CSV
-      const csvRows = []
-      
-      // Headers
-      csvRows.push([
-        'Receipt No',
-        'Date',
-        'Student Name',
-        'Admission No',
-        'Class',
-        'Section',
-        'Term',
-        'Payment Mode',
-        'School Fee',
-        'Transport Fee',
-        'Hostel Fee',
-        'Total Amount',
-        'Transaction ID',
-        'Cheque No',
-        'Bank Name',
-        'Reference No',
-        'Description',
-        'Received By'
-      ].join(','))
-
-      // Data rows
-      payments.forEach(p => {
-        csvRows.push([
-          p.receiptNo,
-          new Date(p.date).toLocaleDateString('en-IN'),
-          `"${p.student.firstName} ${p.student.lastName}"`,
-          p.student.admissionNo,
-          `"${mapEnumToDisplayName(p.student.class)}"`,
-          p.student.section,
-          p.termNumber || 'Full Payment',
-          p.paymentMode,
-          p.schoolFeePaid,
-          p.transportFeePaid,
-          p.hostelFeePaid,
-          p.totalAmount,
-          p.transactionId || '',
-          p.chequeNo || '',
-          p.bankName || '',
-          p.referenceNo || '',
-          `"${p.description || ''}"`,
-          `"${p.receivedBy}"`
-        ].join(','))
-      })
-
-      const csvContent = csvRows.join('\n')
-
-      // Set response headers for file download
-      res.setHeader('Content-Type', 'text/csv')
-      res.setHeader('Content-Disposition', `attachment; filename=payment-history-${new Date().toISOString().split('T')[0]}.csv`)
-      
-      return res.status(200).send(csvContent)
-    }
-  } catch (error) {
-    console.error('Export payment history error:', error)
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to export payment history'
     })
   }
 }

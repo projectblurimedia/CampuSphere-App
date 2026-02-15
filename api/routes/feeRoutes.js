@@ -17,7 +17,6 @@ import {
   searchStudentsForFee,
 
   getAllPaymentHistory,
-  exportPaymentHistory,
 } from '../controllers/feeController.js'
 
 const router = express.Router()
@@ -38,6 +37,5 @@ router.get('/defaulters', getFeeDefaulters)
 
 // ========== PAYMENT HISTORY (NEW) ==========
 router.get('/payment-history', getAllPaymentHistory)
-router.get('/payment-history/export', exportPaymentHistory)
 
 export default router

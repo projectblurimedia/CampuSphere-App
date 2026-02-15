@@ -259,6 +259,9 @@ export default function PaymentHistory({ visible, onClose }) {
   const [downloading, setDownloading] = useState(false)
   const [printing, setPrinting] = useState(false)
 
+  // Ref to track current request for race condition prevention
+  const currentRequestRef = useRef(null)
+
   // Check if filters are applied (for orange dot)
   const hasActiveFilters = useMemo(() => {
     return appliedFilters.startDate || 
@@ -398,7 +401,7 @@ export default function PaymentHistory({ visible, onClose }) {
     } finally {
       setIsLoadingClasses(false)
     }
-  }, [showToast])
+  }, [showToast, appliedFilters.class])
 
   // Function to update sections based on selected class
   const updateSectionsForClass = useCallback((className, classesData = classesAndSections) => {
@@ -476,8 +479,12 @@ export default function PaymentHistory({ visible, onClose }) {
     }
   }, [appliedFilters.class, classesAndSections, updateSectionsForClass])
 
-  // Fetch payment history with applied filters - FIXED PARAMETERS
+  // Fetch payment history with applied filters - with race condition prevention
   const fetchPaymentHistory = useCallback(async (page = 1, append = false) => {
+    // Generate unique request ID
+    const requestId = Date.now().toString()
+    currentRequestRef.current = requestId
+    
     // Don't show loading indicator if it's a refresh
     if (!append && !refreshing) {
       setLoading(true)
@@ -486,12 +493,10 @@ export default function PaymentHistory({ visible, onClose }) {
     try {
       const params = new URLSearchParams({
         page: page.toString(),
-        limit: '20',
-        sortBy: 'date',
-        sortOrder: 'desc'
+        limit: '20'
       })
 
-      // Add date filters if present - using 'startDate' and 'endDate' as expected by backend
+      // Add date filters if present
       if (appliedFilters.startDate) {
         params.append('startDate', appliedFilters.startDate)
       }
@@ -499,20 +504,23 @@ export default function PaymentHistory({ visible, onClose }) {
         params.append('endDate', appliedFilters.endDate)
       }
       
-      // Add class filter if not 'ALL' - using 'class' parameter as expected by backend
+      // Add class filter if not 'ALL'
       if (appliedFilters.class && appliedFilters.class !== 'ALL') {
         params.append('class', appliedFilters.class)
       }
       
-      // Add section filter if not 'ALL' - using 'section' parameter as expected by backend
+      // Add section filter if not 'ALL'
       if (appliedFilters.section && appliedFilters.section !== 'ALL') {
         params.append('section', appliedFilters.section)
       }
-
-      console.log('Fetching with params:', params.toString())
       
       const response = await axiosApi.get(`/fees/payment-history?${params.toString()}`)
-      console.log('Response data:', response.data)
+      
+      // Check if this is still the current request
+      if (currentRequestRef.current !== requestId) {
+        console.log('Ignoring stale response for request:', requestId)
+        return
+      }
       
       if (response.data.success) {
         // Ensure we have data array even if empty
@@ -543,6 +551,12 @@ export default function PaymentHistory({ visible, onClose }) {
         }
       }
     } catch (error) {
+      // Check if this is still the current request
+      if (currentRequestRef.current !== requestId) {
+        console.log('Ignoring stale error for request:', requestId)
+        return
+      }
+      
       console.error('Error fetching payment history:', error)
       
       // Handle 500 error gracefully
@@ -565,9 +579,12 @@ export default function PaymentHistory({ visible, onClose }) {
         })
       }
     } finally {
-      setLoading(false)
-      setInitialLoading(false)
-      setRefreshing(false)
+      // Only update loading state if this is still the current request
+      if (currentRequestRef.current === requestId) {
+        setLoading(false)
+        setInitialLoading(false)
+        setRefreshing(false)
+      }
     }
   }, [appliedFilters, showToast, refreshing])
 
@@ -577,6 +594,11 @@ export default function PaymentHistory({ visible, onClose }) {
       setInitialLoading(true)
       setPayments([]) // Clear existing data
       fetchPaymentHistory(1, false)
+    }
+    
+    // Cleanup function to cancel pending requests
+    return () => {
+      currentRequestRef.current = null
     }
   }, [visible, fetchPaymentHistory, isLoadingClasses])
 
@@ -644,6 +666,8 @@ export default function PaymentHistory({ visible, onClose }) {
     setTempFilters(clearedFilters)
     setAppliedFilters(clearedFilters)
     setShowFilterModal(false)
+    // Cancel any pending requests
+    currentRequestRef.current = null
     // Show loading immediately and fetch data
     setInitialLoading(true)
     setPayments([]) // Clear existing data
@@ -651,16 +675,24 @@ export default function PaymentHistory({ visible, onClose }) {
     showToast('Filters cleared', 'success')
   }, [fetchPaymentHistory, showToast])
 
-  // Apply filters - show loading immediately
+  // Apply filters - only if they're different
   const applyFilters = useCallback(() => {
-    setAppliedFilters({ ...tempFilters })
-    setShowFilterModal(false)
-    // Show loading immediately and fetch data
-    setInitialLoading(true)
-    setPayments([]) // Clear existing data
-    fetchPaymentHistory(1, false)
-    showToast('Filters applied', 'success')
-  }, [tempFilters, fetchPaymentHistory, showToast])
+    // Only update applied filters if they're different from temp filters
+    if (JSON.stringify(tempFilters) !== JSON.stringify(appliedFilters)) {
+      setAppliedFilters({ ...tempFilters })
+      setShowFilterModal(false)
+      // Cancel any pending requests
+      currentRequestRef.current = null
+      // Show loading immediately and fetch data
+      setInitialLoading(true)
+      setPayments([]) // Clear existing data
+      fetchPaymentHistory(1, false)
+      showToast('Filters applied', 'success')
+    } else {
+      // If same filters, just close modal
+      setShowFilterModal(false)
+    }
+  }, [tempFilters, appliedFilters, fetchPaymentHistory, showToast])
 
   // Cancel filter modal
   const cancelFilterModal = useCallback(() => {

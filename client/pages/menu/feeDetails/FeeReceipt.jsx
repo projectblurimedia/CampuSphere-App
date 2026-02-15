@@ -439,6 +439,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#FFFFFF',
     marginBottom: -5,
+    fontFamily: 'Poppins-SemiBold',
   },
   receiptHeaderSubtitle: {
     marginTop: 4,

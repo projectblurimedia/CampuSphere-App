@@ -249,8 +249,19 @@ model FeeDetails {
   @@index([isFullyPaid])
   @@index([totalDue])
   
-  // For tracking pending fees
   @@index([totalDue, isFullyPaid])
+
+  @@index([studentId, createdAt]) 
+  @@index([discountedTotalFee])     
+  @@index([term1DueDate])           
+  @@index([term2DueDate])
+  @@index([term3DueDate])
+  
+  @@index([studentId, totalDue])
+  @@index([isFullyPaid, totalDue])
+  
+  @@index([createdAt, isFullyPaid])
+  @@index([updatedAt, isFullyPaid])
 }
 
 
@@ -285,15 +296,20 @@ model PaymentHistory {
   @@index([paymentMode])
   @@index([studentId, date])
   
-  // For payment reports
   @@index([date, paymentMode])
   @@index([receivedBy, date])
   
-  // For receipt tracking
   @@index([receiptNo, date])
   
-  // For term-wise payments
   @@index([studentId, termNumber])
+
+  @@index([date, termNumber])        
+  
+  @@index([date, totalAmount])       
+  @@index([paymentMode, date])       
+  
+  @@index([createdAt])
+  @@index([date, id])                 
 }
 
 enum Designation {

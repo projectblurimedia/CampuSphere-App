@@ -150,6 +150,11 @@ model Student {
   @@index([firstName, lastName])
   @@index([parentName])
   @@index([class, section, isActive])
+
+  @@index([firstName, lastName, class, section]) 
+  @@index([admissionNo, class])                   
+  @@index([parentPhone, parentName])              
+  @@index([village, studentType])   
 }
 
 
@@ -262,6 +267,16 @@ model FeeDetails {
   
   @@index([createdAt, isFullyPaid])
   @@index([updatedAt, isFullyPaid])
+
+  @@index([studentId, isFullyPaid])         
+  @@index([discountedTotalFee, totalDue])   
+  @@index([term1Due, term2Due, term3Due])   
+  
+  @@index([discountedSchoolFee, schoolFeePaid])
+  @@index([discountedTransportFee, transportFeePaid])
+  @@index([discountedHostelFee, hostelFeePaid])
+  
+  @@index([term1Paid, term2Paid, term3Paid])
 }
 
 
@@ -309,7 +324,11 @@ model PaymentHistory {
   @@index([paymentMode, date])       
   
   @@index([createdAt])
-  @@index([date, id])                 
+  @@index([date, id])   
+
+  @@index([studentId, date, termNumber])    
+  @@index([date, paymentMode, totalAmount])
+  @@index([receiptNo, studentId])                
 }
 
 enum Designation {

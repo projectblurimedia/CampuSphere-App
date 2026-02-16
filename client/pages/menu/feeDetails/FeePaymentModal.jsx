@@ -19,9 +19,11 @@ import { useTheme } from '@/hooks/useTheme'
 import axiosApi from '@/utils/axiosApi'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import ConfirmationModal from './ConfirmationModal'
-import * as FileSystem from 'expo-file-system'
-import * as Sharing from 'expo-sharing'
 import { useSelector } from 'react-redux'
+import * as Sharing from 'expo-sharing'
+import * as Print from 'expo-print'
+import { generateReceiptHTML, generatePrintHTML } from './receiptHtmlTemplates'
+import FeeReceipt from './FeeReceipt'
 
 export default function FeePaymentModal({ visible, onClose, paymentData, student, feeDetails, onPaymentSuccess }) {
   const { colors } = useTheme()
@@ -35,8 +37,12 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
   const [validationErrors, setValidationErrors] = useState({})
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [animation] = useState(new Animated.Value(0))
+  
+  // Receipt modal state
   const [receiptModalVisible, setReceiptModalVisible] = useState(false)
   const [receiptData, setReceiptData] = useState(null)
+  const [downloading, setDownloading] = useState(false)
+  const [printing, setPrinting] = useState(false)
 
   const PAYMENT_METHODS = [
     { key: 'CASH', label: 'Cash', icon: 'money-bill-wave' },
@@ -196,7 +202,7 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
   }
 
   const employee = useSelector(state => state.employee.employee)
-  const receivedBy = `${employee.firstName} ${employee.lastName}`
+  const receivedBy = employee ? `${employee.firstName} ${employee.lastName}` : 'System'
 
   const buildPaymentPayload = () => {
     const payload = {
@@ -259,22 +265,8 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
         
         showToast(`Payment of ₹${totalAmount.toLocaleString()} processed successfully!`, 'success')
         
-        // Store receipt data
-        setReceiptData({
-          receiptNo: paymentResult.receiptNo,
-          paymentId: paymentResult.paymentId,
-          totalAmount: totalAmount,
-          date: new Date().toISOString(),
-          studentName: student.name,
-          admissionNo: student.admissionNo,
-          termNumber: paymentData.term,
-          termDetails: paymentResult.termDetails
-        })
-        
-        // Show receipt modal after delay
-        setTimeout(() => {
-          setReceiptModalVisible(true)
-        }, 500)
+        // Fetch full receipt data
+        await fetchReceiptData(paymentResult.paymentId)
         
         // Call success callback
         if (onPaymentSuccess) {
@@ -320,37 +312,93 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
     }
   }
 
-  const downloadReceipt = async () => {
+  const fetchReceiptData = async (paymentId) => {
     try {
-      if (!receiptData?.paymentId) {
-        showToast('Payment ID is missing', 'error')
-        return
+      const response = await axiosApi.get(`/fees/receipt/${paymentId}`)
+      
+      if (response.data.success) {
+        setReceiptData(response.data.data)
+        // Show receipt modal immediately after data is loaded
+        setReceiptModalVisible(true)
       }
-      
-      setLoading(true)
-      
-      // In a real app, you would generate a PDF receipt
-      // For now, we'll just show a success message
-      showToast('Receipt downloaded successfully', 'success')
-      setReceiptModalVisible(false)
-      onClose()
-      
     } catch (error) {
-      console.error('Receipt download error:', error)
-      showToast('Failed to download receipt', 'error')
-    } finally {
-      setLoading(false)
+      console.error('Error fetching receipt:', error)
+      showToast('Failed to load receipt', 'error')
     }
   }
 
-  const getPaymentMethodIcon = (method) => {
-    const found = PAYMENT_METHODS.find(m => m.key === method)
-    return found?.icon || 'money-bill-wave'
+  const generatePDFReceipt = async () => {
+    if (!receiptData) return
+
+    try {
+      setDownloading(true)
+
+      const htmlContent = generateReceiptHTML(receiptData)
+
+      // Generate PDF
+      const { uri } = await Print.printToFileAsync({ html: htmlContent })
+
+      await Sharing.shareAsync(uri, { 
+        UTI: '.pdf', 
+        mimeType: 'application/pdf', 
+        dialogTitle: 'Share or save PDF',
+      })
+
+      setDownloading(false)
+
+    } catch (error) {
+      console.error('Error generating PDF:', error)
+      showToast('Failed to generate PDF: ' + error.message, 'error')
+      setDownloading(false)
+    }
   }
 
-  const getPaymentMethodLabel = (method) => {
-    const found = PAYMENT_METHODS.find(m => m.key === method)
-    return found?.label || 'Cash'
+  const handlePrintReceipt = async () => {
+    if (!receiptData) return
+
+    try {
+      setPrinting(true)
+
+      const htmlContent = generatePrintHTML(receiptData)
+
+      // Print the receipt
+      await Print.printAsync({
+        html: htmlContent
+      })
+
+      setPrinting(false)
+
+    } catch (error) {
+      console.error('Error printing receipt:', error)
+      showToast('Failed to print receipt', 'error')
+      setPrinting(false)
+    }
+  }
+
+  const handleDownloadReceipt = async () => {
+    if (!receiptData) return
+    
+    try {
+      setDownloading(true)
+      showToast('Preparing receipt for download...', 'info')
+
+      // In a real app, you would generate a PDF receipt
+      // For now, we'll just simulate a download
+      setTimeout(() => {
+        showToast('Receipt downloaded successfully', 'success')
+        setDownloading(false)
+      }, 1500)
+
+    } catch (error) {
+      console.error('Download error:', error)
+      showToast('Failed to download receipt', 'error')
+      setDownloading(false)
+    }
+  }
+
+  const handleReceiptClose = () => {
+    setReceiptModalVisible(false)
+    onClose() // Close the payment modal as well
   }
 
   const renderComponentInputs = () => {
@@ -624,114 +672,6 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
     )
   }
 
-  const renderReceiptModal = () => {
-    if (!receiptData) return null
-    
-    return (
-      <Modal
-        visible={receiptModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setReceiptModalVisible(false)}
-        statusBarTranslucent
-      >
-        <View style={styles.receiptModalOverlay}>
-          <Animated.View 
-            style={[
-              styles.receiptModalContent,
-              { 
-                backgroundColor: colors.cardBackground,
-                transform: [{ scale: animation }]
-              }
-            ]}
-          >
-            <View style={styles.receiptHeader}>
-              <Feather name="check-circle" size={48} color={colors.success} />
-              <ThemedText style={styles.receiptTitle}>Payment Successful!</ThemedText>
-            </View>
-            
-            <View style={styles.receiptDetails}>
-              <View style={styles.receiptRow}>
-                <ThemedText style={styles.receiptLabel}>Receipt No:</ThemedText>
-                <ThemedText style={styles.receiptValue}>{receiptData.receiptNo}</ThemedText>
-              </View>
-              
-              <View style={styles.receiptRow}>
-                <ThemedText style={styles.receiptLabel}>Amount:</ThemedText>
-                <ThemedText style={[styles.receiptValue, { color: colors.success }]}>
-                  ₹{receiptData.totalAmount.toLocaleString()}
-                </ThemedText>
-              </View>
-              
-              <View style={styles.receiptRow}>
-                <ThemedText style={styles.receiptLabel}>Student:</ThemedText>
-                <ThemedText style={styles.receiptValue}>{receiptData.studentName}</ThemedText>
-              </View>
-              
-              <View style={styles.receiptRow}>
-                <ThemedText style={styles.receiptLabel}>Admission No:</ThemedText>
-                <ThemedText style={styles.receiptValue}>{receiptData.admissionNo}</ThemedText>
-              </View>
-              
-              {receiptData.termNumber && (
-                <View style={styles.receiptRow}>
-                  <ThemedText style={styles.receiptLabel}>Term:</ThemedText>
-                  <ThemedText style={styles.receiptValue}>Term {receiptData.termNumber}</ThemedText>
-                </View>
-              )}
-              
-              <View style={styles.receiptRow}>
-                <ThemedText style={styles.receiptLabel}>Date:</ThemedText>
-                <ThemedText style={styles.receiptValue}>
-                  {new Date(receiptData.date).toLocaleDateString('en-IN', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                </ThemedText>
-              </View>
-            </View>
-            
-            <View style={styles.receiptActions}>
-              <TouchableOpacity
-                style={[styles.receiptButton, { backgroundColor: colors.inputBackground }]}
-                onPress={() => {
-                  setReceiptModalVisible(false)
-                  onClose()
-                }}
-                activeOpacity={0.8}
-              >
-                <ThemedText style={[styles.receiptButtonText, { color: colors.text }]}>
-                  Done
-                </ThemedText>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.receiptButton, { backgroundColor: colors.primary }]}
-                onPress={downloadReceipt}
-                activeOpacity={0.8}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <>
-                    <Feather name="download" size={18} color="#FFFFFF" />
-                    <ThemedText style={[styles.receiptButtonText, { color: '#FFFFFF' }]}>
-                      Download Receipt
-                    </ThemedText>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
-        </View>
-      </Modal>
-    )
-  }
-
   const renderContent = () => {
     if (!paymentData || !student) {
       return (
@@ -777,7 +717,7 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
             </View>
             <View style={styles.summaryRow}>
               <ThemedText style={styles.summaryLabel}>Payment Method</ThemedText>
-              <ThemedText style={styles.summaryValue}>{getPaymentMethodLabel(paymentMethod)}</ThemedText>
+              <ThemedText style={styles.summaryValue}>{PAYMENT_METHODS.find(m => m.key === paymentMethod)?.label || 'Cash'}</ThemedText>
             </View>
             <View style={styles.summaryRow}>
               <ThemedText style={styles.summaryLabel}>Payment Type</ThemedText>
@@ -852,8 +792,8 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
       borderWidth: 1,
       borderColor: 'rgba(255, 255, 255, 0.4)',
     },
-    title: { fontSize: 18, color: '#FFFFFF', marginBottom: -5 },
-    subtitle: { marginTop: 4, fontSize: 11, color: 'rgba(255,255,255,0.9)' },
+    title: { fontSize: 18, color: '#FFFFFF', marginBottom: -5, fontFamily: 'Poppins-SemiBold' },
+    subtitle: { marginTop: 4, fontSize: 11, color: 'rgba(255,255,255,0.9)', fontFamily: 'Poppins-Medium' },
     
     scrollView: { flex: 1 },
     scrollContent: { paddingBottom: 100, paddingHorizontal: 16 },
@@ -1146,71 +1086,6 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
       fontFamily: 'Poppins-SemiBold',
     },
     
-    // Receipt Modal
-    receiptModalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: 20,
-    },
-    receiptModalContent: {
-      width: '100%',
-      maxWidth: 400,
-      borderRadius: 20,
-      padding: 24,
-    },
-    receiptHeader: {
-      alignItems: 'center',
-      marginBottom: 24,
-    },
-    receiptTitle: {
-      fontSize: 20,
-      fontFamily: 'Poppins-Bold',
-      color: colors.text,
-      marginTop: 12,
-      textAlign: 'center',
-    },
-    receiptDetails: {
-      gap: 12,
-      marginBottom: 24,
-    },
-    receiptRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border + '30',
-    },
-    receiptLabel: {
-      fontSize: 14,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
-    },
-    receiptValue: {
-      fontSize: 14,
-      fontFamily: 'Poppins-SemiBold',
-      color: colors.text,
-    },
-    receiptActions: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    receiptButton: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 12,
-      borderRadius: 10,
-      gap: 8,
-    },
-    receiptButtonText: {
-      fontSize: 14,
-      fontFamily: 'Poppins-SemiBold',
-    },
-    
     // Loading State
     loadingContainer: {
       flex: 1,
@@ -1293,8 +1168,17 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
         cancelText="Cancel"
       />
       
-      {/* Receipt Modal */}
-      {renderReceiptModal()}
+      {/* Receipt Modal - Shown after successful payment */}
+      <FeeReceipt
+        visible={receiptModalVisible}
+        onClose={handleReceiptClose}
+        receiptData={receiptData}
+        loading={loading && !receiptData}
+        downloading={downloading}
+        printing={printing}
+        onDownload={generatePDFReceipt}
+        onPrint={handlePrintReceipt}
+      />
     </>
   )
 }

@@ -1797,6 +1797,8 @@ export const getClassWisePayments = async (req, res) => {
       return a.class.localeCompare(b.class)
     })
 
+    console.log(classWisePayments[0].students)
+
     // Calculate summary
     const summary = {
       totalSections: classWisePayments.length,
@@ -1805,6 +1807,8 @@ export const getClassWisePayments = async (req, res) => {
       totalTransport: classWisePayments.reduce((sum, s) => sum + s.transportFeePaid, 0),
       totalHostel: classWisePayments.reduce((sum, s) => sum + s.hostelFeePaid, 0)
     }
+
+    console.log(summary)
 
     res.status(200).json({
       success: true,
@@ -2343,7 +2347,7 @@ export const getAllPaymentHistory = async (req, res) => {
 
 
 /**
- * @desc    Get class-wise fee pending report
+ * @desc    Get class-wise fee pending report for a specific term
  * @route   GET /api/fees/class-wise-pending
  */
 export const getClassWiseFeePending = async (req, res) => {
@@ -2353,6 +2357,15 @@ export const getClassWiseFeePending = async (req, res) => {
       section,
       termNumber = 1
     } = req.query
+
+    // Validate term number
+    const termNum = parseInt(termNumber)
+    if (termNum < 1 || termNum > 3) {
+      return res.status(400).json({
+        success: false,
+        message: 'Term number must be between 1 and 3'
+      })
+    }
 
     // Build where clause for students
     const studentWhere = { isActive: true }
@@ -2374,7 +2387,7 @@ export const getClassWiseFeePending = async (req, res) => {
       studentWhere.section = section
     }
 
-    // Get students with fee details
+    // Get all active students with their latest fee details in a single optimized query
     const students = await prisma.student.findMany({
       where: studentWhere,
       include: {
@@ -2386,76 +2399,137 @@ export const getClassWiseFeePending = async (req, res) => {
       orderBy: [
         { class: 'asc' },
         { section: 'asc' },
-        { firstName: 'asc' }
+        { rollNo: 'asc' } // Sort by roll number in ascending order
       ]
     })
 
-    // Group by class and section
-    const groupedData = {}
-    
+    // Process students to extract term-specific pending fees
+    const classWiseData = []
+    const summary = {
+      totalStudents: 0,
+      totalWithFees: 0,
+      totalTermPending: 0,
+      totalTransportPending: 0,
+      totalHostelPending: 0,
+      totalPending: 0
+    }
+
     students.forEach(student => {
       const feeRecord = student.feeDetails[0]
-      if (!feeRecord) return
-      
+      if (!feeRecord) return // Skip if no fee record
+
+      // Parse term distribution
       const termDistribution = feeRecord.termDistribution || {}
-      const termData = termDistribution[termNumber] || {}
-      
-      const key = `${student.class}-${student.section}`
-      
-      if (!groupedData[key]) {
-        groupedData[key] = {
-          class: student.class,
-          classLabel: mapEnumToDisplayName(student.class),
-          section: student.section,
-          students: [],
-          totalTermPending: 0,
-          totalTransportPending: 0,
-          totalHostelPending: 0,
-          totalPending: 0,
-          pendingCount: 0
-        }
-      }
-      
-      // Calculate pending amounts for this term
+      const termData = termDistribution[termNum] || {}
+
+      // Calculate pending amounts for the specified term
       const termFeePending = Math.max(0, (termData.schoolFee || 0) - (termData.schoolFeePaid || 0))
       const transportPending = Math.max(0, (termData.transportFee || 0) - (termData.transportFeePaid || 0))
       const hostelPending = Math.max(0, (termData.hostelFee || 0) - (termData.hostelFeePaid || 0))
       const totalPending = termFeePending + transportPending + hostelPending
+
+      // Create student object with only non-zero fees
+      const studentData = {
+        rollNo: student.rollNo || 'N/A',
+        name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
+        admissionNo: student.admissionNo,
+        class: student.class,
+        classLabel: mapEnumToDisplayName(student.class),
+        section: student.section,
+        term: termNum
+      }
+
+      // Add fee details only if they have pending amount > 0
+      if (termFeePending > 0) {
+        studentData.schoolFeePending = termFeePending
+      }
       
+      if (transportPending > 0) {
+        studentData.transportFeePending = transportPending
+      }
+      
+      if (hostelPending > 0) {
+        studentData.hostelFeePending = hostelPending
+      }
+
+      // Always include total pending
+      studentData.totalPending = totalPending
+
+      // Add to class-wise data
+      classWiseData.push(studentData)
+
+      // Update summary counts
+      summary.totalStudents++
       if (totalPending > 0) {
-        groupedData[key].students.push({
-          id: student.id,
-          name: `${student.firstName} ${student.lastName}`,
-          rollNo: student.rollNo,
-          admissionNo: student.admissionNo,
-          termFeePending,
-          transportPending,
-          hostelPending,
-          totalPending
-        })
-        
-        groupedData[key].totalTermPending += termFeePending
-        groupedData[key].totalTransportPending += transportPending
-        groupedData[key].totalHostelPending += hostelPending
-        groupedData[key].totalPending += totalPending
-        groupedData[key].pendingCount++
+        summary.totalWithFees++
+        summary.totalTermPending += termFeePending
+        summary.totalTransportPending += transportPending
+        summary.totalHostelPending += hostelPending
+        summary.totalPending += totalPending
       }
     })
 
-    const result = Object.values(groupedData).sort((a, b) => {
-      if (a.class === b.class) return a.section.localeCompare(b.section)
+    // Group by class and section for easier consumption
+    const groupedByClassSection = {}
+    classWiseData.forEach(student => {
+      const key = `${student.classLabel}-${student.section}`
+      if (!groupedByClassSection[key]) {
+        groupedByClassSection[key] = {
+          class: student.class,
+          classLabel: student.classLabel,
+          section: student.section,
+          students: [],
+          summary: {
+            totalStudents: 0,
+            totalWithPending: 0,
+            totalTermPending: 0,
+            totalTransportPending: 0,
+            totalHostelPending: 0,
+            totalPending: 0
+          }
+        }
+      }
+
+      groupedByClassSection[key].students.push(student)
+      groupedByClassSection[key].summary.totalStudents++
+
+      if (student.totalPending > 0) {
+        groupedByClassSection[key].summary.totalWithPending++
+        groupedByClassSection[key].summary.totalTermPending += student.schoolFeePending || 0
+        groupedByClassSection[key].summary.totalTransportPending += student.transportFeePending || 0
+        groupedByClassSection[key].summary.totalHostelPending += student.hostelFeePending || 0
+        groupedByClassSection[key].summary.totalPending += student.totalPending
+      }
+    })
+
+    // Convert grouped object to array and sort by class and section
+    const groupedResult = Object.values(groupedByClassSection).sort((a, b) => {
+      if (a.class === b.class) {
+        return a.section.localeCompare(b.section)
+      }
       return a.class.localeCompare(b.class)
     })
 
     res.status(200).json({
       success: true,
       data: {
-        sections: result,
+        term: termNum,
+        filters: {
+          class: classFilter || 'ALL',
+          section: section || 'ALL'
+        },
         summary: {
-          totalSections: result.length,
-          totalPendingStudents: result.reduce((sum, s) => sum + s.pendingCount, 0),
-          totalPendingAmount: result.reduce((sum, s) => sum + s.totalPending, 0)
-        }
+          totalStudents: summary.totalStudents,
+          studentsWithPendingFees: summary.totalWithFees,
+          totalPendingAmount: summary.totalPending,
+          breakdown: {
+            termFee: summary.totalTermPending,
+            transportFee: summary.totalTransportPending,
+            hostelFee: summary.totalHostelPending
+          }
+        },
+        classWiseBreakdown: groupedResult,
+        allStudents: classWiseData // Flat list of all students in roll number order
       }
     })
   } catch (error) {

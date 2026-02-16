@@ -9,6 +9,7 @@ import {
   Modal,
   FlatList,
   ScrollView,
+  Dimensions,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -19,40 +20,11 @@ import { ToastNotification } from '@/components/ui/ToastNotification'
 import axiosApi from '@/utils/axiosApi'
 import * as Sharing from 'expo-sharing'
 import * as Print from 'expo-print'
-import { generateClassWisePDFHTML } from './generateClassWisePDFHTML'
+import { schoolInfo ,generateClassWisePDFHTML } from './generateClassWisePDFHTML'
 
-// Class options with enum mapping
-const CLASS_OPTIONS = [
-  { label: 'All Classes', value: 'ALL' },
-  { label: 'Pre-Nursery', value: 'PRE_NURSERY' },
-  { label: 'Nursery', value: 'NURSERY' },
-  { label: 'LKG', value: 'LKG' },
-  { label: 'UKG', value: 'UKG' },
-  { label: 'Class 1', value: 'CLASS_1' },
-  { label: 'Class 2', value: 'CLASS_2' },
-  { label: 'Class 3', value: 'CLASS_3' },
-  { label: 'Class 4', value: 'CLASS_4' },
-  { label: 'Class 5', value: 'CLASS_5' },
-  { label: 'Class 6', value: 'CLASS_6' },
-  { label: 'Class 7', value: 'CLASS_7' },
-  { label: 'Class 8', value: 'CLASS_8' },
-  { label: 'Class 9', value: 'CLASS_9' },
-  { label: 'Class 10', value: 'CLASS_10' },
-  { label: 'Class 11', value: 'CLASS_11' },
-  { label: 'Class 12', value: 'CLASS_12' },
-]
+const { width, height } = Dimensions.get('window')
 
-// Section options
-const SECTION_OPTIONS = [
-  { label: 'All Sections', value: 'ALL' },
-  { label: 'Section A', value: 'A' },
-  { label: 'Section B', value: 'B' },
-  { label: 'Section C', value: 'C' },
-  { label: 'Section D', value: 'D' },
-  { label: 'Section E', value: 'E' },
-]
-
-// Term options
+// Term options (static)
 const TERM_OPTIONS = [
   { label: 'First Term', value: 'First Term' },
   { label: 'Second Term', value: 'Second Term' },
@@ -67,31 +39,37 @@ export default function ClassWiseFeePending({ visible, onClose }) {
   const [selectedSection, setSelectedSection] = useState('ALL')
   const [selectedTerm, setSelectedTerm] = useState('First Term')
   
-  // Dropdown visibility
-  const [showClassDropdown, setShowClassDropdown] = useState(false)
-  const [showSectionDropdown, setShowSectionDropdown] = useState(false)
-  const [showTermDropdown, setShowTermDropdown] = useState(false)
+  // Dropdown modal visibility
+  const [showClassModal, setShowClassModal] = useState(false)
+  const [showSectionModal, setShowSectionModal] = useState(false)
+  const [showTermModal, setShowTermModal] = useState(false)
+  
+  // State for classes and sections
+  const [classesAndSections, setClassesAndSections] = useState({})
+  const [isLoadingClasses, setIsLoadingClasses] = useState(false)
+  const [classes, setClasses] = useState([])
+  const [sections, setSections] = useState([])
   
   // State for data
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [classWiseData, setClassWiseData] = useState([])
+  const [classWiseData, setClassWiseData] = useState({ allStudents: [], classWiseBreakdown: [] })
   const [filteredSections, setFilteredSections] = useState([])
-  const [sectionStudents, setSectionStudents] = useState({})
-  const [loadingStudents, setLoadingStudents] = useState({})
+  
+  // State for section student modal
+  const [selectedSectionData, setSelectedSectionData] = useState(null)
+  const [showSectionStudentsModal, setShowSectionStudentsModal] = useState(false)
+  const [sectionStudents, setSectionStudents] = useState([])
   
   // Export states
   const [downloading, setDownloading] = useState(false)
   const [printing, setPrinting] = useState(false)
+  const [downloadingSection, setDownloadingSection] = useState(false)
+  const [printingSection, setPrintingSection] = useState(false)
   
   // Toast
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' })
-  
-  // Refs
-  const classDropdownRef = useRef(null)
-  const sectionDropdownRef = useRef(null)
-  const termDropdownRef = useRef(null)
 
   const showToast = useCallback((message, type = 'info') => {
     setToast({ visible: true, message, type })
@@ -101,19 +79,191 @@ export default function ClassWiseFeePending({ visible, onClose }) {
     setToast((prev) => ({ ...prev, visible: false }))
   }, [])
 
+  // Function to load classes and sections from API
+  const loadClassesAndSections = useCallback(async () => {
+    try {
+      setIsLoadingClasses(true)
+
+      const response = await axiosApi.get('/students/classes-sections')
+      
+      if (response.data.success) {
+        const classesData = response.data.data
+        setClassesAndSections(classesData)
+        
+        // Transform the data for dropdown (including "All Classes" option)
+        const classesArray = [
+          { label: 'All Classes', value: 'ALL' },
+          ...Object.keys(classesData).map(className => ({
+            label: className,
+            value: className === 'Pre-Nursery' || className === 'Nursery' || className === 'LKG' || className === 'UKG' 
+              ? className 
+              : className.split(' ')[1] // Extract number from "Class X"
+          }))
+        ]
+        
+        // Sort classes: Pre-Nursery, Nursery, LKG, UKG, then Class 1-12
+        const sortedClasses = classesArray.sort((a, b) => {
+          // Always keep "All Classes" at the top
+          if (a.value === 'ALL') return -1
+          if (b.value === 'ALL') return 1
+          
+          // Define the correct order for non-numeric classes
+          const specialOrder = {
+            'Pre-Nursery': 0,
+            'Nursery': 1,
+            'LKG': 2,
+            'UKG': 3
+          }
+          
+          // Get order for both items
+          const orderA = specialOrder[a.value] !== undefined ? specialOrder[a.value] : 
+                        specialOrder[a.label] !== undefined ? specialOrder[a.label] : 4
+          const orderB = specialOrder[b.value] !== undefined ? specialOrder[b.value] : 
+                        specialOrder[b.label] !== undefined ? specialOrder[b.label] : 4
+          
+          // If both are numeric classes (after the special ones)
+          if (orderA === 4 && orderB === 4) {
+            // Extract numeric value and compare as numbers
+            const numA = parseInt(a.value) || parseInt(a.label?.split(' ')[1]) || 100
+            const numB = parseInt(b.value) || parseInt(b.label?.split(' ')[1]) || 100
+            return numA - numB
+          }
+          
+          return orderA - orderB
+        })
+        
+        setClasses(sortedClasses)
+        
+      } else {
+        throw new Error(response.data.message || 'Failed to load classes and sections')
+      }
+    } catch (err) {
+      console.error('Error loading classes and sections:', err)
+      showToast('Failed to load classes. Using default list.', 'warning')
+      
+      // Fallback to hardcoded classes if API fails
+      const fallbackClasses = [
+        { label: 'All Classes', value: 'ALL' },
+        { label: 'Pre-Nursery', value: 'Pre-Nursery' },
+        { label: 'Nursery', value: 'Nursery' },
+        { label: 'LKG', value: 'LKG' },
+        { label: 'UKG', value: 'UKG' },
+        { label: 'Class 1', value: '1' },
+        { label: 'Class 2', value: '2' },
+        { label: 'Class 3', value: '3' },
+        { label: 'Class 4', value: '4' },
+        { label: 'Class 5', value: '5' },
+        { label: 'Class 6', value: '6' },
+        { label: 'Class 7', value: '7' },
+        { label: 'Class 8', value: '8' },
+        { label: 'Class 9', value: '9' },
+        { label: 'Class 10', value: '10' },
+        { label: 'Class 11', value: '11' },
+        { label: 'Class 12', value: '12' },
+      ]
+      
+      const fallbackClassSections = {
+        'Pre-Nursery': ['A', 'B', 'C'],
+        'Nursery': ['A', 'B', 'C'],
+        'LKG': ['A', 'B', 'C'],
+        'UKG': ['A', 'B', 'C'],
+        '1': ['A', 'B', 'C', 'D'],
+        '2': ['A', 'B', 'C', 'D'],
+        '3': ['A', 'B', 'C', 'D'],
+        '4': ['A', 'B', 'C', 'D'],
+        '5': ['A', 'B', 'C', 'D'],
+        '6': ['A', 'B', 'C', 'D'],
+        '7': ['A', 'B', 'C', 'D'],
+        '8': ['A', 'B', 'C', 'D'],
+        '9': ['A', 'B', 'C', 'D'],
+        '10': ['A', 'B', 'C', 'D'],
+        '11': ['A', 'B', 'C', 'D'],
+        '12': ['A', 'B', 'C', 'D'],
+      }
+      
+      setClasses(fallbackClasses)
+      setClassesAndSections(fallbackClassSections)
+    } finally {
+      setIsLoadingClasses(false)
+    }
+  }, [])
+
+  // Function to update sections based on selected class
+  const updateSectionsForClass = (className) => {
+    if (!className || className === 'ALL') {
+      // If "All Classes" is selected, show "All Sections" only
+      setSections([{ label: 'All Sections', value: 'ALL' }])
+      setSelectedSection('ALL')
+      return
+    }
+    
+    if (!classesAndSections || Object.keys(classesAndSections).length === 0) return
+    
+    // Find the class label
+    const classItem = classes.find(c => c.value === className)
+    if (!classItem) return
+    
+    const classLabel = classItem.label
+    const classSections = classesAndSections[classLabel] || []
+    
+    if (classSections.length > 0) {
+      const sectionsArray = [
+        { label: 'All Sections', value: 'ALL' },
+        ...classSections.map(section => ({
+          label: `Section ${section}`,
+          value: section
+        }))
+      ]
+      setSections(sectionsArray)
+      
+      // Auto-select "All Sections" by default
+      setSelectedSection('ALL')
+    } else {
+      // Default fallback
+      const defaultSections = [
+        { label: 'All Sections', value: 'ALL' },
+        { label: 'Section A', value: 'A' },
+        { label: 'Section B', value: 'B' },
+        { label: 'Section C', value: 'C' },
+      ]
+      setSections(defaultSections)
+      setSelectedSection('ALL')
+    }
+  }
+
+  // Load classes and sections when modal becomes visible
+  useEffect(() => {
+    if (visible) {
+      loadClassesAndSections()
+    }
+  }, [visible, loadClassesAndSections])
+
+  // Update sections when class changes or classes are loaded
+  useEffect(() => {
+    if (selectedClass && Object.keys(classesAndSections).length > 0) {
+      updateSectionsForClass(selectedClass)
+    }
+  }, [selectedClass, classesAndSections])
+
   // Get display label for selected class
   const getSelectedClassLabel = useCallback(() => {
-    const option = CLASS_OPTIONS.find(opt => opt.value === selectedClass)
+    const option = classes.find(opt => opt.value === selectedClass)
     return option ? option.label : 'All Classes'
-  }, [selectedClass])
+  }, [selectedClass, classes])
 
   // Get display label for selected section
   const getSelectedSectionLabel = useCallback(() => {
-    const option = SECTION_OPTIONS.find(opt => opt.value === selectedSection)
+    const option = sections.find(opt => opt.value === selectedSection)
     return option ? option.label : 'All Sections'
-  }, [selectedSection])
+  }, [selectedSection, sections])
 
-  // Fetch class-wise fee pending data
+  // Safe number formatting function
+  const formatCurrency = useCallback((value) => {
+    if (value === undefined || value === null) return '₹0'
+    return `₹${Number(value).toLocaleString()}`
+  }, [])
+
+  // Fetch class-wise fee pending data using the new optimized endpoint
   const fetchClassWiseData = useCallback(async () => {
     try {
       setLoading(true)
@@ -132,279 +282,237 @@ export default function ClassWiseFeePending({ visible, onClose }) {
         params.section = selectedSection
       }
       
-      const response = await axiosApi.get('/fees/class-wise-payments', { params })
+      const response = await axiosApi.get('/fees/class-wise-pending', { params })
       
       if (response.data.success) {
-        const data = response.data.data.classWisePayments || []
+        const data = response.data.data
         setClassWiseData(data)
+        
+        // Process class-wise breakdown for the list view
+        const sections = data.classWiseBreakdown || []
+        
+        // Add additional computed fields for display with safe values
+        const processedSections = sections.map(section => ({
+          id: `${section.class}-${section.section}`,
+          className: section.classLabel || 'Unknown',
+          class: section.class || 'Unknown',
+          section: section.section || 'Unknown',
+          students: (section.students || []).map(student => ({
+            id: student.id || `temp-${Math.random()}`,
+            rollNo: student.rollNo || 'N/A',
+            name: student.name || 'Unknown',
+            schoolFeePending: student.schoolFeePending || 0,
+            transportFeePending: student.transportFeePending || 0,
+            hostelFeePending: student.hostelFeePending || 0,
+            totalPending: student.totalPending || 0
+          })),
+          totalTermPending: section.summary?.totalTermPending || 0,
+          totalTransportPending: section.summary?.totalTransportPending || 0,
+          totalHostelPending: section.summary?.totalHostelPending || 0,
+          totalPendingAmount: section.summary?.totalPending || 0,
+          pendingStudentsCount: section.summary?.totalWithPending || 0,
+          totalStudents: section.summary?.totalStudents || 0
+        }))
+        
+        setFilteredSections(processedSections)
         return data
       } else {
         showToast(response.data.message || 'Failed to fetch data', 'error')
-        return []
+        return { allStudents: [], classWiseBreakdown: [] }
       }
     } catch (error) {
       console.error('Error fetching class-wise data:', error)
       showToast(error.response?.data?.message || 'Failed to load data', 'error')
-      return []
+      return { allStudents: [], classWiseBreakdown: [] }
     } finally {
       setLoading(false)
     }
   }, [selectedTerm, selectedClass, selectedSection, showToast])
 
-  // Fetch students for a specific section
-  const fetchSectionStudents = useCallback(async (className, section) => {
-    const key = `${className}-${section}`
-    
-    if (sectionStudents[key] || loadingStudents[key]) return
-    
-    setLoadingStudents(prev => ({ ...prev, [key]: true }))
-    
-    try {
-      const response = await axiosApi.get('/fees/students/search', {
-        params: {
-          class: className,
-          section: section,
-          limit: 100
-        }
-      })
-      
-      if (response.data.success) {
-        const students = response.data.data || []
-        
-        // Process students with fee details
-        const processedStudents = students.map(student => {
-          const feeSummary = student.feeSummary || {}
-          const termFee = feeSummary.schoolFee?.due || 0
-          const transportFeePending = feeSummary.transportFee?.due || 0
-          const hostelFeePending = feeSummary.hostelFee?.due || 0
-          const totalPending = termFee + transportFeePending + hostelFeePending
-          
-          return {
-            id: student.id,
-            rollNo: student.rollNo || 'N/A',
-            name: student.name,
-            termFee,
-            transportFeePending,
-            hostelFeePending,
-            totalPending,
-            hasPendingFee: totalPending > 0,
-            feeSummary
-          }
-        })
-        
-        setSectionStudents(prev => ({ ...prev, [key]: processedStudents }))
-      }
-    } catch (error) {
-      console.error('Error fetching section students:', error)
-      showToast('Failed to load students', 'error')
-    } finally {
-      setLoadingStudents(prev => ({ ...prev, [key]: false }))
-    }
-  }, [showToast])
-
-  // Process data for display
-  const processClassWiseData = useCallback((data) => {
-    // Transform data to match the expected format
-    const sections = data.map(item => ({
-      id: `${item.class}-${item.section}`,
-      className: item.classLabel || item.class,
-      class: item.class,
-      section: item.section,
-      students: [],
-      totalTermPending: item.totalAmount || 0,
-      totalTransportPending: item.transportFeePaid || 0,
-      totalHostelPending: item.hostelFeePaid || 0,
-      totalPendingAmount: (item.totalAmount || 0) + (item.transportFeePaid || 0) + (item.hostelFeePaid || 0),
-      pendingStudentsCount: item.paymentCount || 0,
-    }))
-    
-    return sections
-  }, [])
-
   // Load initial data
   useEffect(() => {
-    if (visible) {
+    if (visible && !isLoadingClasses) {
       setInitialLoading(true)
-      fetchClassWiseData().then(data => {
-        const processed = processClassWiseData(data)
-        setFilteredSections(processed)
+      fetchClassWiseData().then(() => {
         setInitialLoading(false)
       })
     }
-  }, [visible, fetchClassWiseData, selectedClass, selectedSection])
+  }, [visible, fetchClassWiseData, selectedClass, selectedSection, isLoadingClasses])
 
   // Handle filter changes
   const handleClassChange = useCallback(async (classValue) => {
     setSelectedClass(classValue)
-    setShowClassDropdown(false)
+    setShowClassModal(false)
     setInitialLoading(true)
-    setSectionStudents({}) // Clear cached students
     
-    const data = await fetchClassWiseData()
-    const processed = processClassWiseData(data)
-    setFilteredSections(processed)
+    await fetchClassWiseData()
     setInitialLoading(false)
-  }, [fetchClassWiseData, processClassWiseData])
+  }, [fetchClassWiseData])
 
   const handleSectionChange = useCallback(async (sectionValue) => {
     setSelectedSection(sectionValue)
-    setShowSectionDropdown(false)
+    setShowSectionModal(false)
     setInitialLoading(true)
-    setSectionStudents({}) // Clear cached students
     
-    const data = await fetchClassWiseData()
-    const processed = processClassWiseData(data)
-    setFilteredSections(processed)
+    await fetchClassWiseData()
     setInitialLoading(false)
-  }, [fetchClassWiseData, processClassWiseData])
+  }, [fetchClassWiseData])
 
   const handleTermChange = useCallback(async (term) => {
     setSelectedTerm(term)
-    setShowTermDropdown(false)
+    setShowTermModal(false)
     setInitialLoading(true)
-    setSectionStudents({}) // Clear cached students
     
-    const data = await fetchClassWiseData()
-    const processed = processClassWiseData(data)
-    setFilteredSections(processed)
+    await fetchClassWiseData()
     setInitialLoading(false)
-  }, [fetchClassWiseData, processClassWiseData])
+  }, [fetchClassWiseData])
 
   // Handle refresh
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)
-    setSectionStudents({}) // Clear cached students
-    const data = await fetchClassWiseData()
-    const processed = processClassWiseData(data)
-    setFilteredSections(processed)
+    await fetchClassWiseData()
     setRefreshing(false)
     showToast('Data refreshed!', 'success')
-  }, [fetchClassWiseData, processClassWiseData, showToast])
+  }, [fetchClassWiseData, showToast])
 
-  // Fetch students for a section when needed
-  const fetchSectionData = useCallback(async (section) => {
-    if (!sectionStudents[section.id] && !loadingStudents[section.id]) {
-      await fetchSectionStudents(section.class, section.section)
-    }
-  }, [sectionStudents, loadingStudents, fetchSectionStudents])
-
-  // Load students for all sections when all classes/sections selected
-  useEffect(() => {
-    if (filteredSections.length > 0) {
-      filteredSections.forEach(section => {
-        fetchSectionData(section)
-      })
-    }
-  }, [filteredSections, fetchSectionData])
-
-  // Get students for a section
-  const getSectionStudents = useCallback((sectionId) => {
-    return sectionStudents[sectionId] || []
-  }, [sectionStudents])
-
-  // Get pending students for a section
-  const getPendingStudents = useCallback((sectionId) => {
-    const students = sectionStudents[sectionId] || []
-    return students.filter(student => student.hasPendingFee)
-  }, [sectionStudents])
-
-  // Check if section has pending fees
-  const hasPendingFees = useCallback((section) => {
-    const pendingStudents = getPendingStudents(section.id)
-    return pendingStudents.length > 0
-  }, [getPendingStudents])
-
-  // Calculate grand totals
-  const grandTotals = useMemo(() => {
-    let totalStudents = 0
-    let totalTermFee = 0
-    let totalTransportFee = 0
-    let totalHostelFee = 0
-    let totalAmount = 0
-
-    filteredSections.forEach(section => {
-      const students = sectionStudents[section.id] || []
-      const pendingStudents = students.filter(s => s.hasPendingFee)
-      
-      totalStudents += pendingStudents.length
-      totalTermFee += section.totalTermPending
-      totalTransportFee += section.totalTransportPending
-      totalHostelFee += section.totalHostelPending
-      totalAmount += section.totalPendingAmount
-    })
-
-    return {
-      totalSections: filteredSections.length,
-      totalStudents,
-      totalTermFee,
-      totalTransportFee,
-      totalHostelFee,
-      totalAmount
-    }
-  }, [filteredSections, sectionStudents])
-
-  // Prepare data for PDF
-  const preparePDFData = useCallback(async () => {
-    const sectionsData = []
+  // Handle section card press - show students in modal
+  const handleSectionPress = useCallback((section) => {
+    if (!section) return
     
-    for (const section of filteredSections) {
-      // Ensure we have student data for this section
-      if (!sectionStudents[section.id]) {
-        await fetchSectionStudents(section.class, section.section)
-      }
-      
-      const students = sectionStudents[section.id] || []
-      const pendingStudents = students.filter(s => s.hasPendingFee)
-      
-      // Sort by roll number
-      const sortedStudents = pendingStudents.sort((a, b) => {
-        const rollA = parseInt(a.rollNo) || 0
-        const rollB = parseInt(b.rollNo) || 0
-        return rollA - rollB
-      })
-      
-      sectionsData.push({
-        className: section.className,
-        section: section.section,
-        totalTermPending: section.totalTermPending,
-        totalTransportPending: section.totalTransportPending,
-        totalHostelPending: section.totalHostelPending,
-        totalPendingAmount: section.totalPendingAmount,
-        pendingCount: pendingStudents.length,
-        students: sortedStudents.map(s => ({
-          rollNo: s.rollNo,
-          name: s.name,
-          termFee: s.termFee,
-          transportFee: s.transportFeePending,
-          hostelFee: s.hostelFeePending,
-          totalPending: s.totalPending
+    // Ensure all student data has default values to prevent undefined errors
+    const processedStudents = (section.students || []).map(student => ({
+      id: student.id || `temp-${Math.random()}`,
+      rollNo: student.rollNo || 'N/A',
+      name: student.name || 'Unknown',
+      schoolFeePending: student.schoolFeePending || 0,
+      transportFeePending: student.transportFeePending || 0,
+      hostelFeePending: student.hostelFeePending || 0,
+      totalPending: student.totalPending || 0
+    }))
+    
+    setSelectedSectionData(section)
+    setSectionStudents(processedStudents)
+    setShowSectionStudentsModal(true)
+  }, [])
+
+  // Prepare data for PDF (overall report)
+  const prepareOverallPDFData = useCallback(async () => {
+    try {
+      const sectionsData = filteredSections.map(section => ({
+        className: section.className || 'Unknown',
+        section: section.section || 'Unknown',
+        totalTermPending: section.totalTermPending || 0,
+        totalTransportPending: section.totalTransportPending || 0,
+        totalHostelPending: section.totalHostelPending || 0,
+        totalPendingAmount: section.totalPendingAmount || 0,
+        pendingCount: section.pendingStudentsCount || 0,
+        totalStudents: section.totalStudents || 0,
+        students: (section.students || []).map(s => ({
+          rollNo: s.rollNo || 'N/A',
+          name: s.name || 'Unknown',
+          termFee: s.schoolFeePending || 0,
+          transportFee: s.transportFeePending || 0,
+          hostelFee: s.hostelFeePending || 0,
+          totalPending: s.totalPending || 0
         }))
+      }))
+
+      return generateClassWisePDFHTML({
+        selectedClass: getSelectedClassLabel(),
+        selectedSection: getSelectedSectionLabel(),
+        selectedTerm,
+        sections: sectionsData,
+        grandTotals: {
+          totalSections: filteredSections.length,
+          totalStudents: grandTotals.totalStudents,
+          totalTermFee: grandTotals.totalTermFee,
+          totalTransportFee: grandTotals.totalTransportFee,
+          totalHostelFee: grandTotals.totalHostelFee,
+          totalAmount: grandTotals.totalAmount
+        },
+        schoolInfo: {
+          name: schoolInfo.name,
+          address: schoolInfo.address,
+          phone: schoolInfo.phone,
+          email: schoolInfo.email
+        },
+        generatedAt: new Date(),
+        isOverallReport: true
       })
+    } catch (error) {
+      console.error('Error preparing overall PDF:', error)
+      throw error
     }
+  }, [filteredSections, selectedTerm, getSelectedClassLabel, getSelectedSectionLabel, grandTotals])
 
-    return generateClassWisePDFHTML({
-      selectedClass: getSelectedClassLabel(),
-      selectedSection: getSelectedSectionLabel(),
-      selectedTerm,
-      sections: sectionsData,
-      grandTotals,
-      schoolInfo: {
-        name: 'Your School Name',
-        address: 'School Address',
-        phone: 'School Phone',
-        email: 'school@email.com'
-      },
-      generatedAt: new Date()
-    })
-  }, [filteredSections, sectionStudents, selectedTerm, getSelectedClassLabel, getSelectedSectionLabel, grandTotals, fetchSectionStudents])
+  // Prepare data for PDF (section-specific report)
+  const prepareSectionPDFData = useCallback(async (section) => {
+    try {
+      if (!section) return ''
 
-  // Handle Download
+      // Sort students by roll number and ensure safe values
+      const sortedStudents = [...(section.students || [])]
+        .sort((a, b) => {
+          const rollA = parseInt(a.rollNo) || 0
+          const rollB = parseInt(b.rollNo) || 0
+          return rollA - rollB
+        })
+        .map(s => ({
+          rollNo: s.rollNo || 'N/A',
+          name: s.name || 'Unknown',
+          termFee: s.schoolFeePending || 0,
+          transportFee: s.transportFeePending || 0,
+          hostelFee: s.hostelFeePending || 0,
+          totalPending: s.totalPending || 0
+        }))
+
+      const sectionsData = [{
+        className: section.className || 'Unknown',
+        section: section.section || 'Unknown',
+        totalTermPending: section.totalTermPending || 0,
+        totalTransportPending: section.totalTransportPending || 0,
+        totalHostelPending: section.totalHostelPending || 0,
+        totalPendingAmount: section.totalPendingAmount || 0,
+        pendingCount: section.pendingStudentsCount || 0,
+        totalStudents: section.totalStudents || 0,
+        students: sortedStudents
+      }]
+
+      return generateClassWisePDFHTML({
+        selectedClass: section.className || 'Unknown',
+        selectedSection: `Section ${section.section || 'Unknown'}`,
+        selectedTerm,
+        sections: sectionsData,
+        grandTotals: {
+          totalSections: 1,
+          totalStudents: section.pendingStudentsCount || 0,
+          totalTermFee: section.totalTermPending || 0,
+          totalTransportFee: section.totalTransportPending || 0,
+          totalHostelFee: section.totalHostelPending || 0,
+          totalAmount: section.totalPendingAmount || 0
+        },
+        schoolInfo: {
+          name: 'Your School Name',
+          address: 'School Address',
+          phone: 'School Phone',
+          email: 'school@email.com'
+        },
+        generatedAt: new Date(),
+        isOverallReport: false
+      })
+    } catch (error) {
+      console.error('Error preparing section PDF:', error)
+      throw error
+    }
+  }, [selectedTerm])
+
+  // Handle Download (overall)
   const handleDownload = useCallback(async () => {
     try {
       setDownloading(true)
       showToast('Generating PDF...', 'info')
 
-      const htmlContent = await preparePDFData()
+      const htmlContent = await prepareOverallPDFData()
 
       // Generate PDF file
       const { uri } = await Print.printToFileAsync({ 
@@ -431,15 +539,15 @@ export default function ClassWiseFeePending({ visible, onClose }) {
     } finally {
       setDownloading(false)
     }
-  }, [preparePDFData, showToast])
+  }, [prepareOverallPDFData, showToast])
 
-  // Handle Print
+  // Handle Print (overall)
   const handlePrint = useCallback(async () => {
     try {
       setPrinting(true)
       showToast('Preparing print...', 'info')
 
-      const htmlContent = await preparePDFData()
+      const htmlContent = await prepareOverallPDFData()
 
       // Print the document
       await Print.printAsync({ 
@@ -453,13 +561,266 @@ export default function ClassWiseFeePending({ visible, onClose }) {
     } finally {
       setPrinting(false)
     }
-  }, [preparePDFData, showToast])
+  }, [prepareOverallPDFData, showToast])
+
+  // Handle Download for specific section
+  const handleSectionDownload = useCallback(async () => {
+    if (!selectedSectionData) return
+    
+    try {
+      setDownloadingSection(true)
+      showToast('Generating section PDF...', 'info')
+
+      const htmlContent = await prepareSectionPDFData(selectedSectionData)
+
+      // Generate PDF file
+      const { uri } = await Print.printToFileAsync({ 
+        html: htmlContent,
+        width: 612,
+        height: 792,
+      })
+
+      // Share the PDF
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: `Save ${selectedSectionData.className} - Section ${selectedSectionData.section} Report`,
+          UTI: 'com.adobe.pdf',
+        })
+        
+        showToast('Section PDF downloaded successfully', 'success')
+      } else {
+        showToast('Sharing is not available on this device', 'error')
+      }
+    } catch (error) {
+      console.error('Section download error:', error)
+      showToast('Failed to download: ' + error.message, 'error')
+    } finally {
+      setDownloadingSection(false)
+    }
+  }, [selectedSectionData, prepareSectionPDFData, showToast])
+
+  // Handle Print for specific section
+  const handleSectionPrint = useCallback(async () => {
+    if (!selectedSectionData) return
+    
+    try {
+      setPrintingSection(true)
+      showToast('Preparing section print...', 'info')
+
+      const htmlContent = await prepareSectionPDFData(selectedSectionData)
+
+      // Print the document
+      await Print.printAsync({ 
+        html: htmlContent
+      })
+      
+      showToast('Section print job sent successfully', 'success')
+    } catch (error) {
+      console.error('Section print error:', error)
+      showToast('Failed to print: ' + error.message, 'error')
+    } finally {
+      setPrintingSection(false)
+    }
+  }, [selectedSectionData, prepareSectionPDFData, showToast])
+
+  // Render dropdown modal (centered)
+  const renderDropdownModal = (visible, onClose, options, selectedValue, onSelect, title, isLoading = false) => (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <TouchableOpacity 
+        style={styles.modalOverlay} 
+        activeOpacity={1} 
+        onPress={onClose}
+      >
+        <View 
+          style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}
+          onStartShouldSetResponder={() => true}
+          onTouchEnd={(e) => e.stopPropagation()}
+        >
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+            <ThemedText style={styles.modalTitle}>{title}</ThemedText>
+            <TouchableOpacity onPress={onClose} style={styles.modalCloseButton}>
+              <Feather name="x" size={22} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+          
+          {isLoading ? (
+            <View style={styles.modalLoadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <ThemedText style={styles.modalLoadingText}>Loading...</ThemedText>
+            </View>
+          ) : (
+            <ScrollView 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScrollContent}
+            >
+              {options.map((option) => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[
+                    styles.modalItem,
+                    { borderBottomColor: colors.border + '30' },
+                    selectedValue === option.value && { backgroundColor: colors.primary + '10' }
+                  ]}
+                  onPress={() => onSelect(option.value)}
+                >
+                  <ThemedText style={[
+                    styles.modalItemText,
+                    selectedValue === option.value && { color: colors.primary, fontFamily: 'Poppins-SemiBold' }
+                  ]}>
+                    {option.label}
+                  </ThemedText>
+                  {selectedValue === option.value && (
+                    <Feather name="check" size={20} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  )
+
+  // Render section students modal
+  const renderSectionStudentsModal = () => (
+    <Modal
+      visible={showSectionStudentsModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowSectionStudentsModal(false)}
+      statusBarTranslucent
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.studentsModalContent, { backgroundColor: colors.cardBackground }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={styles.modalTitle}>
+                {selectedSectionData?.className || 'Unknown'} - Section {selectedSectionData?.section || 'Unknown'}
+              </ThemedText>
+              <ThemedText style={styles.modalSubtitle}>
+                Total Students: {selectedSectionData?.totalStudents || 0} | Pending: {selectedSectionData?.pendingStudentsCount || 0}
+              </ThemedText>
+            </View>
+            <TouchableOpacity 
+              onPress={() => setShowSectionStudentsModal(false)} 
+              style={styles.modalCloseButton}
+            >
+              <Feather name="x" size={22} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Section Action Buttons */}
+          <View style={styles.sectionActionButtons}>
+            <TouchableOpacity 
+              style={[styles.sectionDownloadButton, { backgroundColor: colors.success }]}
+              onPress={handleSectionDownload}
+              disabled={downloadingSection || printingSection}
+            >
+              {downloadingSection ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Feather name="download" size={16} color="#FFFFFF" />
+                  <ThemedText style={styles.sectionActionButtonText}>Download</ThemedText>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.sectionPrintButton, { backgroundColor: colors.primary }]}
+              onPress={handleSectionPrint}
+              disabled={downloadingSection || printingSection}
+            >
+              {printingSection ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Feather name="printer" size={16} color="#FFFFFF" />
+                  <ThemedText style={styles.sectionActionButtonText}>Print</ThemedText>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Students List */}
+          <ScrollView 
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.studentsListContent}
+          >
+            {sectionStudents.length > 0 ? (
+              sectionStudents.map((student) => (
+                <View key={student.id} style={[styles.studentCard, { borderBottomColor: colors.border }]}>
+                  <View style={styles.studentHeader}>
+                    <View style={[styles.rollBadge, { backgroundColor: colors.primary + '20' }]}>
+                      <ThemedText style={[styles.rollText, { color: colors.primary }]}>
+                        #{student.rollNo}
+                      </ThemedText>
+                    </View>
+                    <ThemedText style={styles.studentName}>{student.name}</ThemedText>
+                  </View>
+                  
+                  <View style={styles.studentFees}>
+                    {student.schoolFeePending > 0 && (
+                      <View style={styles.feeRow}>
+                        <FontAwesome5 name="money-check" size={12} color={colors.warning} />
+                        <ThemedText style={styles.feeLabel}>School Fee:</ThemedText>
+                        <ThemedText style={[styles.feeAmount, { color: colors.warning }]}>
+                          {formatCurrency(student.schoolFeePending)}
+                        </ThemedText>
+                      </View>
+                    )}
+                    
+                    {student.transportFeePending > 0 && (
+                      <View style={styles.feeRow}>
+                        <FontAwesome5 name="bus" size={12} color={colors.info} />
+                        <ThemedText style={styles.feeLabel}>Transport:</ThemedText>
+                        <ThemedText style={[styles.feeAmount, { color: colors.info }]}>
+                          {formatCurrency(student.transportFeePending)}
+                        </ThemedText>
+                      </View>
+                    )}
+                    
+                    {student.hostelFeePending > 0 && (
+                      <View style={styles.feeRow}>
+                        <MaterialIcons name="account-balance" size={12} color={colors.danger} />
+                        <ThemedText style={styles.feeLabel}>Hostel:</ThemedText>
+                        <ThemedText style={[styles.feeAmount, { color: colors.danger }]}>
+                          {formatCurrency(student.hostelFeePending)}
+                        </ThemedText>
+                      </View>
+                    )}
+                    
+                    <View style={[styles.feeRow, styles.totalRow]}>
+                      <ThemedText style={styles.totalLabel}>Total Pending:</ThemedText>
+                      <ThemedText style={[styles.totalAmount, { color: colors.danger }]}>
+                        {formatCurrency(student.totalPending)}
+                      </ThemedText>
+                    </View>
+                  </View>
+                </View>
+              ))
+            ) : (
+              <View style={styles.noStudentsContainer}>
+                <MaterialIcons name="school" size={48} color={colors.textSecondary} />
+                <ThemedText style={styles.noStudentsText}>No students found</ThemedText>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  )
 
   // Render section card for list
   const renderSectionCard = ({ item }) => {
-    const pendingStudents = getPendingStudents(item.id)
-    const isLoading = loadingStudents[item.id]
-    const hasPending = pendingStudents.length > 0
+    const hasPending = item.pendingStudentsCount > 0
     
     return (
       <TouchableOpacity
@@ -470,7 +831,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
           borderLeftColor: hasPending ? colors.warning : colors.success,
           borderLeftWidth: 4,
         }]}
-        onPress={() => fetchSectionData(item)}
+        onPress={() => handleSectionPress(item)}
       >
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleContainer}>
@@ -489,76 +850,82 @@ export default function ClassWiseFeePending({ visible, onClose }) {
             <ThemedText style={[styles.statusText, { 
               color: hasPending ? colors.warning : colors.success 
             }]}>
-              {hasPending ? `${pendingStudents.length} to be paid` : 'All Cleared'}
+              {hasPending ? `${item.pendingStudentsCount} to be paid` : 'All Cleared'}
             </ThemedText>
           </View>
         </View>
 
-        {isLoading ? (
-          <View style={styles.loadingStudentsContainer}>
-            <ActivityIndicator size="small" color={colors.primary} />
-            <ThemedText style={styles.loadingStudentsText}>Loading students...</ThemedText>
-          </View>
-        ) : hasPending ? (
-          <>
-            <View style={styles.feeSummary}>
-              <View style={styles.feeItem}>
-                <FontAwesome5 name="money-check" size={12} color={colors.warning} />
-                <ThemedText style={styles.feeLabel}>Term Fee</ThemedText>
-                <ThemedText style={[styles.feeValue, { color: colors.warning }]}>
-                  ₹{item.totalTermPending.toLocaleString()}
-                </ThemedText>
-              </View>
-              {item.totalTransportPending > 0 && (
-                <View style={styles.feeItem}>
-                  <FontAwesome5 name="bus" size={12} color={colors.info} />
-                  <ThemedText style={styles.feeLabel}>Transport</ThemedText>
-                  <ThemedText style={[styles.feeValue, { color: colors.info }]}>
-                    ₹{item.totalTransportPending.toLocaleString()}
-                  </ThemedText>
-                </View>
-              )}
-              {item.totalHostelPending > 0 && (
-                <View style={styles.feeItem}>
-                  <MaterialIcons name="account-balance" size={12} color={colors.danger} />
-                  <ThemedText style={styles.feeLabel}>Hostel</ThemedText>
-                  <ThemedText style={[styles.feeValue, { color: colors.danger }]}>
-                    ₹{item.totalHostelPending.toLocaleString()}
-                  </ThemedText>
-                </View>
-              )}
+        <View style={styles.feeSummary}>
+          {item.totalTermPending > 0 && (
+            <View style={styles.feeItem}>
+              <FontAwesome5 name="money-check" size={12} color={colors.warning} />
+              <ThemedText style={styles.feeLabel}>Term Fee:</ThemedText>
+              <ThemedText style={[styles.feeValue, { color: colors.warning }]}>
+                {formatCurrency(item.totalTermPending)}
+              </ThemedText>
             </View>
+          )}
+          
+          {item.totalTransportPending > 0 && (
+            <View style={styles.feeItem}>
+              <FontAwesome5 name="bus" size={12} color={colors.info} />
+              <ThemedText style={styles.feeLabel}>Transport:</ThemedText>
+              <ThemedText style={[styles.feeValue, { color: colors.info }]}>
+                {formatCurrency(item.totalTransportPending)}
+              </ThemedText>
+            </View>
+          )}
+          
+          {item.totalHostelPending > 0 && (
+            <View style={styles.feeItem}>
+              <MaterialIcons name="account-balance" size={12} color={colors.danger} />
+              <ThemedText style={styles.feeLabel}>Hostel:</ThemedText>
+              <ThemedText style={[styles.feeValue, { color: colors.danger }]}>
+                {formatCurrency(item.totalHostelPending)}
+              </ThemedText>
+            </View>
+          )}
+        </View>
 
-            {/* Show first 2 students preview */}
-            <View style={styles.studentsPreview}>
-              {pendingStudents.slice(0, 2).map((student, index) => (
-                <View key={student.id} style={styles.previewRow}>
-                  <ThemedText style={styles.previewName} numberOfLines={1}>
-                    {student.name}
-                  </ThemedText>
-                  <ThemedText style={styles.previewAmount}>
-                    ₹{student.totalPending.toLocaleString()}
-                  </ThemedText>
-                </View>
-              ))}
-              {pendingStudents.length > 2 && (
-                <ThemedText style={styles.moreText}>
-                  +{pendingStudents.length - 2} more students
-                </ThemedText>
-              )}
-            </View>
-          </>
-        ) : (
-          <View style={styles.clearedContainer}>
-            <MaterialIcons name="check-circle" size={16} color={colors.success} />
-            <ThemedText style={styles.clearedText}>
-              All fees cleared for this section
+        {/* Show preview of students only if there are pending students */}
+        {hasPending && (
+          <View style={styles.studentsPreview}>
+            <ThemedText style={styles.previewTitle}>
+              Tap to view {item.pendingStudentsCount} student{item.pendingStudentsCount > 1 ? 's' : ''} with pending fees
             </ThemedText>
           </View>
         )}
       </TouchableOpacity>
     )
   }
+
+  // Calculate grand totals
+  const grandTotals = useMemo(() => {
+    let totalStudents = 0
+    let totalTermFee = 0
+    let totalTransportFee = 0
+    let totalHostelFee = 0
+    let totalAmount = 0
+
+    filteredSections.forEach(section => {
+      totalStudents += section.pendingStudentsCount || 0
+      totalTermFee += section.totalTermPending || 0
+      totalTransportFee += section.totalTransportPending || 0
+      totalHostelFee += section.totalHostelPending || 0
+      totalAmount += section.totalPendingAmount || 0
+    })
+
+    return {
+      totalSections: filteredSections.length,
+      totalStudents,
+      totalTermFee,
+      totalTransportFee,
+      totalHostelFee,
+      totalAmount
+    }
+  }, [filteredSections])
+
+  const isActionDisabled = downloading || printing || filteredSections.length === 0
 
   const styles = StyleSheet.create({
     container: { 
@@ -621,104 +988,299 @@ export default function ClassWiseFeePending({ visible, onClose }) {
     filterRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
+      gap: 12,
+      marginBottom: 12,
+    },
+    filterRowLast: {
+      marginBottom: 0,
     },
     
-    // Dropdowns - All equal width
-    dropdownContainer: {
-      flex: 1,
-      position: 'relative',
-      zIndex: 1000,
-    },
+    // Dropdown Buttons
     dropdownButton: {
+      flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      borderWidth: 1,
-      borderRadius: 12,
-      paddingHorizontal: 12,
-      height: 44,
       backgroundColor: colors.inputBackground,
+      borderWidth: 2,
       borderColor: colors.border,
+      borderRadius: 16,
+      paddingHorizontal: 16,
+      paddingVertical: 14,    
     },
-    buttonContent: {
+    dropdownButtonContent: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
+      gap: 10,
       flex: 1,
     },
-    buttonText: {
-      fontSize: 13,
+    dropdownButtonText: {
+      fontSize: 14,
       fontFamily: 'Poppins-Medium',
       color: colors.text,
       flex: 1,
     },
     
-    // Action Buttons (Term Dropdown, Download, Print)
-    actionButtonContainer: {
-      flex: 1,
-      position: 'relative',
-      zIndex: 1000,
+    // Term Dropdown (half width)
+    termDropdownButton: {
+      width: '49%',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.inputBackground,
+      borderWidth: 2,
+      borderColor: colors.border,
+      borderRadius: 16,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
     },
-    actionButton: {
+    
+    // Action Buttons Container (remaining half)
+    actionButtonsContainer: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    
+    // Download Button
+    downloadButton: {
+      flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: 6,
-      paddingHorizontal: 12,
-      height: 44,
-      borderRadius: 12,
-      backgroundColor: colors.primary,
-      elevation: 2,
-      shadowColor: colors.primary,
-      shadowOffset: { width: 0, height: 2 },
+      paddingVertical: 14,
+      borderRadius: 16,
+      backgroundColor: colors.success,
+      elevation: 3,
+      shadowColor: colors.success,
+      shadowOffset: { width: 0, height: 3 },
       shadowOpacity: 0.2,
-      shadowRadius: 3,
+      shadowRadius: 4,
     },
-    actionButtonText: {
+    downloadButtonText: {
       fontSize: 13,
       fontFamily: 'Poppins-SemiBold',
       color: '#FFFFFF',
     },
     
-    // Dropdown Menu
-    dropdownMenu: {
-      position: 'absolute',
-      top: 48,
-      left: 0,
-      right: 0,
-      backgroundColor: colors.cardBackground,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
-      zIndex: 2000,
-      elevation: 8,
+    // Print Button (icon only)
+    printButton: {
+      width: 48,
+      height: 48,
+      borderRadius: 16,
+      backgroundColor: colors.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
+      elevation: 3,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+    },
+    
+    // Modal Styles (centered)
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalContent: {
+      width: width * 0.85,
+      maxHeight: height * 0.7,
+      borderRadius: 24,
+      overflow: 'hidden',
+      elevation: 24,
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.15,
-      shadowRadius: 12,
-      maxHeight: 300,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.3,
+      shadowRadius: 20,
     },
-    dropdownItem: {
-      paddingHorizontal: 16,
-      paddingVertical: 12,
+    modalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingVertical: 16,
       borderBottomWidth: 1,
-      borderBottomColor: colors.border + '40',
     },
-    dropdownItemLast: {
-      borderBottomWidth: 0,
+    modalTitle: {
+      fontSize: 18,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
     },
-    dropdownItemText: {
-      fontSize: 14,
+    modalSubtitle: {
+      fontSize: 12,
+      fontFamily: 'Poppins-Medium',
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    modalCloseButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.inputBackground,
+    },
+    modalScrollContent: {
+      paddingVertical: 8,
+    },
+    modalItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+    },
+    modalItemText: {
+      fontSize: 16,
       fontFamily: 'Poppins-Medium',
       color: colors.text,
     },
-    dropdownItemSelected: {
-      backgroundColor: colors.primary + '10',
+    modalLoadingContainer: {
+      padding: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
-    dropdownItemSelectedText: {
-      color: colors.primary,
+    modalLoadingText: {
+      marginTop: 12,
+      fontSize: 14,
+      color: colors.textSecondary,
+      fontFamily: 'Poppins-Medium',
+    },
+    
+    // Students Modal
+    studentsModalContent: {
+      width: width * 0.95,
+      maxHeight: height * 0.85,
+      borderRadius: 24,
+      overflow: 'hidden',
+      elevation: 24,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.3,
+      shadowRadius: 20,
+    },
+    studentsListContent: {
+      padding: 16,
+    },
+    studentCard: {
+      backgroundColor: colors.inputBackground,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    studentHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    rollBadge: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 16,
+      marginRight: 10,
+    },
+    rollText: {
+      fontSize: 13,
       fontFamily: 'Poppins-SemiBold',
+    },
+    studentName: {
+      fontSize: 15,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+      flex: 1,
+    },
+    studentFees: {
+      marginLeft: 4,
+    },
+    feeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 4,
+      flexWrap: 'wrap',
+    },
+    feeLabel: {
+      fontSize: 12,
+      fontFamily: 'Poppins-Medium',
+      color: colors.textSecondary,
+      marginLeft: 8,
+    },
+    feeAmount: {
+      flex: 1,
+      textAlign: 'right',
+      fontSize: 13,
+      fontFamily: 'Poppins-Bold',
+    },
+    totalRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginTop: 4,
+      paddingTop: 4,
+      borderTopWidth: 1,
+      borderTopColor: colors.border + '50',
+    },
+    totalLabel: {
+      fontSize: 13,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+      marginLeft: 8,
+    },
+    totalAmount: {
+      flex: 1,
+      textAlign: 'right',
+      fontSize: 14,
+      fontFamily: 'Poppins-Bold',
+    },
+    noStudentsContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 40,
+    },
+    noStudentsText: {
+      marginTop: 12,
+      fontSize: 14,
+      fontFamily: 'Poppins-Medium',
+      color: colors.textSecondary,
+    },
+    sectionActionButtons: {
+      flexDirection: 'row',
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      gap: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    sectionDownloadButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 12,
+      borderRadius: 12,
+    },
+    sectionPrintButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 12,
+      borderRadius: 12,
+    },
+    sectionActionButtonText: {
+      fontSize: 14,
+      fontFamily: 'Poppins-SemiBold',
+      color: '#FFFFFF',
     },
     
     // List Header
@@ -750,6 +1312,8 @@ export default function ClassWiseFeePending({ visible, onClose }) {
     // Section Card
     sectionCard: {
       borderRadius: 16,
+      borderTopLeftRadius: 4,
+      borderBottomLeftRadius: 4,
       borderWidth: 1,
       marginBottom: 12,
       padding: 16,
@@ -785,31 +1349,29 @@ export default function ClassWiseFeePending({ visible, onClose }) {
       fontFamily: 'Poppins-SemiBold',
     },
     
-    // Fee Summary
+    // Fee Summary - Each fee type in its own row
     feeSummary: {
-      flexDirection: 'row',
-      gap: 8,
       marginBottom: 12,
-      flexWrap: 'wrap',
     },
     feeItem: {
-      flex: 1,
-      flexDirection: 'column',
+      flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
       padding: 8,
       borderRadius: 8,
       backgroundColor: colors.inputBackground,
-      minWidth: 80,
+      marginBottom: 4,
     },
     feeLabel: {
-      fontSize: 9,
-      fontFamily: 'Poppins-Medium',
+      fontSize: 12,
+      fontFamily: 'Poppins-SemiBold',
       color: colors.textSecondary,
+      marginLeft: 8,
+      width: 80,
     },
     feeValue: {
-      fontSize: 12,
+      fontSize: 13,
       fontFamily: 'Poppins-Bold',
+      flex: 1,
     },
     
     // Students Preview
@@ -819,44 +1381,11 @@ export default function ClassWiseFeePending({ visible, onClose }) {
       borderTopWidth: 1,
       borderTopColor: colors.border + '30',
     },
-    previewRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: 4,
-    },
-    previewName: {
+    previewTitle: {
       fontSize: 12,
       fontFamily: 'Poppins-Medium',
-      color: colors.text,
-      flex: 1,
-      marginRight: 8,
-    },
-    previewAmount: {
-      fontSize: 12,
-      fontFamily: 'Poppins-SemiBold',
-      color: colors.danger,
-    },
-    moreText: {
-      fontSize: 11,
-      fontFamily: 'Poppins-Medium',
-      color: colors.textSecondary,
-      marginTop: 4,
-    },
-    
-    // Cleared Container
-    clearedContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      padding: 8,
-      backgroundColor: colors.success + '10',
-      borderRadius: 8,
-    },
-    clearedText: {
-      fontSize: 12,
-      fontFamily: 'Poppins-Medium',
-      color: colors.success,
+      color: colors.primary,
+      textAlign: 'center',
     },
     
     // Loading States
@@ -925,35 +1454,37 @@ export default function ClassWiseFeePending({ visible, onClose }) {
       fontFamily: 'Poppins-Medium' 
     },
     
-    // Action Buttons Container
-    actionButtonsRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      marginTop: 8,
-    },
-    
-    // Printer Icon
-    printerButton: {
+    // Classes Loading Overlay
+    classesLoadingOverlay: {
       position: 'absolute',
-      bottom: 20,
-      right: 20,
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      backgroundColor: colors.primary,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: colors.background + 'E6',
       justifyContent: 'center',
       alignItems: 'center',
+      zIndex: 2000,
+    },
+    classesLoadingCard: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 16,
+      padding: 24,
+      alignItems: 'center',
+      minWidth: 200,
       elevation: 8,
-      shadowColor: colors.primary,
+      shadowColor: '#000',
       shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
+      shadowOpacity: 0.2,
       shadowRadius: 8,
-      zIndex: 1000,
+    },
+    classesLoadingText: {
+      marginTop: 12,
+      fontSize: 14,
+      fontFamily: 'Poppins-Medium',
+      color: colors.text,
     },
   })
-
-  const isActionDisabled = downloading || printing || filteredSections.length === 0
 
   return (
     <Modal visible={visible} animationType="fade" onRequestClose={onClose} statusBarTranslucent>
@@ -973,184 +1504,95 @@ export default function ClassWiseFeePending({ visible, onClose }) {
           </SafeAreaView>
         </LinearGradient>
         
-        {/* Filters - First Row: Class and Section */}
+        {/* Filters */}
         <View style={styles.filterContainer}>
+          {/* First Row: Class and Section */}
           <View style={styles.filterRow}>
             {/* Class Dropdown */}
-            <View style={styles.dropdownContainer}>
-              <TouchableOpacity 
-                style={styles.dropdownButton}
-                onPress={() => setShowClassDropdown(!showClassDropdown)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.buttonContent}>
-                  <MaterialIcons name="class" size={16} color={colors.textSecondary} />
-                  <ThemedText style={styles.buttonText} numberOfLines={1}>
-                    {getSelectedClassLabel()}
-                  </ThemedText>
-                </View>
-                <Feather 
-                  name={showClassDropdown ? "chevron-up" : "chevron-down"} 
-                  size={16} 
-                  color={colors.textSecondary} 
-                />
-              </TouchableOpacity>
-              
-              {showClassDropdown && (
-                <View style={styles.dropdownMenu}>
-                  <ScrollView nestedScrollEnabled>
-                    {CLASS_OPTIONS.map((option, index) => (
-                      <TouchableOpacity
-                        key={option.value}
-                        style={[
-                          styles.dropdownItem,
-                          index === CLASS_OPTIONS.length - 1 && styles.dropdownItemLast,
-                          selectedClass === option.value && styles.dropdownItemSelected
-                        ]}
-                        onPress={() => handleClassChange(option.value)}
-                        activeOpacity={0.7}
-                      >
-                        <ThemedText style={[
-                          styles.dropdownItemText,
-                          selectedClass === option.value && styles.dropdownItemSelectedText
-                        ]}>
-                          {option.label}
-                        </ThemedText>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-            </View>
+            <TouchableOpacity 
+              style={styles.dropdownButton}
+              onPress={() => setShowClassModal(true)}
+              activeOpacity={0.8}
+              disabled={isLoadingClasses}
+            >
+              <View style={styles.dropdownButtonContent}>
+                <MaterialIcons name="class" size={18} color={colors.primary} />
+                <ThemedText style={styles.dropdownButtonText} numberOfLines={1}>
+                  {isLoadingClasses ? 'Loading classes...' : getSelectedClassLabel()}
+                </ThemedText>
+              </View>
+              <Feather name="chevron-down" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
             
             {/* Section Dropdown */}
-            <View style={styles.dropdownContainer}>
-              <TouchableOpacity 
-                style={styles.dropdownButton}
-                onPress={() => setShowSectionDropdown(!showSectionDropdown)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.buttonContent}>
-                  <MaterialIcons name="view-module" size={16} color={colors.textSecondary} />
-                  <ThemedText style={styles.buttonText} numberOfLines={1}>
-                    {getSelectedSectionLabel()}
-                  </ThemedText>
-                </View>
-                <Feather 
-                  name={showSectionDropdown ? "chevron-up" : "chevron-down"} 
-                  size={16} 
-                  color={colors.textSecondary} 
-                />
-              </TouchableOpacity>
-              
-              {showSectionDropdown && (
-                <View style={styles.dropdownMenu}>
-                  <ScrollView nestedScrollEnabled>
-                    {SECTION_OPTIONS.map((option, index) => (
-                      <TouchableOpacity
-                        key={option.value}
-                        style={[
-                          styles.dropdownItem,
-                          index === SECTION_OPTIONS.length - 1 && styles.dropdownItemLast,
-                          selectedSection === option.value && styles.dropdownItemSelected
-                        ]}
-                        onPress={() => handleSectionChange(option.value)}
-                        activeOpacity={0.7}
-                      >
-                        <ThemedText style={[
-                          styles.dropdownItemText,
-                          selectedSection === option.value && styles.dropdownItemSelectedText
-                        ]}>
-                          {option.label}
-                        </ThemedText>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-            </View>
+            <TouchableOpacity 
+              style={styles.dropdownButton}
+              onPress={() => setShowSectionModal(true)}
+              activeOpacity={0.8}
+              disabled={isLoadingClasses || selectedClass === 'ALL'}
+            >
+              <View style={styles.dropdownButtonContent}>
+                <MaterialIcons name="view-module" size={18} color={colors.primary} />
+                <ThemedText style={styles.dropdownButtonText} numberOfLines={1}>
+                  {isLoadingClasses ? 'Loading sections...' : getSelectedSectionLabel()}
+                </ThemedText>
+              </View>
+              <Feather name="chevron-down" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
           </View>
           
-          {/* Second Row: Term Dropdown, Download, and Print */}
-          <View style={styles.actionButtonsRow}>
-            {/* Term Dropdown */}
-            <View style={styles.dropdownContainer}>
+          {/* Second Row: Term (half) + Download + Print (half) */}
+          <View style={[styles.filterRow, styles.filterRowLast]}>
+            {/* Term Dropdown - Half width */}
+            <TouchableOpacity 
+              style={styles.termDropdownButton}
+              onPress={() => setShowTermModal(true)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.dropdownButtonContent}>
+                <Feather name="book" size={18} color={colors.primary} />
+                <ThemedText style={styles.dropdownButtonText} numberOfLines={1}>
+                  {selectedTerm}
+                </ThemedText>
+              </View>
+              <Feather name="chevron-down" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
+            
+            {/* Download and Print - Remaining half */}
+            <View style={styles.actionButtonsContainer}>
+              {/* Download Button with text */}
               <TouchableOpacity 
-                style={styles.dropdownButton}
-                onPress={() => setShowTermDropdown(!showTermDropdown)}
+                style={styles.downloadButton}
+                onPress={handleDownload}
                 activeOpacity={0.8}
+                disabled={isActionDisabled}
               >
-                <View style={styles.buttonContent}>
-                  <Feather name="book" size={16} color={colors.textSecondary} />
-                  <ThemedText style={styles.buttonText} numberOfLines={1}>
-                    {selectedTerm}
-                  </ThemedText>
-                </View>
-                <Feather 
-                  name={showTermDropdown ? "chevron-up" : "chevron-down"} 
-                  size={16} 
-                  color={colors.textSecondary} 
-                />
+                {downloading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Feather name="download" size={16} color="#FFFFFF" />
+                    <ThemedText style={styles.downloadButtonText}>
+                      Download
+                    </ThemedText>
+                  </>
+                )}
               </TouchableOpacity>
               
-              {showTermDropdown && (
-                <View style={styles.dropdownMenu}>
-                  {TERM_OPTIONS.map((option, index) => (
-                    <TouchableOpacity
-                      key={option.value}
-                      style={[
-                        styles.dropdownItem,
-                        index === TERM_OPTIONS.length - 1 && styles.dropdownItemLast
-                      ]}
-                      onPress={() => handleTermChange(option.value)}
-                      activeOpacity={0.7}
-                    >
-                      <ThemedText style={styles.dropdownItemText}>
-                        {option.label}
-                      </ThemedText>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
+              {/* Print Button - Icon only */}
+              <TouchableOpacity 
+                style={styles.printButton}
+                onPress={handlePrint}
+                activeOpacity={0.8}
+                disabled={isActionDisabled}
+              >
+                {printing ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Feather name="printer" size={20} color="#FFFFFF" />
+                )}
+              </TouchableOpacity>
             </View>
-            
-            {/* Download Button */}
-            <TouchableOpacity 
-              style={[styles.actionButton, { backgroundColor: colors.success }]}
-              onPress={handleDownload}
-              activeOpacity={0.8}
-              disabled={isActionDisabled}
-            >
-              {downloading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <Feather name="download" size={16} color="#FFFFFF" />
-                  <ThemedText style={styles.actionButtonText}>
-                    Download
-                  </ThemedText>
-                </>
-              )}
-            </TouchableOpacity>
-            
-            {/* Print Button */}
-            <TouchableOpacity 
-              style={[styles.actionButton, { backgroundColor: colors.primary }]}
-              onPress={handlePrint}
-              activeOpacity={0.8}
-              disabled={isActionDisabled}
-            >
-              {printing ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <Feather name="printer" size={16} color="#FFFFFF" />
-                  <ThemedText style={styles.actionButtonText}>
-                    Print
-                  </ThemedText>
-                </>
-              )}
-            </TouchableOpacity>
           </View>
         </View>
         
@@ -1194,22 +1636,53 @@ export default function ClassWiseFeePending({ visible, onClose }) {
           </View>
         )}
         
-        {/* Printer Icon - Bottom Right */}
-        <TouchableOpacity 
-          style={styles.printerButton}
-          onPress={handlePrint}
-          activeOpacity={0.8}
-          disabled={isActionDisabled}
-        >
-          {printing ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <FontAwesome5 name="print" size={24} color="#FFFFFF" />
-          )}
-        </TouchableOpacity>
+        {/* Dropdown Modals - Centered */}
+        {renderDropdownModal(
+          showClassModal,
+          () => setShowClassModal(false),
+          classes,
+          selectedClass,
+          handleClassChange,
+          'Select Class',
+          isLoadingClasses
+        )}
+        
+        {renderDropdownModal(
+          showSectionModal,
+          () => setShowSectionModal(false),
+          sections,
+          selectedSection,
+          handleSectionChange,
+          'Select Section',
+          isLoadingClasses
+        )}
+        
+        {renderDropdownModal(
+          showTermModal,
+          () => setShowTermModal(false),
+          TERM_OPTIONS,
+          selectedTerm,
+          handleTermChange,
+          'Select Term'
+        )}
+        
+        {/* Section Students Modal */}
+        {renderSectionStudentsModal()}
+        
+        {/* Classes Loading Overlay */}
+        {isLoadingClasses && (
+          <View style={styles.classesLoadingOverlay}>
+            <View style={styles.classesLoadingCard}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <ThemedText style={styles.classesLoadingText}>
+                Loading classes and sections...
+              </ThemedText>
+            </View>
+          </View>
+        )}
         
         {/* Loading Overlay */}
-        {(loading || refreshing) && !initialLoading && (
+        {(loading || refreshing) && !initialLoading && !isLoadingClasses && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
             <ThemedText style={styles.loadingText}>

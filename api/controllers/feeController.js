@@ -1797,8 +1797,6 @@ export const getClassWisePayments = async (req, res) => {
       return a.class.localeCompare(b.class)
     })
 
-    console.log(classWisePayments[0].students)
-
     // Calculate summary
     const summary = {
       totalSections: classWisePayments.length,
@@ -1807,8 +1805,6 @@ export const getClassWisePayments = async (req, res) => {
       totalTransport: classWisePayments.reduce((sum, s) => sum + s.transportFeePaid, 0),
       totalHostel: classWisePayments.reduce((sum, s) => sum + s.hostelFeePaid, 0)
     }
-
-    console.log(summary)
 
     res.status(200).json({
       success: true,

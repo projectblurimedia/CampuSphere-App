@@ -444,3 +444,93 @@ model HostelFeeStructure {
   @@index([className])
   @@index([isActive])
 }
+
+
+// ================= ENUMS =================
+
+enum CashFlowType {
+  INCOME
+  EXPENSE
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  ONLINE
+  CREDIT_CARD
+  OTHER
+}
+
+model Category {
+  id        String    @id @default(uuid())
+  name      String    @unique @db.VarChar(100)
+  type      CashFlowType
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  items     Item[]
+  cashFlows CashFlow[]
+
+  @@index([type])
+  @@index([name])
+  @@index([type, name])
+}
+
+model Item {
+  id         String   @id @default(uuid())
+  name       String   @db.VarChar(100)
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  cashFlows CashFlow[]
+
+  @@unique([categoryId, name])
+  @@index([categoryId])
+  @@index([name])
+  @@index([categoryId, name])
+}
+
+model CashFlow {
+  id            String        @id @default(uuid())
+  type          CashFlowType
+  categoryId    String
+  category      Category      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  itemId        String
+  item          Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  amount        Int           
+  quantity      Int           @default(1)
+  person        String        @db.VarChar(100)
+  description   String        @db.Text
+  date          DateTime
+  paymentMethod PaymentMethod @default(CASH)
+  
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  updatedBy     String        @db.VarChar(50)
+
+  // Indexes for performance
+  @@index([type])
+  @@index([categoryId])
+  @@index([itemId])
+  @@index([person])
+  @@index([date])
+  @@index([paymentMethod])
+  
+  // Composite indexes for common queries
+  @@index([type, date])
+  @@index([categoryId, date])
+  @@index([itemId, date])
+  @@index([person, date])
+  @@index([date, type])
+  
+  // For date range queries
+  @@index([date, type, categoryId])
+  @@index([date, type, itemId])
+  
+  // For reports and aggregations
+  @@index([type, date, amount])
+  @@index([categoryId, date, amount])
+}

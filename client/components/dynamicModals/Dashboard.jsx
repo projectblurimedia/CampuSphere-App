@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { View, ActivityIndicator, Modal, StyleSheet } from 'react-native'
 
 const componentMap = {
+  // Existing menu components
   'schoolProfile': () => import('@/pages/menu/schoolProfile/SchoolProfile'),
   'schoolStats': () => import('@/pages/menu/schoolStats/SchoolStats'),
   'events': () => import('@/pages/menu/events/Events'),
@@ -13,15 +14,26 @@ const componentMap = {
   'uploadMarks': () => import('@/pages/menu/uploadMarks/UploadMarks'),
   'feeManagement': () => import('@/pages/menu/feeManagement/FeeManagement'),
   'feeDetails': () => import('@/pages/menu/feeDetails/FeeDetails'),
+  
+  // Cashflow components
+  'AddIncome': () => import('@/pages/cashflow/CashflowForm'),
+  'AddExpense': () => import('@/pages/cashflow/CashflowForm'),
+  'Analytics': () => import('@/pages/cashflow/Analytics'),
+  'Reports': () => import('@/pages/cashflow/Reports'),
 }
 
 export default function Dashboard({ 
   visible, 
   onClose, 
-  componentName 
+  componentName,
+  // Additional props for cashflow components
+  type,
+  title,
+  subtitle
 }) {
   const [Component, setComponent] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [componentProps, setComponentProps] = useState({})
 
   useEffect(() => {
     if (visible && componentName && !Component) {
@@ -37,6 +49,26 @@ export default function Dashboard({
       importComponent()
         .then(module => {
           setComponent(() => module.default)
+          
+          // Set specific props based on component type
+          if (componentName === 'AddIncome') {
+            setComponentProps({
+              type: 'Income',
+              title: 'Add Income',
+              subtitle: 'Record new income transaction'
+            })
+          } else if (componentName === 'AddExpense') {
+            setComponentProps({
+              type: 'Expense',
+              title: 'Add Expense',
+              subtitle: 'Record new expense transaction'
+            })
+          } else if (componentName === 'Analytics') {
+            setComponentProps({})
+          } else if (componentName === 'Reports') {
+            setComponentProps({})
+          }
+          
           setLoading(false)
         })
         .catch(err => {
@@ -51,6 +83,7 @@ export default function Dashboard({
       const timer = setTimeout(() => {
         setComponent(null)
         setLoading(false)
+        setComponentProps({})
       }, 300) // Delay cleanup to allow smooth animations
       
       return () => clearTimeout(timer)
@@ -75,7 +108,14 @@ export default function Dashboard({
   }
 
   if (Component) {
-    return <Component visible={visible} onClose={onClose} />
+    // Pass all props to the component
+    return (
+      <Component 
+        visible={visible} 
+        onClose={onClose} 
+        {...componentProps}
+      />
+    )
   }
 
   return null

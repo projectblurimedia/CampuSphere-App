@@ -20,7 +20,7 @@ export const ToastNotification = ({
   message, 
   duration = 3000, 
   onHide, 
-  position = 'bottom-right',
+  position = 'top-center',
   showCloseButton = true,
   style: customStyle 
 }) => {

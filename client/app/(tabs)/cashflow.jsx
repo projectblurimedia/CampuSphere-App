@@ -1,196 +1,271 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { 
   StyleSheet, 
   View, 
   ScrollView, 
   FlatList,
+  RefreshControl,
+  ActivityIndicator
 } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { useTheme } from '@/hooks/useTheme'
 import FinancialStats from '@/components/cashflow/financial-stats'
 import TransactionCard from '@/components/cashflow/transaction-card'
-import IncomeExpenseChart from '@/components/cashflow/income-expense-chart'
-
-const transactionsData = [
-  {
-    id: '1',
-    type: 'income',
-    category: 'Tuition Fees',
-    description: 'Monthly tuition fees - December',
-    amount: 485000,
-    date: 'Dec 5, 2024',
-    paymentMethod: 'Online',
-    reference: 'TXN-001234',
-    status: 'Completed'
-  },
-  {
-    id: '2',
-    type: 'expense',
-    category: 'Salaries',
-    description: 'Teaching staff salaries - November',
-    amount: 320000,
-    date: 'Dec 1, 2024',
-    paymentMethod: 'Bank Transfer',
-    reference: 'SAL-112024',
-    status: 'Completed'
-  },
-  {
-    id: '3',
-    type: 'expense',
-    category: 'Infrastructure',
-    description: 'Computer lab equipment',
-    amount: 125000,
-    date: 'Nov 28, 2024',
-    paymentMethod: 'Cheque',
-    reference: 'INF-00456',
-    status: 'Completed'
-  },
-  {
-    id: '4',
-    type: 'income',
-    category: 'Admission Fees',
-    description: 'New student admission fees',
-    amount: 75000,
-    date: 'Nov 25, 2024',
-    paymentMethod: 'Cash',
-    reference: 'ADM-1124',
-    status: 'Completed'
-  },
-  {
-    id: '5',
-    type: 'expense',
-    category: 'Utilities',
-    description: 'Electricity & Water bills',
-    amount: 45000,
-    date: 'Nov 20, 2024',
-    paymentMethod: 'Online',
-    reference: 'UTL-112024',
-    status: 'Completed'
-  },
-  {
-    id: '6',
-    type: 'income',
-    category: 'Donations',
-    description: 'Annual alumni donation',
-    amount: 100000,
-    date: 'Nov 15, 2024',
-    paymentMethod: 'Bank Transfer',
-    reference: 'DON-1124',
-    status: 'Pending'
-  },
-  {
-    id: '7',
-    type: 'expense',
-    category: 'Maintenance',
-    description: 'School building maintenance',
-    amount: 35000,
-    date: 'Nov 10, 2024',
-    paymentMethod: 'Cash',
-    reference: 'MNT-1124',
-    status: 'Completed'
-  },
-  {
-    id: '8',
-    type: 'income',
-    category: 'Transport Fees',
-    description: 'Monthly bus fees collection',
-    amount: 65000,
-    date: 'Nov 5, 2024',
-    paymentMethod: 'Online',
-    reference: 'TRN-1124',
-    status: 'Completed'
-  },
-  {
-    id: '9',
-    type: 'expense',
-    category: 'Stationery',
-    description: 'Books and stationery supplies',
-    amount: 28000,
-    date: 'Nov 2, 2024',
-    paymentMethod: 'Cheque',
-    reference: 'STN-1124',
-    status: 'Completed'
-  },
-  {
-    id: '10',
-    type: 'income',
-    category: 'Examination Fees',
-    description: 'Annual examination fees',
-    amount: 120000,
-    date: 'Oct 28, 2024',
-    paymentMethod: 'Online',
-    reference: 'EXM-1024',
-    status: 'Completed'
-  },
-]
-
-const chartData = [
-  { month: 'Jul', income: 420000, expenses: 380000 },
-  { month: 'Aug', income: 450000, expenses: 395000 },
-  { month: 'Sep', income: 480000, expenses: 410000 },
-  { month: 'Oct', income: 510000, expenses: 425000 },
-  { month: 'Nov', income: 540000, expenses: 460000 },
-  { month: 'Dec', income: 585000, expenses: 485000 },
-]
+import QuickActions from '@/components/cashflow/quick-actions'
+import { ToastNotification } from '@/components/ui/ToastNotification'
+import axiosApi from '@/utils/axiosApi'
 
 export default function Cashflow() {
   const { colors } = useTheme()
-  const [selectedCategory, setSelectedCategory] = useState('All')
-
-  const totalIncome = transactionsData
-    .filter(t => t.type === 'income')
-    .reduce((sum, t) => sum + (t.amount || 0), 0)
-
-  const totalExpenses = transactionsData
-    .filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + (t.amount || 0), 0)
-
-  const netBalance = totalIncome - totalExpenses
-
-  const filteredTransactions = transactionsData.filter(transaction => {
-    if (selectedCategory !== 'All') {
-      if (selectedCategory === 'Income' && transaction.type !== 'income') return false
-      if (selectedCategory === 'Expenses' && transaction.type !== 'expense') return false
-      if (!['Income', 'Expenses'].includes(selectedCategory) && 
-          transaction.category !== selectedCategory) return false
-    }
-    
-    return true
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [transactions, setTransactions] = useState([])
+  const [stats, setStats] = useState({
+    totalIncome: 0,
+    totalExpenses: 0,
+    netBalance: 0,
+    profitMargin: 0
   })
+  const [timePeriod, setTimePeriod] = useState('month')
+  const [toast, setToast] = useState(null)
+
+  const showToast = (message, type = 'info') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const fetchDashboardData = useCallback(async (period = timePeriod, showLoading = true) => {
+    try {
+      if (showLoading) setLoading(true)
+      
+      // Get date range based on period
+      const now = new Date()
+      let startDate, endDate
+      
+      switch (period) {
+        case 'day':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+          break
+        case 'week':
+          const day = now.getDay()
+          const diff = now.getDate() - day + (day === 0 ? -6 : 1)
+          startDate = new Date(now.setDate(diff))
+          startDate.setHours(0, 0, 0, 0)
+          endDate = new Date(now)
+          endDate.setDate(startDate.getDate() + 6)
+          endDate.setHours(23, 59, 59, 999)
+          break
+        case 'month':
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+          endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+          break
+        case 'year':
+          startDate = new Date(now.getFullYear(), 0, 1)
+          endDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999)
+          break
+        default:
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1)
+          endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+      }
+
+      // Fetch transactions
+      const transactionsResponse = await axiosApi.get('/cashflow/date-range', {
+        params: {
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          limit: 15,
+          sort: '-date'
+        }
+      })
+
+      // Check if response has data
+      if (!transactionsResponse.data) {
+        throw new Error('Invalid response from server')
+      }
+
+      const transactionsData = transactionsResponse.data?.data || []
+      setTransactions(transactionsData)
+
+      // Calculate stats
+      let totalIncome = 0
+      let totalExpenses = 0
+
+      transactionsData.forEach(transaction => {
+        if (transaction.type === 'Income') {
+          totalIncome += transaction.amount || 0
+        } else if (transaction.type === 'Expense') {
+          totalExpenses += transaction.amount || 0
+        }
+      })
+
+      const netBalance = totalIncome - totalExpenses
+      const profitMargin = totalIncome > 0 ? ((netBalance / totalIncome) * 100) : 0
+
+      setStats({
+        totalIncome,
+        totalExpenses,
+        netBalance,
+        profitMargin
+      })
+
+      // Show success message if this is a refresh
+      if (!showLoading && transactionsData.length > 0) {
+        showToast('Dashboard updated successfully', 'success')
+      } else if (!showLoading && transactionsData.length === 0) {
+        showToast('No transactions found for this period', 'info')
+      }
+
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error)
+      
+      // Set empty data on error
+      setTransactions([])
+      setStats({
+        totalIncome: 0,
+        totalExpenses: 0,
+        netBalance: 0,
+        profitMargin: 0
+      })
+      
+      // Show error toast
+      if (error.response) {
+        const status = error.response.status
+        if (status === 401) {
+          showToast('Unauthorized access. Please login again.', 'error')
+        } else if (status === 403) {
+          showToast('You do not have permission to view this data', 'error')
+        } else if (status === 404) {
+          showToast('API endpoint not found', 'error')
+        } else if (status >= 500) {
+          showToast('Server error. Please try again later.', 'error')
+        } else {
+          showToast(error.response.data?.message || 'Failed to load dashboard data', 'error')
+        }
+      } else if (error.request) {
+        showToast('Network error. Please check your connection.', 'error')
+      } else {
+        showToast(error.message || 'An unexpected error occurred', 'error')
+      }
+    } finally {
+      if (showLoading) setLoading(false)
+      setRefreshing(false)
+    }
+  }, [timePeriod])
+
+  useEffect(() => {
+    fetchDashboardData()
+  }, [timePeriod])
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true)
+    fetchDashboardData(timePeriod, false)
+  }, [timePeriod])
+
+  const handleTimePeriodChange = (period) => {
+    setTimePeriod(period)
+    showToast(`Showing data for ${period}`, 'info')
+  }
+
+  const quickActions = [
+    {
+      title: 'Add Income',
+      icon: 'add-circle',
+      iconType: 'MaterialIcons',
+      bgColor: colors.success,
+      route: 'AddIncome'
+    },
+    {
+      title: 'Add Expense',
+      icon: 'remove-circle',
+      iconType: 'MaterialIcons',
+      bgColor: colors.danger,
+      route: 'AddExpense'
+    },
+    {
+      title: 'Analytics',
+      icon: 'analytics',
+      iconType: 'MaterialIcons',
+      bgColor: colors.purple || '#8b5cf6',
+      route: 'Analytics'
+    },
+    {
+      title: 'Reports',
+      icon: 'description',
+      iconType: 'MaterialIcons',
+      bgColor: colors.warning,
+      route: 'Reports'
+    }
+  ]
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <ThemedText style={[styles.loadingText, { color: colors.textSecondary }]}>
+            Loading cashflow details...
+          </ThemedText>
+        </View>
+        
+        {/* Toast Notification */}
+        <ToastNotification
+          visible={!!toast}
+          type={toast?.type}
+          message={toast?.message}
+          onHide={() => setToast(null)}
+          position="bottom-center"
+          duration={3000}
+          showCloseButton={true}
+        />
+      </View>
+    )
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
       >
         <FinancialStats 
-          totalIncome={totalIncome}
-          totalExpenses={totalExpenses}
-          netBalance={netBalance}
+          totalIncome={stats.totalIncome}
+          totalExpenses={stats.totalExpenses}
+          netBalance={stats.netBalance}
+          profitMargin={stats.profitMargin}
+          timePeriod={timePeriod}
+          onTimePeriodChange={handleTimePeriodChange}
         />
 
-        <IncomeExpenseChart 
-          data={chartData}
+        <QuickActions 
+          actions={quickActions}
         />
 
         <View style={styles.resultsHeader}>
           <ThemedText type='subtitle' style={[styles.resultsTitle, { color: colors.text }]}>
-            Recent Transactions ({filteredTransactions.length})
+            Recent Transactions ({transactions.length})
           </ThemedText>
           <ThemedText style={[styles.resultsSubtitle, { color: colors.textSecondary }]}>
-            Sorted by: Latest
+            Latest 15 records
           </ThemedText>
         </View>
 
         <FlatList
-          data={filteredTransactions}
+          data={transactions}
           renderItem={({ item }) => (
             <TransactionCard 
               transaction={item} 
             />
           )}
-          keyExtractor={item => item.id}
+          keyExtractor={item => item.id || item._id || Math.random().toString()}
           scrollEnabled={false}
           ListEmptyComponent={
             <View style={styles.emptyState}>
@@ -198,12 +273,23 @@ export default function Cashflow() {
                 No transactions found
               </ThemedText>
               <ThemedText style={[styles.emptySubtext, { color: colors.textSecondary }]}>
-                Try changing your filter criteria
+                Add your first income or expense transaction
               </ThemedText>
             </View>
           }
         />
       </ScrollView>
+
+      {/* Toast Notification */}
+      <ToastNotification
+        visible={!!toast}
+        type={toast?.type}
+        message={toast?.message}
+        onHide={() => setToast(null)}
+        position="bottom-center"
+        duration={3000}
+        showCloseButton={true}
+      />
     </View>
   )
 }
@@ -213,14 +299,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 200,
     paddingHorizontal: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 400,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 14,
   },
   resultsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+    marginTop: 8,
   },
   resultsTitle: {
     fontSize: 18,

@@ -55,7 +55,7 @@ export const generateCashflowReportHTML = (data) => {
     return {
       sno: '5%',
       date: '10%',
-      type: '8%',
+      type: '10%',
       category: '12%',
       item: hasItems ? '12%' : '0%',
       person: '12%',
@@ -397,7 +397,7 @@ export const generateCashflowReportHTML = (data) => {
             </tbody>
             <tfoot>
               <tr>
-                <td colspan="${1}" class="text-right"><strong>Totals</strong></td>
+                <td colspan="${1}" class="text-right"><strong>Total</strong></td>
                 <td></td>
                 <td></td>
                 <td></td>

@@ -1,10 +1,9 @@
-import { View, StyleSheet, Dimensions, TouchableOpacity, Modal } from 'react-native'
+import { View, StyleSheet, TouchableOpacity, Modal, ActivityIndicator } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons, MaterialIcons, FontAwesome5, Feather } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
-import { useState } from 'react'
-
-const { width } = Dimensions.get('window')
+import { useState, useEffect } from 'react'
+import axiosApi from '@/utils/axiosApi'
 
 const TIME_PERIODS = [
   { key: 'day', label: 'Today', icon: 'calendar-view-day' },
@@ -18,75 +17,137 @@ export default function FinancialStats({
   totalIncome = 0, 
   totalExpenses = 0, 
   netBalance = 0,
+  profitMargin = 0,
   timePeriod = 'month',
   onTimePeriodChange = () => {}
 }) {
   const { colors } = useTheme()
   const [showFilter, setShowFilter] = useState(false)
   const [selectedPeriod, setSelectedPeriod] = useState(timePeriod)
+  const [trendData, setTrendData] = useState({
+    income: '+0',
+    incomePercent: '0%',
+    expenses: '-0',
+    expensesPercent: '0%',
+    balance: '+0',
+    balancePercent: '0%',
+    margin: '0%'
+  })
+  const [loadingTrends, setLoadingTrends] = useState(false)
   
   const safeTotalIncome = Number(totalIncome) || 0
   const safeTotalExpenses = Number(totalExpenses) || 0
   const safeNetBalance = Number(netBalance) || 0
-  const safeProfitMargin = safeTotalIncome > 0 
-    ? ((safeNetBalance / safeTotalIncome) * 100).toFixed(2) 
-    : 0.00
+  const safeProfitMargin = Number(profitMargin) || 0
 
-  // Dynamic trend data based on time period
-  const getTrendData = (period) => {
-    const trends = {
-      day: { 
-        income: '+₹2,500', 
-        incomePercent: '+3.2%', 
-        expenses: '-₹1,200', 
-        expensesPercent: '-2.1%', 
-        balance: '+₹3,700', 
-        balancePercent: '+5.4%', 
-        margin: '+2.1%' 
-      },
-      week: { 
-        income: '+₹15,800', 
-        incomePercent: '+8.7%', 
-        expenses: '-₹8,200', 
-        expensesPercent: '-4.3%', 
-        balance: '+₹24,000', 
-        balancePercent: '+12.5%', 
-        margin: '+4.8%' 
-      },
-      month: { 
-        income: '+₹45,200', 
-        incomePercent: '+12.5%', 
-        expenses: '-₹28,500', 
-        expensesPercent: '-5.2%', 
-        balance: '+₹73,700', 
-        balancePercent: '+15.0%', 
-        margin: '+8.3%' 
-      },
-      year: { 
-        income: '+₹456,800', 
-        incomePercent: '+25.6%', 
-        expenses: '-₹312,400', 
-        expensesPercent: '-12.1%', 
-        balance: '+₹769,200', 
-        balancePercent: '+32.8%', 
-        margin: '+18.7%' 
-      },
-      all: { 
-        income: '+₹1,234,500', 
-        incomePercent: '+35.2%', 
-        expenses: '-₹789,300', 
-        expensesPercent: '-18.4%', 
-        balance: '+₹2,023,800', 
-        balancePercent: '+48.6%', 
-        margin: '+27.3%' 
-      }
-    }
-    return trends[period] || trends.month
-  }
-
-  const trend = getTrendData(selectedPeriod)
   const isPositiveBalance = safeNetBalance >= 0
-  const isPositiveMargin = parseFloat(safeProfitMargin) >= 0
+  const isPositiveMargin = safeProfitMargin >= 0
+
+  useEffect(() => {
+    fetchTrendData(selectedPeriod)
+  }, [selectedPeriod, totalIncome, totalExpenses])
+
+  const fetchTrendData = async (period) => {
+    try {
+      setLoadingTrends(true)
+      
+      // Get previous period date range
+      const now = new Date()
+      let currentStart, previousStart, previousEnd
+
+      switch (period) {
+        case 'day':
+          currentStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+          previousStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+          previousEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999)
+          break
+        case 'week':
+          const day = now.getDay()
+          const diff = now.getDate() - day + (day === 0 ? -6 : 1)
+          currentStart = new Date(now.setDate(diff))
+          currentStart.setHours(0, 0, 0, 0)
+          previousStart = new Date(currentStart)
+          previousStart.setDate(previousStart.getDate() - 7)
+          previousEnd = new Date(currentStart)
+          previousEnd.setDate(previousEnd.getDate() - 1)
+          previousEnd.setHours(23, 59, 59, 999)
+          break
+        case 'month':
+          currentStart = new Date(now.getFullYear(), now.getMonth(), 1)
+          previousStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+          previousEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
+          break
+        case 'year':
+          currentStart = new Date(now.getFullYear(), 0, 1)
+          previousStart = new Date(now.getFullYear() - 1, 0, 1)
+          previousEnd = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999)
+          break
+        case 'all':
+          // For all time, we can't calculate previous period
+          setTrendData({
+            income: '+0',
+            incomePercent: '0%',
+            expenses: '-0',
+            expensesPercent: '0%',
+            balance: '+0',
+            balancePercent: '0%',
+            margin: '0%'
+          })
+          setLoadingTrends(false)
+          return
+      }
+
+      // Fetch previous period data
+      const response = await axiosApi.get('/cashflow/total', {
+        params: {
+          type: 'All',
+          startDate: previousStart.toISOString(),
+          endDate: previousEnd.toISOString()
+        }
+      })
+
+      const previousTotal = response.data?.data?.total || 0
+      const previousIncome = response.data?.data?.income || 0
+      const previousExpenses = response.data?.data?.expense || 0
+
+      // Calculate percentage changes
+      const incomeChange = previousIncome > 0 
+        ? ((safeTotalIncome - previousIncome) / previousIncome * 100).toFixed(1)
+        : safeTotalIncome > 0 ? '100' : '0'
+      
+      const expenseChange = previousExpenses > 0
+        ? ((safeTotalExpenses - previousExpenses) / previousExpenses * 100).toFixed(1)
+        : safeTotalExpenses > 0 ? '100' : '0'
+
+      const balanceChange = previousTotal > 0
+        ? ((safeNetBalance - previousTotal) / previousTotal * 100).toFixed(1)
+        : safeNetBalance > 0 ? '100' : '0'
+
+      setTrendData({
+        income: `${safeTotalIncome >= previousIncome ? '+' : '-'}₹${Math.abs(safeTotalIncome - previousIncome).toLocaleString('en-IN')}`,
+        incomePercent: `${incomeChange}%`,
+        expenses: `${safeTotalExpenses >= previousExpenses ? '+' : '-'}₹${Math.abs(safeTotalExpenses - previousExpenses).toLocaleString('en-IN')}`,
+        expensesPercent: `${expenseChange}%`,
+        balance: `${safeNetBalance >= previousTotal ? '+' : '-'}₹${Math.abs(safeNetBalance - previousTotal).toLocaleString('en-IN')}`,
+        balancePercent: `${balanceChange}%`,
+        margin: `${isPositiveMargin ? '+' : ''}${safeProfitMargin.toFixed(1)}%`
+      })
+
+    } catch (error) {
+      console.error('Error fetching trend data:', error)
+      setTrendData({
+        income: '+0',
+        incomePercent: '0%',
+        expenses: '-0',
+        expensesPercent: '0%',
+        balance: '+0',
+        balancePercent: '0%',
+        margin: '0%'
+      })
+    } finally {
+      setLoadingTrends(false)
+    }
+  }
 
   const handlePeriodSelect = (periodKey) => {
     setSelectedPeriod(periodKey)
@@ -229,10 +290,16 @@ export default function FinancialStats({
               ₹{safeTotalIncome.toLocaleString('en-IN')}
             </ThemedText>
             <View style={styles.statTrend}>
-              <Ionicons name="arrow-up" size={12} color={colors.success} />
-              <ThemedText style={[styles.trendText, { color: colors.success }]}>
-                {trend.incomePercent} from last {selectedPeriod}
-              </ThemedText>
+              {loadingTrends ? (
+                <ActivityIndicator size="small" color={colors.success} />
+              ) : (
+                <>
+                  <Ionicons name="arrow-up" size={12} color={colors.success} />
+                  <ThemedText style={[styles.trendText, { color: colors.success }]}>
+                    {trendData.incomePercent} from last {selectedPeriod}
+                  </ThemedText>
+                </>
+              )}
             </View>
           </View>
         </View>
@@ -253,10 +320,16 @@ export default function FinancialStats({
               ₹{safeTotalExpenses.toLocaleString('en-IN')}
             </ThemedText>
             <View style={styles.statTrend}>
-              <Ionicons name="arrow-down" size={12} color={colors.danger} />
-              <ThemedText style={[styles.trendText, { color: colors.danger }]}>
-                {trend.expensesPercent} from last {selectedPeriod}
-              </ThemedText>
+              {loadingTrends ? (
+                <ActivityIndicator size="small" color={colors.danger} />
+              ) : (
+                <>
+                  <Ionicons name="arrow-down" size={12} color={colors.danger} />
+                  <ThemedText style={[styles.trendText, { color: colors.danger }]}>
+                    {trendData.expensesPercent} from last {selectedPeriod}
+                  </ThemedText>
+                </>
+              )}
             </View>
           </View>
         </View>
@@ -278,19 +351,26 @@ export default function FinancialStats({
             <ThemedText type='title' style={[styles.statValue, { 
               color: isPositiveBalance ? colors.success : colors.danger
             }]}>
-              ₹{safeNetBalance.toLocaleString('en-IN')}
+              ₹{Math.abs(safeNetBalance).toLocaleString('en-IN')}
+              {!isPositiveBalance && ' (Loss)'}
             </ThemedText>
             <View style={styles.statTrend}>
-              <Ionicons 
-                name={isPositiveBalance ? "arrow-up" : "arrow-down"} 
-                size={12} 
-                color={isPositiveBalance ? colors.success : colors.danger} 
-              />
-              <ThemedText style={[styles.trendText, { 
-                color: isPositiveBalance ? colors.success : colors.danger
-              }]}>
-                {trend.balancePercent} from last {selectedPeriod}
-              </ThemedText>
+              {loadingTrends ? (
+                <ActivityIndicator size="small" color={isPositiveBalance ? colors.success : colors.danger} />
+              ) : (
+                <>
+                  <Ionicons 
+                    name={isPositiveBalance ? "arrow-up" : "arrow-down"} 
+                    size={12} 
+                    color={isPositiveBalance ? colors.success : colors.danger} 
+                  />
+                  <ThemedText style={[styles.trendText, { 
+                    color: isPositiveBalance ? colors.success : colors.danger
+                  }]}>
+                    {trendData.balancePercent} from last {selectedPeriod}
+                  </ThemedText>
+                </>
+              )}
             </View>
           </View>
         </View>
@@ -310,19 +390,26 @@ export default function FinancialStats({
             <ThemedText type='title' style={[styles.statValue, { 
               color: isPositiveMargin ? colors.success : colors.danger
             }]}>
-              {safeProfitMargin}%
+              {Math.abs(safeProfitMargin).toFixed(2)}%
+              {!isPositiveMargin && ' (Loss)'}
             </ThemedText>
             <View style={styles.statTrend}>
-              <Ionicons 
-                name={isPositiveMargin ? "arrow-up" : "arrow-down"} 
-                size={12} 
-                color={isPositiveMargin ? colors.success : colors.danger}
-              />
-              <ThemedText style={[styles.trendText, { 
-                color: isPositiveMargin ? colors.success : colors.danger
-              }]}>
-                {trend.margin} from last {selectedPeriod}
-              </ThemedText>
+              {loadingTrends ? (
+                <ActivityIndicator size="small" color={isPositiveMargin ? colors.success : colors.danger} />
+              ) : (
+                <>
+                  <Ionicons 
+                    name={isPositiveMargin ? "arrow-up" : "arrow-down"} 
+                    size={12} 
+                    color={isPositiveMargin ? colors.success : colors.danger}
+                  />
+                  <ThemedText style={[styles.trendText, { 
+                    color: isPositiveMargin ? colors.success : colors.danger
+                  }]}>
+                    {trendData.margin} from last {selectedPeriod}
+                  </ThemedText>
+                </>
+              )}
             </View>
           </View>
         </View>
@@ -352,9 +439,7 @@ const styles = StyleSheet.create({
     gap: 12,
     flex: 1,
   },
-  titleIcon: {
-    // marginTop: 4,
-  },
+  titleIcon: {},
   headerTitle: {
     fontSize: 18,
   },

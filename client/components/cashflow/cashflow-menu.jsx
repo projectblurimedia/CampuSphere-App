@@ -13,20 +13,22 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons, MaterialIcons } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
-import CashflowForm from '@/pages/cashflow/CashflowForm'
-import Analytics from '@/pages/cashflow/Analytics'
-import Reports from '@/pages/cashflow/Reports'
+import { ToastNotification } from '@/components/ui/ToastNotification'
+import Dashboard from '@/components/dynamicModals/Dashboard'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
 export default function CashflowMenu({ visible, onClose }) {
-  const { theme, colors } = useTheme()
-  const [showIncomeModal, setShowIncomeModal] = useState(false)
-  const [showExpenseModal, setShowExpenseModal] = useState(false)
-  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false)
-  const [showReportsModal, setShowReportsModal] = useState(false)
+  const { colors } = useTheme()
+  const [activeModal, setActiveModal] = useState(null)
+  const [toast, setToast] = useState(null)
   const translateX = useRef(new Animated.Value(SCREEN_WIDTH)).current
   const backdropOpacity = useRef(new Animated.Value(0)).current
+
+  const showToast = (message, type = 'info') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
   
   useEffect(() => {
     if (visible) {
@@ -60,6 +62,7 @@ export default function CashflowMenu({ visible, onClose }) {
     }
   }, [visible])
 
+  // Map menu items to component names
   const menuItems = [
     { 
       id: 1, 
@@ -67,7 +70,7 @@ export default function CashflowMenu({ visible, onClose }) {
       icon: 'add-circle', 
       iconType: 'MaterialIcons', 
       gradient: ['#10b981', '#059669'], 
-      action: () => setShowIncomeModal(true)
+      componentName: 'AddIncome'
     },
     { 
       id: 2, 
@@ -75,7 +78,7 @@ export default function CashflowMenu({ visible, onClose }) {
       icon: 'remove-circle', 
       iconType: 'MaterialIcons', 
       gradient: ['#ef4444', '#dc2626'], 
-      action: () => setShowExpenseModal(true)
+      componentName: 'AddExpense'
     },
     { 
       id: 3, 
@@ -83,7 +86,7 @@ export default function CashflowMenu({ visible, onClose }) {
       icon: 'analytics', 
       iconType: 'MaterialIcons', 
       gradient: ['#8b5cf6', '#7c3aed'], 
-      action: () => setShowAnalyticsModal(true)
+      componentName: 'Analytics'
     },
     { 
       id: 4, 
@@ -91,7 +94,7 @@ export default function CashflowMenu({ visible, onClose }) {
       icon: 'description', 
       iconType: 'MaterialIcons', 
       gradient: ['#f59e0b', '#d97706'], 
-      action: () => setShowReportsModal(true)
+      componentName: 'Reports'
     },
   ]
 
@@ -107,31 +110,18 @@ export default function CashflowMenu({ visible, onClose }) {
   ]
 
   const getIcon = (type, name, size, color) => {
-    const icons = {
-      MaterialIcons: MaterialIcons,
-    }
+    const icons = { MaterialIcons }
     const Icon = icons[type] || Ionicons
     return <Icon name={name} size={size} color={color} />
   }
 
   const handleMenuItemPress = (item) => {
-    item.action()
+    setActiveModal(item.componentName)
+    onClose() // Close menu when opening modal
   }
 
-  const handleIncomeClose = () => {
-    setShowIncomeModal(false)
-  }
-
-  const handleExpenseClose = () => {
-    setShowExpenseModal(false)
-  }
-
-  const handleAnalyticsClose = () => {
-    setShowAnalyticsModal(false)
-  }
-
-  const handleReportsClose = () => {
-    setShowReportsModal(false)
+  const handleModalClose = () => {
+    setActiveModal(null)
   }
 
   return (
@@ -170,7 +160,7 @@ export default function CashflowMenu({ visible, onClose }) {
             ]}
           >
             <LinearGradient
-              colors={[colors.gradientStart, colors.gradientEnd]}
+              colors={[colors.gradientStart || '#5053ee', colors.gradientEnd || '#7346e5']}
               style={styles.header}
             >
               <View style={styles.headerRow}>
@@ -245,38 +235,22 @@ export default function CashflowMenu({ visible, onClose }) {
         </View>
       </Modal>
 
-      <CashflowForm
-        visible={showIncomeModal}
-        onClose={handleIncomeClose}
-        onSave={(data) => {
-          console.log('Income saved:', data)
-          handleIncomeClose()
-        }}
-        type="Income"
-        title="Add Income"
-        subtitle="Record new income transaction"
+      {/* Dynamic Modal Loader */}
+      <Dashboard
+        visible={!!activeModal}
+        onClose={handleModalClose}
+        componentName={activeModal}
       />
 
-      <CashflowForm
-        visible={showExpenseModal}
-        onClose={handleExpenseClose}
-        onSave={(data) => {
-          console.log('Expense saved:', data)
-          handleExpenseClose()
-        }}
-        type="Expense"
-        title="Add Expense"
-        subtitle="Record new expense transaction"
-      />
-
-      <Analytics
-        visible={showAnalyticsModal}
-        onClose={handleAnalyticsClose}
-      />
-
-      <Reports
-        visible={showReportsModal}
-        onClose={handleReportsClose}
+      {/* Toast Notification */}
+      <ToastNotification
+        visible={!!toast}
+        type={toast?.type}
+        message={toast?.message}
+        onHide={() => setToast(null)}
+        position="bottom-center"
+        duration={3000}
+        showCloseButton={true}
       />
     </>
   )

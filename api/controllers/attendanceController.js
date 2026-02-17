@@ -550,34 +550,35 @@ export const getStudentAttendance = asyncHandler(async (req, res) => {
       })
     }
 
-    // Set date range
-    const currentDate = new Date()
-    const defaultStartDate = startDate 
-      ? new Date(startDate) 
-      : new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
-    
-    const defaultEndDate = endDate 
-      ? new Date(endDate) 
-      : new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
+    // Get attendance records with date range if provided
+    const whereClause = {
+      studentId,
+    }
 
-    defaultStartDate.setHours(0, 0, 0, 0)
-    defaultEndDate.setHours(23, 59, 59, 999)
+    // Apply date filters if provided
+    if (startDate || endDate) {
+      whereClause.date = {}
+      if (startDate) {
+        const gteDate = new Date(startDate)
+        gteDate.setHours(0, 0, 0, 0)
+        whereClause.date.gte = gteDate
+      }
+      if (endDate) {
+        const lteDate = new Date(endDate)
+        lteDate.setHours(23, 59, 59, 999)
+        whereClause.date.lte = lteDate
+      }
+    }
 
     // Get attendance records
     const attendanceRecords = await prisma.attendance.findMany({
-      where: {
-        studentId,
-        date: {
-          gte: defaultStartDate,
-          lte: defaultEndDate
-        }
-      },
+      where: whereClause,
       orderBy: {
         date: 'desc'
       }
     })
 
-    // Calculate summary
+    // Calculate summary (all zeros if no records)
     let presentDays = 0
     let absentDays = 0
     let halfDays = 0
@@ -596,6 +597,21 @@ export const getStudentAttendance = asyncHandler(async (req, res) => {
       ? (effectivePresentDays / totalDays) * 100 
       : 0
 
+    // Determine period dates based on actual attendance records
+    let periodStartDate = null
+    let periodEndDate = null
+
+    if (attendanceRecords.length > 0) {
+      // Sort by date to get first and last
+      const sortedRecords = [...attendanceRecords].sort((a, b) => 
+        new Date(a.date) - new Date(b.date)
+      )
+      
+      periodStartDate = sortedRecords[0].date
+      periodEndDate = sortedRecords[sortedRecords.length - 1].date
+    }
+
+    // Format response with proper null handling
     res.status(200).json({
       success: true,
       data: {
@@ -609,8 +625,9 @@ export const getStudentAttendance = asyncHandler(async (req, res) => {
           displayClass: mapEnumToDisplayName(student.class)
         },
         period: {
-          startDate: defaultStartDate,
-          endDate: defaultEndDate
+          startDate: periodStartDate,
+          endDate: periodEndDate,
+          filtered: !!(startDate || endDate) // Indicates if filters were applied
         },
         summary: {
           totalDays,
@@ -620,13 +637,15 @@ export const getStudentAttendance = asyncHandler(async (req, res) => {
           effectivePresentDays,
           attendancePercentage: parseFloat(attendancePercentage.toFixed(2))
         },
-        dailyAttendance: attendanceRecords.map(record => ({
-          date: record.date,
-          morning: record.morning,
-          afternoon: record.afternoon,
-          dayStatus: calculateDayStatus(record.morning, record.afternoon),
-          markedBy: record.markedBy
-        }))
+        dailyAttendance: attendanceRecords.length > 0 
+          ? attendanceRecords.map(record => ({
+              date: record.date,
+              morning: record.morning,
+              afternoon: record.afternoon,
+              dayStatus: calculateDayStatus(record.morning, record.afternoon),
+              markedBy: record.markedBy
+            }))
+          : [] // Return empty array if no records
       }
     })
   } catch (error) {

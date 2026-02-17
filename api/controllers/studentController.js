@@ -9,7 +9,8 @@ import {
   addDisplayClassToStudent,
   addDisplayClassToStudents,
   parseDiscount,
-  formatPhoneNumber
+  formatPhoneNumber,
+  validateSection,
 } from '../utils/classMappings.js'
 
 // Multer configuration for file uploads
@@ -93,7 +94,7 @@ export const createStudent = [
         address,
         village,
         studentType = 'DAY_SCHOLAR',
-        isUsingSchoolTransport = false,
+        isUsingSchoolTransport = 'false',
         schoolFeeDiscount = 0,
         transportFeeDiscount = 0,
         hostelFeeDiscount = 0,
@@ -103,12 +104,44 @@ export const createStudent = [
         parentEmail,
       } = req.body
 
+      console.log('Received data:', {
+        firstName,
+        lastName,
+        class: className,
+        admissionNo,
+        parentPhone
+      })
+
       // Validate required fields
-      if (!firstName || !lastName || !admissionNo || !parentPhone || !className) {
+      if (!firstName || !lastName) {
         cleanupTempFiles(req.file)
         return res.status(400).json({
           success: false,
-          message: 'Missing required fields: firstName, lastName, admissionNo, parentPhone, class'
+          message: 'First name and last name are required'
+        })
+      }
+
+      if (!admissionNo) {
+        cleanupTempFiles(req.file)
+        return res.status(400).json({
+          success: false,
+          message: 'Admission number is required'
+        })
+      }
+
+      if (!parentPhone) {
+        cleanupTempFiles(req.file)
+        return res.status(400).json({
+          success: false,
+          message: 'Parent phone number is required'
+        })
+      }
+
+      if (!className) {
+        cleanupTempFiles(req.file)
+        return res.status(400).json({
+          success: false,
+          message: 'Class is required'
         })
       }
 
@@ -138,6 +171,7 @@ export const createStudent = [
       let profilePicUrl = null
       if (req.file) {
         try {
+          console.log('Uploading profile picture to Cloudinary...')
           const uploadResult = await cloudinaryUtils.uploadToCloudinary(
             req.file.path,
             {
@@ -150,12 +184,16 @@ export const createStudent = [
               },
             }
           )
+
+          console.log('Profile picture uploaded successfully:', uploadResult)
           
           profilePicUrl = uploadResult.url
           profilePicPublicId = uploadResult.publicId
           uploadedProfilePic = true
+          console.log('Profile picture uploaded successfully:', profilePicUrl)
           
         } catch (uploadError) {
+          console.error('Cloudinary upload error:', uploadError)
           cleanupTempFiles(req.file)
           return res.status(500).json({
             success: false,
@@ -490,51 +528,14 @@ export const updateStudent = [
         lastName,
         dob,
         gender,
-        class: className,
-        section,
-        admissionNo,
-        rollNo,
         address,
         village,
-        studentType,
-        isUsingSchoolTransport,
-        schoolFeeDiscount,
-        transportFeeDiscount,
-        hostelFeeDiscount,
         parentName,
         parentPhone,
         parentPhone2,
         parentEmail,
         removeProfilePic,
       } = req.body
-
-      // Check for duplicate admission number if changed
-      if (admissionNo && admissionNo !== existingStudent.admissionNo) {
-        const duplicate = await prisma.student.findUnique({
-          where: { admissionNo }
-        })
-        if (duplicate) {
-          cleanupTempFiles(req.file)
-          return res.status(400).json({
-            success: false,
-            message: 'Admission number already exists',
-          })
-        }
-      }
-
-      // Handle class change
-      let classEnum = existingStudent.class
-      if (className !== undefined) {
-        const mappedClass = mapClassToEnum(className)
-        if (!mappedClass) {
-          cleanupTempFiles(req.file)
-          return res.status(400).json({
-            success: false,
-            message: `Invalid class: "${className}"`,
-          })
-        }
-        classEnum = mappedClass
-      }
 
       // Handle profile picture
       let newProfilePicUrl = existingStudent.profilePicUrl
@@ -555,6 +556,7 @@ export const updateStudent = [
         }
 
         try {
+          console.log('Uploading new profile picture to Cloudinary...')
           const uploadResult = await cloudinaryUtils.uploadToCloudinary(
             req.file.path,
             {
@@ -570,35 +572,27 @@ export const updateStudent = [
 
           newProfilePicUrl = uploadResult.url
           newProfilePicPublicId = uploadResult.publicId
+          console.log('New profile picture uploaded successfully')
         } catch (uploadError) {
+          console.error('Cloudinary upload error:', uploadError)
           cleanupTempFiles(req.file)
-          throw new Error(
-            `Failed to upload new profile picture: ${uploadError.message}`
-          )
+          return res.status(500).json({
+            success: false,
+            message: `Failed to upload new profile picture: ${uploadError.message}`
+          })
         }
 
         cleanupTempFiles(req.file)
       }
 
-      // Prepare update data
+      // Prepare update data - ONLY EDITABLE FIELDS
       const updateData = {
         firstName: firstName !== undefined ? firstName.trim() : existingStudent.firstName,
         lastName: lastName !== undefined ? lastName.trim() : existingStudent.lastName,
         dob: dob !== undefined ? new Date(dob) : existingStudent.dob,
         gender: gender !== undefined ? gender.toUpperCase() : existingStudent.gender,
-        class: classEnum,
-        section: section ? section.toUpperCase() : existingStudent.section,
-        admissionNo: admissionNo || existingStudent.admissionNo,
-        rollNo: rollNo !== undefined ? rollNo : existingStudent.rollNo,
         address: address !== undefined ? address : existingStudent.address,
         village: village !== undefined ? village : existingStudent.village,
-        studentType: studentType !== undefined ? studentType.toUpperCase() : existingStudent.studentType,
-        isUsingSchoolTransport: isUsingSchoolTransport !== undefined ? 
-          (isUsingSchoolTransport === true || isUsingSchoolTransport === 'true') : 
-          existingStudent.isUsingSchoolTransport,
-        schoolFeeDiscount: parseDiscount(schoolFeeDiscount !== undefined ? schoolFeeDiscount : existingStudent.schoolFeeDiscount),
-        transportFeeDiscount: parseDiscount(transportFeeDiscount !== undefined ? transportFeeDiscount : existingStudent.transportFeeDiscount),
-        hostelFeeDiscount: parseDiscount(hostelFeeDiscount !== undefined ? hostelFeeDiscount : existingStudent.hostelFeeDiscount),
         parentName: parentName !== undefined ? parentName : existingStudent.parentName,
         parentPhone: parentPhone ? formatPhoneNumber(parentPhone) : existingStudent.parentPhone,
         parentPhone2: parentPhone2 !== undefined ? 
@@ -608,6 +602,8 @@ export const updateStudent = [
         profilePicUrl: newProfilePicUrl,
         profilePicPublicId: newProfilePicPublicId,
       }
+
+      console.log('Updating student with data:', updateData)
 
       // Update student
       const updatedStudent = await prisma.student.update({
@@ -619,6 +615,7 @@ export const updateStudent = [
       if (oldPublicId) {
         try {
           await cloudinaryUtils.deleteFromCloudinary(oldPublicId)
+          console.log('Old profile picture deleted from Cloudinary')
         } catch (deleteError) {
           console.error(
             'Failed to delete old profile picture from Cloudinary:',
@@ -745,40 +742,6 @@ export const getAllStudents = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to fetch students',
-    })
-  }
-}
-
-// Get student by ID
-export const getStudentById = async (req, res) => {
-  try {
-    const student = await prisma.student.findUnique({
-      where: { id: req.params.id },
-      include: {
-        attendance: true,
-        marks: true,
-        feeDetails: true,
-        paymentHistory: true
-      }
-    })
-
-    if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: 'Student not found',
-      })
-    }
-
-    const studentWithDisplay = addDisplayClassToStudent(student)
-
-    res.status(200).json({
-      success: true,
-      data: studentWithDisplay,
-    })
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to fetch student',
     })
   }
 }
@@ -1108,7 +1071,7 @@ export const getClassDetails = async (req, res) => {
   }
 }
 
-// Get students by class and section
+// Get students by class and section (simplified - only basic info)
 export const getStudentsByClassAndSection = async (req, res) => {
   try {
     const {
@@ -1117,8 +1080,6 @@ export const getStudentsByClassAndSection = async (req, res) => {
       sortBy = 'firstName',
       sortOrder = 'asc',
     } = req.query
-
-    console.log('getStudentsByClassAndSection - classInput:', classInput, 'section:', section)
 
     if (!classInput || classInput === '' || classInput === 'undefined') {
       return res.status(400).json({
@@ -1129,12 +1090,11 @@ export const getStudentsByClassAndSection = async (req, res) => {
 
     // Map class name to enum
     const classEnum = mapClassToEnum(classInput)
-    console.log('getStudentsByClassAndSection - Mapped classEnum:', classEnum)
     
     if (!classEnum) {
       return res.status(400).json({
         success: false,
-        message: `Invalid class: "${classInput}". Valid formats: "1", "10", "Class 1", "Class_1", "CLASS_1"`
+        message: `Invalid class: "${classInput}"`
       })
     }
 
@@ -1147,7 +1107,6 @@ export const getStudentsByClassAndSection = async (req, res) => {
 
     // Validate section
     const validatedSection = validateSection(section)
-    console.log('getStudentsByClassAndSection - Validated section:', validatedSection)
     
     if (!validatedSection) {
       return res.status(400).json({
@@ -1162,27 +1121,41 @@ export const getStudentsByClassAndSection = async (req, res) => {
       isActive: true
     }
 
-    console.log('getStudentsByClassAndSection - Where clause:', where)
-
     const orderBy = {}
     const validSortFields = ['firstName', 'lastName', 'rollNo', 'admissionNo', 'createdAt']
     const sortField = validSortFields.includes(sortBy) ? sortBy : 'firstName'
     orderBy[sortField] = sortOrder === 'desc' ? 'desc' : 'asc'
 
+    // Get only basic student info - no relations
     const students = await prisma.student.findMany({
       where,
       orderBy,
-      include: {
-        feeDetails: {
-          orderBy: { createdAt: 'desc' },
-          take: 1
-        }
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        rollNo: true,
+        admissionNo: true,
+        class: true,
+        section: true,
+        profilePicUrl: true,
+        gender: true,
+        isActive: true
       }
     })
 
-    console.log('getStudentsByClassAndSection - Found students:', students.length)
-
-    const studentsWithDisplay = addDisplayClassToStudents(students)
+    const studentsWithDisplay = students.map(student => ({
+      id: student.id,
+      firstName: student.firstName,
+      lastName: student.lastName,
+      name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
+      rollNo: student.rollNo || student.admissionNo,
+      class: mapEnumToDisplayName(student.class),
+      classEnum: student.class,
+      section: student.section,
+      profilePicUrl: student.profilePicUrl,
+      gender: student.gender
+    }))
 
     res.status(200).json({
       success: true,
@@ -1200,6 +1173,143 @@ export const getStudentsByClassAndSection = async (req, res) => {
       success: false,
       message: error.message || 'Failed to get students by class and section',
     })
+  }
+}
+
+// Get single student with complete details
+export const getStudentById = async (req, res) => {
+  try {
+    const { id } = req.params
+    
+    const student = await prisma.student.findUnique({
+      where: { id },
+      include: {
+        attendance: {
+          orderBy: { date: 'desc' }
+        },
+        marks: {
+          orderBy: { uploadedAt: 'desc' }
+        },
+        feeDetails: {
+          orderBy: { createdAt: 'desc' },
+          take: 1
+        },
+        paymentHistory: {
+          orderBy: { date: 'desc' },
+          take: 10
+        }
+      }
+    })
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found',
+      })
+    }
+
+    // Calculate attendance statistics
+    const attendanceStats = {
+      total: student.attendance.length,
+      present: student.attendance.filter(a => a.morning === true || a.afternoon === true).length,
+      absent: student.attendance.filter(a => a.morning === false && a.afternoon === false).length,
+      records: student.attendance
+    }
+    
+    attendanceStats.percentage = attendanceStats.total > 0 
+      ? ((attendanceStats.present / attendanceStats.total) * 100).toFixed(2)
+      : 0
+
+    // Get fee details
+    const feeRecord = student.feeDetails[0] || null
+    const feeStats = feeRecord ? {
+      totalFee: feeRecord.originalTotalFee,
+      discountedFee: feeRecord.discountedTotalFee,
+      paid: feeRecord.totalPaid,
+      due: feeRecord.totalDue,
+      isFullyPaid: feeRecord.isFullyPaid,
+      termWise: feeRecord.termDistribution,
+      term1DueDate: feeRecord.term1DueDate,
+      term2DueDate: feeRecord.term2DueDate,
+      term3DueDate: feeRecord.term3DueDate,
+      paymentHistory: student.paymentHistory
+    } : null
+
+    // Get marks statistics
+    const marksStats = {
+      totalExams: student.marks.length,
+      recent: student.marks[0] || null,
+      all: student.marks
+    }
+
+    const studentWithDisplay = {
+      ...student,
+      displayClass: mapEnumToDisplayName(student.class),
+      attendance: attendanceStats,
+      fees: feeStats,
+      marks: marksStats
+    }
+
+    // Remove relations from the main object to keep response clean
+    delete studentWithDisplay.attendance
+    delete studentWithDisplay.marks
+    delete studentWithDisplay.feeDetails
+    delete studentWithDisplay.paymentHistory
+
+    res.status(200).json({
+      success: true,
+      data: studentWithDisplay,
+    })
+  } catch (error) {
+    console.error('Get student by id error:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch student',
+    })
+  }
+}
+
+// Helper function to calculate working days (excluding Sundays and holidays)
+async function calculateWorkingDays(year, month, daysInMonth) {
+  try {
+    // Get holidays for the month from a Holiday model (if you have one)
+    // This is a simplified version - you can enhance based on your schema
+    let holidays = []
+    
+    // Try to get holidays from database if you have a Holiday model
+    if (prisma.holiday) {
+      const startDate = new Date(year, month - 1, 1)
+      const endDate = new Date(year, month, 0, 23, 59, 59)
+      
+      holidays = await prisma.holiday.findMany({
+        where: {
+          date: {
+            gte: startDate,
+            lte: endDate
+          }
+        },
+        select: { date: true }
+      })
+    }
+
+    const holidayDates = holidays.map(h => new Date(h.date).toDateString())
+    
+    let workingDays = 0
+    for (let day = 1; day <= daysInMonth; day++) {
+      const currentDate = new Date(year, month - 1, day)
+      const dayOfWeek = currentDate.getDay() // 0 = Sunday, 6 = Saturday
+      
+      // Skip Sundays (0) and holidays
+      if (dayOfWeek !== 0 && !holidayDates.includes(currentDate.toDateString())) {
+        workingDays++
+      }
+    }
+    
+    return workingDays
+  } catch (error) {
+    console.error('Error calculating working days:', error)
+    // Fallback: return days in month minus Sundays (approx 4-5 Sundays)
+    return daysInMonth - Math.floor(daysInMonth / 7)
   }
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useMemo } from 'react'
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import {
   View,
   StyleSheet,
@@ -31,7 +31,7 @@ import { Image } from 'expo-image'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
-// Custom Input Component - Fixed keyboard issue
+// Custom Input Component
 const CustomInput = React.memo(({
   value,
   onChangeText,
@@ -40,6 +40,7 @@ const CustomInput = React.memo(({
   multiline,
   numberOfLines,
   style,
+  editable = true,
   ...props
 }) => {
   const { colors } = useTheme()
@@ -53,12 +54,13 @@ const CustomInput = React.memo(({
       keyboardType={keyboardType}
       multiline={multiline}
       numberOfLines={numberOfLines}
+      editable={editable}
       style={[
         {
           flex: 1,
           height: '100%',
           fontSize: 15,
-          color: colors.text,
+          color: editable ? colors.text : colors.textSecondary,
           paddingVertical: 0,
           paddingRight: 10,
           margin: 0,
@@ -86,7 +88,7 @@ const CustomDropdown = ({
   placeholder = "Select an option",
   style,
   dropdownStyle,
-  iconName = "chevron-down",
+  editable = true,
 }) => {
   const { colors } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
@@ -96,7 +98,13 @@ const CustomDropdown = ({
   const rotateAnim = useRef(new Animated.Value(0)).current
   const heightAnim = useRef(new Animated.Value(0)).current
 
+  useEffect(() => {
+    setSelectedLabel(items.find(item => item.value === value)?.label || placeholder)
+  }, [value, items, placeholder])
+
   const toggleDropdown = () => {
+    if (!editable) return
+    
     if (isOpen) {
       Animated.parallel([
         Animated.timing(rotateAnim, {
@@ -140,7 +148,6 @@ const CustomDropdown = ({
 
   const maxDropdownHeight = Math.min(items.length * 48, SCREEN_HEIGHT * 0.3)
 
-  // Inline styles for dropdown since styles is not accessible
   const dropdownStyles = {
     customDropdownContainer: {
       marginBottom: 12,
@@ -158,6 +165,7 @@ const CustomDropdown = ({
       backgroundColor: colors.inputBackground,
       borderColor: colors.border,
       borderLeftColor: colors.primary,
+      opacity: editable ? 1 : 0.6,
     },
     dropdownIcon: {
       marginRight: 8,
@@ -166,7 +174,7 @@ const CustomDropdown = ({
       flex: 1,
       fontSize: 15,
       fontFamily: 'Poppins-Medium',
-      color: value ? colors.text : colors.textSecondary,
+      color: value ? (editable ? colors.text : colors.textSecondary) : colors.textSecondary,
     },
     dropdownList: {
       position: 'absolute',
@@ -207,13 +215,14 @@ const CustomDropdown = ({
         style={dropdownStyles.dropdownHeader}
         onPress={toggleDropdown}
         activeOpacity={0.7}
+        disabled={!editable}
       >
         <Feather name="chevron-down" size={18} color={colors.textSecondary} style={dropdownStyles.dropdownIcon} />
         <ThemedText style={dropdownStyles.dropdownSelectedText}>
           {selectedLabel}
         </ThemedText>
         <Animated.View style={{ transform: [{ rotate }] }}>
-          <Ionicons name="chevron-down" size={16} color={colors.primary} />
+          <Ionicons name="chevron-down" size={16} color={editable ? colors.primary : colors.textSecondary} />
         </Animated.View>
       </TouchableOpacity>
       
@@ -262,41 +271,70 @@ const CustomDropdown = ({
   )
 }
 
-export default function CreateStudent({ visible, onClose }) {
-  const { colors, currentTheme } = useTheme()
+export default function CreateStudent({ visible, onClose, studentData: editStudentData }) {
+  const { colors } = useTheme()
+  const isEditMode = !!editStudentData
 
+  // Form state - only editable fields
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     dob: new Date(),
     gender: 'NOT_SPECIFIED',
-    class: '1',
-    section: 'A',
-    admissionNo: '',
-    rollNo: '',
     address: '',
     village: '',
     parentName: '',
     parentPhone: '',
     parentPhone2: '',
     parentEmail: '',
-    studentType: 'DAY_SCHOLAR',
-    isUsingSchoolTransport: false,
-    isUsingSchoolHostel: false,
-    schoolFeeDiscount: 0,
-    transportFeeDiscount: 0,
-    hostelFeeDiscount: 0,
   })
 
+  // Additional state for create mode only
   const [selectedClass, setSelectedClass] = useState('1')
   const [selectedSection, setSelectedSection] = useState('A')
-  const [selectedGender, setSelectedGender] = useState('NOT_SPECIFIED')
   const [selectedStudentType, setSelectedStudentType] = useState('DAY_SCHOLAR')
+  const [isUsingSchoolTransport, setIsUsingSchoolTransport] = useState(false)
+  const [isUsingSchoolHostel, setIsUsingSchoolHostel] = useState(false)
+  const [schoolFeeDiscount, setSchoolFeeDiscount] = useState(0)
+  const [transportFeeDiscount, setTransportFeeDiscount] = useState(0)
+  const [hostelFeeDiscount, setHostelFeeDiscount] = useState(0)
+  const [admissionNo, setAdmissionNo] = useState('')
+  const [rollNo, setRollNo] = useState('')
+
+  const [selectedGender, setSelectedGender] = useState('NOT_SPECIFIED')
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [profilePic, setProfilePic] = useState(null)
+  const [existingProfilePic, setExistingProfilePic] = useState(null)
+  const [removeProfilePic, setRemoveProfilePic] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState(null)
 
+  // Load student data in edit mode
+  useEffect(() => {
+    if (visible && isEditMode && editStudentData) {
+      const dob = editStudentData.dob ? new Date(editStudentData.dob) : new Date()
+      
+      setFormData({
+        firstName: editStudentData.firstName || '',
+        lastName: editStudentData.lastName || '',
+        dob: dob,
+        gender: editStudentData.gender || 'NOT_SPECIFIED',
+        address: editStudentData.address || '',
+        village: editStudentData.village || '',
+        parentName: editStudentData.parentName || '',
+        parentPhone: editStudentData.parentPhone || '',
+        parentPhone2: editStudentData.parentPhone2 || '',
+        parentEmail: editStudentData.parentEmail || '',
+      })
+
+      setSelectedGender(editStudentData.gender || 'NOT_SPECIFIED')
+      setExistingProfilePic(editStudentData.profilePicUrl || null)
+      setRemoveProfilePic(false)
+    }
+  }, [visible, isEditMode, editStudentData])
+
+  // Dropdown options
   const classes = useMemo(() => [
     { label: 'Pre-Nursery', value: 'Pre-Nursery' },
     { label: 'Nursery', value: 'Nursery' },
@@ -369,39 +407,81 @@ export default function CreateStudent({ visible, onClose }) {
 
     if (!result.canceled) {
       setProfilePic(result.assets[0].uri)
+      setExistingProfilePic(null)
+      setRemoveProfilePic(false) // Cancel any pending removal
     }
   }, [showToast])
 
+  const handleDeleteProfilePic = useCallback(() => {
+    setShowDeleteModal(true)
+  }, [])
+
+  const confirmDeleteProfilePic = useCallback(() => {
+    setProfilePic(null)
+    setExistingProfilePic(null)
+    
+    // If in edit mode, mark for removal on server
+    if (isEditMode) {
+      setRemoveProfilePic(true)
+    }
+    
+    setShowDeleteModal(false)
+    showToast('Profile picture removed', 'success')
+  }, [isEditMode, showToast])
+
   const handleSave = useCallback(async () => {
-    if (!formData.firstName || !formData.lastName || !formData.admissionNo || !formData.parentPhone) {
-      showToast('Please fill all required fields', 'error')
+    // Validate required fields
+    if (!formData.firstName || !formData.lastName) {
+      showToast('First name and last name are required', 'error')
+      return
+    }
+
+    if (!isEditMode && !admissionNo) {
+      showToast('Admission number is required', 'error')
+      return
+    }
+
+    if (!formData.parentPhone) {
+      showToast('Parent phone number is required', 'error')
+      return
+    }
+
+    if (!isEditMode && !selectedClass) {
+      showToast('Class is required', 'error')
       return
     }
 
     setLoading(true)
     try {
       const formDataToSend = new FormData()
-      formDataToSend.append('firstName', formData.firstName)
-      formDataToSend.append('lastName', formData.lastName)
+      
+      // Common fields for both create and edit
+      formDataToSend.append('firstName', formData.firstName.trim())
+      formDataToSend.append('lastName', formData.lastName.trim())
       formDataToSend.append('dob', formData.dob.toISOString())
       formDataToSend.append('gender', formData.gender)
-      formDataToSend.append('class', selectedClass)
-      formDataToSend.append('section', selectedSection)
-      formDataToSend.append('admissionNo', formData.admissionNo)
-      formDataToSend.append('rollNo', formData.rollNo)
-      formDataToSend.append('address', formData.address)
-      formDataToSend.append('village', formData.village)
-      formDataToSend.append('parentName', formData.parentName)
-      formDataToSend.append('parentPhone', formData.parentPhone)
-      formDataToSend.append('parentPhone2', formData.parentPhone2)
-      formDataToSend.append('parentEmail', formData.parentEmail)
-      formDataToSend.append('studentType', formData.studentType)
-      formDataToSend.append('isUsingSchoolTransport', formData.isUsingSchoolTransport)
-      formDataToSend.append('isUsingSchoolHostel', formData.isUsingSchoolHostel)
-      formDataToSend.append('schoolFeeDiscount', formData.schoolFeeDiscount)
-      formDataToSend.append('transportFeeDiscount', formData.transportFeeDiscount)
-      formDataToSend.append('hostelFeeDiscount', formData.hostelFeeDiscount)
+      formDataToSend.append('address', formData.address || '')
+      formDataToSend.append('village', formData.village || '')
+      formDataToSend.append('parentName', formData.parentName || '')
+      formDataToSend.append('parentPhone', formData.parentPhone.trim())
+      formDataToSend.append('parentPhone2', formData.parentPhone2 || '')
+      formDataToSend.append('parentEmail', formData.parentEmail || '')
 
+      // Create mode specific fields
+      if (!isEditMode) {
+        formDataToSend.append('class', selectedClass)
+        formDataToSend.append('section', selectedSection)
+        formDataToSend.append('admissionNo', admissionNo.trim())
+        formDataToSend.append('rollNo', rollNo || '')
+        formDataToSend.append('studentType', selectedStudentType)
+        formDataToSend.append('isUsingSchoolTransport', isUsingSchoolTransport)
+        formDataToSend.append('isUsingSchoolHostel', isUsingSchoolHostel)
+        formDataToSend.append('schoolFeeDiscount', schoolFeeDiscount.toString())
+        formDataToSend.append('transportFeeDiscount', transportFeeDiscount.toString())
+        formDataToSend.append('hostelFeeDiscount', hostelFeeDiscount.toString())
+      }
+
+      // Handle profile picture
       if (profilePic) {
         const uriParts = profilePic.split('.')
         const fileType = uriParts[uriParts.length - 1]
@@ -412,34 +492,72 @@ export default function CreateStudent({ visible, onClose }) {
         })
       }
 
-      const response = await axiosApi.post('/students', formDataToSend, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      })
+      // Add removeProfilePic flag for edit mode
+      if (isEditMode && removeProfilePic) {
+        formDataToSend.append('removeProfilePic', 'true')
+      }
 
-      if (response.data.message === 'Student created successfully') {
-        showToast('Student created successfully!', 'success')
+      let response
+      if (isEditMode) {
+        // Update existing student
+        response = await axiosApi.put(`/students/${editStudentData.id}`, formDataToSend, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        })
+      } else {
+        // Create new student
+        response = await axiosApi.post('/students', formDataToSend, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        })
+      }
+
+      if (response.data.success || response.data.message?.includes('successfully')) {
+        showToast(
+          isEditMode ? 'Student updated successfully!' : 'Student created successfully!', 
+          'success'
+        )
         resetForm()
-        setTimeout(() => onClose(), 1500) // Delay close to show success toast
+        setTimeout(() => onClose(true), 1500)
       }
     } catch (error) {
-      console.error('Create student error:', error)
-      let errorMessage = 'Failed to create student'
+      console.error(isEditMode ? 'Update student error:' : 'Create student error:', error)
+      let errorMessage = isEditMode ? 'Failed to update student' : 'Failed to create student'
       
       if (error.response) {
         errorMessage = error.response.data?.message || error.response.data?.error || 'Server error occurred'
       } else if (error.request) {
         errorMessage = 'No response from server. Check your internet connection.'
       } else {
-        errorMessage = error.message || 'Failed to create student'
+        errorMessage = error.message || (isEditMode ? 'Failed to update student' : 'Failed to create student')
       }
       
       showToast(errorMessage, 'error')
     } finally {
       setLoading(false)
     }
-  }, [formData, selectedClass, selectedSection, profilePic, showToast, onClose, resetForm])
+  }, [
+    formData, 
+    isEditMode, 
+    editStudentData, 
+    profilePic, 
+    removeProfilePic,
+    showToast, 
+    onClose,
+    // Create mode fields
+    selectedClass,
+    selectedSection,
+    admissionNo,
+    rollNo,
+    selectedStudentType,
+    isUsingSchoolTransport,
+    isUsingSchoolHostel,
+    schoolFeeDiscount,
+    transportFeeDiscount,
+    hostelFeeDiscount
+  ])
 
   const resetForm = useCallback(() => {
     setFormData({
@@ -447,29 +565,32 @@ export default function CreateStudent({ visible, onClose }) {
       lastName: '',
       dob: new Date(),
       gender: 'NOT_SPECIFIED',
-      class: '1',
-      section: 'A',
-      admissionNo: '',
-      rollNo: '',
       address: '',
       village: '',
       parentName: '',
       parentPhone: '',
       parentPhone2: '',
       parentEmail: '',
-      studentType: 'DAY_SCHOLAR',
-      isUsingSchoolTransport: false,
-      isUsingSchoolHostel: false,
-      schoolFeeDiscount: 0,
-      transportFeeDiscount: 0,
-      hostelFeeDiscount: 0,
     })
-    setSelectedClass('1')
-    setSelectedSection('A')
     setSelectedGender('NOT_SPECIFIED')
-    setSelectedStudentType('DAY_SCHOLAR')
     setProfilePic(null)
-  }, [])
+    setExistingProfilePic(null)
+    setRemoveProfilePic(false)
+    
+    // Reset create mode fields
+    if (!isEditMode) {
+      setSelectedClass('1')
+      setSelectedSection('A')
+      setSelectedStudentType('DAY_SCHOLAR')
+      setIsUsingSchoolTransport(false)
+      setIsUsingSchoolHostel(false)
+      setSchoolFeeDiscount(0)
+      setTransportFeeDiscount(0)
+      setHostelFeeDiscount(0)
+      setAdmissionNo('')
+      setRollNo('')
+    }
+  }, [isEditMode])
 
   const onDateChange = useCallback((event, selectedDate) => {
     setShowDatePicker(Platform.OS === 'ios')
@@ -478,41 +599,19 @@ export default function CreateStudent({ visible, onClose }) {
     }
   }, [updateFormData])
 
-  const onClassSelect = useCallback((value) => {
-    setSelectedClass(value)
-    updateFormData({ class: value })
-  }, [updateFormData])
-
-  const onSectionSelect = useCallback((value) => {
-    setSelectedSection(value)
-    updateFormData({ section: value })
-  }, [updateFormData])
-
   const onGenderSelect = useCallback((value) => {
     setSelectedGender(value)
     updateFormData({ gender: value })
   }, [updateFormData])
 
-  const onStudentTypeSelect = useCallback((value) => {
-    setSelectedStudentType(value)
-    updateFormData({ studentType: value })
-  }, [updateFormData])
-
   const onFirstNameChange = useCallback((text) => updateFormData({ firstName: text }), [updateFormData])
   const onLastNameChange = useCallback((text) => updateFormData({ lastName: text }), [updateFormData])
-  const onAdmissionNoChange = useCallback((text) => updateFormData({ admissionNo: text }), [updateFormData])
-  const onRollNoChange = useCallback((text) => updateFormData({ rollNo: text }), [updateFormData])
   const onAddressChange = useCallback((text) => updateFormData({ address: text }), [updateFormData])
   const onVillageChange = useCallback((text) => updateFormData({ village: text }), [updateFormData])
   const onParentNameChange = useCallback((text) => updateFormData({ parentName: text }), [updateFormData])
   const onParentPhoneChange = useCallback((text) => updateFormData({ parentPhone: text }), [updateFormData])
   const onParentPhone2Change = useCallback((text) => updateFormData({ parentPhone2: text }), [updateFormData])
   const onParentEmailChange = useCallback((text) => updateFormData({ parentEmail: text }), [updateFormData])
-  const onSchoolFeeDiscountChange = useCallback((text) => updateFormData({ schoolFeeDiscount: parseInt(text) || 0 }), [updateFormData])
-  const onTransportFeeDiscountChange = useCallback((text) => updateFormData({ transportFeeDiscount: parseInt(text) || 0 }), [updateFormData])
-  const onHostelFeeDiscountChange = useCallback((text) => updateFormData({ hostelFeeDiscount: parseInt(text) || 0 }), [updateFormData])
-  const onIsUsingSchoolTransportSelect = useCallback((value) => updateFormData({ isUsingSchoolTransport: value }), [updateFormData])
-  const onIsUsingSchoolHostelSelect = useCallback((value) => updateFormData({ isUsingSchoolHostel: value }), [updateFormData])
 
   const styles = useMemo(() => StyleSheet.create({
     container: {
@@ -592,6 +691,9 @@ export default function CreateStudent({ visible, onClose }) {
       alignItems: 'center',
       marginBottom: 16,
     },
+    profilePicWrapper: {
+      position: 'relative',
+    },
     profilePicOuter: {
       width: 96,
       height: 96,
@@ -615,6 +717,23 @@ export default function CreateStudent({ visible, onClose }) {
       width: '100%',
       height: '100%',
       borderRadius: 45,
+    },
+    deletePicButton: {
+      position: 'absolute',
+      bottom: 0,
+      right: 0,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 2,
+      borderColor: colors.cardBackground,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 3.84,
+      elevation: 5,
     },
     profilePicHint: {
       color: colors.textSecondary,
@@ -646,16 +765,6 @@ export default function CreateStudent({ visible, onClose }) {
       color: colors.textSecondary,
       width: 24,
       marginBottom: 3,
-    },
-    textInput: {
-      flex: 1,
-      height: '100%',
-      fontSize: 15,
-      color: colors.text,
-      paddingVertical: 0,
-      paddingHorizontal: 0,
-      margin: 0,
-      fontFamily: 'Poppins-Medium'
     },
     dateText: {
       fontSize: 15,
@@ -717,12 +826,101 @@ export default function CreateStudent({ visible, onClose }) {
       fontSize: 16,
       marginLeft: 8,
     },
+    sectionDivider: {
+      marginTop: 8,
+      marginBottom: 16,
+      height: 1,
+      backgroundColor: colors.border,
+    },
+    readOnlyNotice: {
+      backgroundColor: colors.primary + '10',
+      padding: 12,
+      borderRadius: 8,
+      marginBottom: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    readOnlyNoticeText: {
+      color: colors.primary,
+      fontSize: 12,
+      marginLeft: 8,
+      flex: 1,
+    },
+    // Modal Styles
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalContent: {
+      width: SCREEN_WIDTH * 0.8,
+      backgroundColor: colors.cardBackground,
+      borderRadius: 20,
+      padding: 20,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    modalIcon: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: colors.danger + '20',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.text,
+      marginBottom: 8,
+    },
+    modalMessage: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      marginBottom: 20,
+    },
+    modalButtons: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    modalButton: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    modalButtonCancel: {
+      backgroundColor: colors.inputBackground,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    modalButtonDelete: {
+      backgroundColor: colors.danger,
+    },
+    modalButtonText: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    modalButtonTextCancel: {
+      color: colors.text,
+    },
+    modalButtonTextDelete: {
+      color: '#FFFFFF',
+    },
   }), [colors])
 
   const handleClose = useCallback(() => {
     if (!loading) {
       resetForm()
-      onClose()
+      onClose(false)
     }
   }, [loading, resetForm, onClose])
 
@@ -743,8 +941,12 @@ export default function CreateStudent({ visible, onClose }) {
                 <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
               </TouchableOpacity>
               <View style={{ flex: 1, alignItems: 'center' }}>
-                <ThemedText type='subtitle' style={styles.title}>Create New Student</ThemedText>
-                <ThemedText style={styles.subtitle}>Fill the details below</ThemedText>
+                <ThemedText type='subtitle' style={styles.title}>
+                  {isEditMode ? 'Edit Student' : 'Create New Student'}
+                </ThemedText>
+                <ThemedText style={styles.subtitle}>
+                  {isEditMode ? 'Update editable information' : 'Fill all details below'}
+                </ThemedText>
               </View>
               <View style={{ width: 44 }} />
             </View>
@@ -758,16 +960,9 @@ export default function CreateStudent({ visible, onClose }) {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.card}>
-            {/* PERSONAL DETAILS */}
-            <View style={styles.formGroup}>
-              <View style={styles.groupTitleContainer}>
-                <View style={styles.groupTitleChip}>
-                  <MaterialIcons name="person" size={22} color={colors.primary} />
-                  <ThemedText type='subtitle' style={styles.groupTitleText}>Personal Details</ThemedText>
-                </View>
-              </View>
-
-              <View style={styles.profilePicContainer}>
+            {/* PROFILE PICTURE */}
+            <View style={styles.profilePicContainer}>
+              <View style={styles.profilePicWrapper}>
                 <TouchableOpacity onPress={handleProfilePic} activeOpacity={0.8} disabled={loading}>
                   <LinearGradient
                     colors={[colors.gradientStart, colors.gradientEnd]}
@@ -776,15 +971,49 @@ export default function CreateStudent({ visible, onClose }) {
                     <View style={styles.profilePicInner}>
                       {profilePic ? (
                         <Image source={{ uri: profilePic }} style={styles.profilePicImage} />
+                      ) : existingProfilePic ? (
+                        <Image source={{ uri: existingProfilePic }} style={styles.profilePicImage} />
                       ) : (
                         <Feather name="camera" size={30} color={colors.textSecondary} />
                       )}
                     </View>
                   </LinearGradient>
                 </TouchableOpacity>
-                <ThemedText style={styles.profilePicHint}>
-                  Tap to add profile picture
+                
+                {/* Delete button - only show when there's a profile picture */}
+                {(profilePic || existingProfilePic) && (
+                  <TouchableOpacity
+                    style={[styles.deletePicButton, { backgroundColor: colors.danger }]}
+                    onPress={handleDeleteProfilePic}
+                    disabled={loading}
+                  >
+                    <MaterialIcons name="delete" size={18} color="#FFFFFF" />
+                  </TouchableOpacity>
+                )}
+              </View>
+              
+              <ThemedText style={styles.profilePicHint}>
+                {isEditMode ? 'Tap to change profile picture' : 'Tap to add profile picture'}
+              </ThemedText>
+            </View>
+
+            {/* READ-ONLY NOTICE FOR EDIT MODE */}
+            {isEditMode && (
+              <View style={styles.readOnlyNotice}>
+                <MaterialIcons name="info" size={16} color={colors.primary} />
+                <ThemedText style={styles.readOnlyNoticeText}>
+                  Academic details (Class, Section, Admission No, etc.) cannot be edited
                 </ThemedText>
+              </View>
+            )}
+
+            {/* PERSONAL DETAILS - Always visible */}
+            <View style={styles.formGroup}>
+              <View style={styles.groupTitleContainer}>
+                <View style={styles.groupTitleChip}>
+                  <MaterialIcons name="person" size={22} color={colors.primary} />
+                  <ThemedText type='subtitle' style={styles.groupTitleText}>Personal Details</ThemedText>
+                </View>
               </View>
 
               <ThemedText style={styles.fieldLabel}>First Name *</ThemedText>
@@ -823,7 +1052,7 @@ export default function CreateStudent({ visible, onClose }) {
                   disabled={loading}
                 >
                   <ThemedText style={styles.dateText}>
-                    {formData.dob.toLocaleDateString()}
+                    {formData.dob.toLocaleDateString('en-GB')}
                   </ThemedText>
                 </TouchableOpacity>
                 {showDatePicker && (
@@ -844,71 +1073,79 @@ export default function CreateStudent({ visible, onClose }) {
                 onSelect={onGenderSelect}
                 placeholder="Select Gender"
                 style={loading ? { opacity: 0.5 } : {}}
+                editable={!loading}
               />
             </View>
 
-            {/* ACADEMIC DETAILS */}
-            <View style={styles.formGroup}>
-              <View style={styles.groupTitleContainer}>
-                <View style={styles.groupTitleChip}>
-                  <MaterialIcons name="school" size={22} color={colors.primary} />
-                  <ThemedText type='subtitle' style={styles.groupTitleText}>Academic Details</ThemedText>
+            {/* CREATE MODE - ACADEMIC DETAILS */}
+            {!isEditMode && (
+              <View style={styles.formGroup}>
+                <View style={styles.groupTitleContainer}>
+                  <View style={styles.groupTitleChip}>
+                    <MaterialIcons name="school" size={22} color={colors.primary} />
+                    <ThemedText type='subtitle' style={styles.groupTitleText}>Academic Details</ThemedText>
+                  </View>
                 </View>
-              </View>
 
-              <ThemedText style={styles.fieldLabel}>Class</ThemedText>
-              <CustomDropdown
-                value={selectedClass}
-                items={classes}
-                onSelect={onClassSelect}
-                placeholder="Select Class"
-                style={loading ? { opacity: 0.5 } : {}}
-              />
-
-              <ThemedText style={styles.fieldLabel}>Section</ThemedText>
-              <CustomDropdown
-                value={selectedSection}
-                items={sections}
-                onSelect={onSectionSelect}
-                placeholder="Select Section"
-                style={loading ? { opacity: 0.5 } : {}}
-              />
-
-              <ThemedText style={styles.fieldLabel}>Student Type</ThemedText>
-              <CustomDropdown
-                value={formData.studentType}
-                items={studentTypes}
-                onSelect={onStudentTypeSelect}
-                placeholder="Select Student Type"
-                style={loading ? { opacity: 0.5 } : {}}
-              />
-
-              <ThemedText style={styles.fieldLabel}>Admission Number *</ThemedText>
-              <View style={styles.inputContainer}>
-                <AntDesign name="idcard" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter admission number"
-                  value={formData.admissionNo}
-                  onChangeText={onAdmissionNoChange}
-                  keyboardType="numeric"
+                <ThemedText style={styles.fieldLabel}>Class *</ThemedText>
+                <CustomDropdown
+                  value={selectedClass}
+                  items={classes}
+                  onSelect={setSelectedClass}
+                  placeholder="Select Class"
+                  style={loading ? { opacity: 0.5 } : {}}
                   editable={!loading}
                 />
-              </View>
 
-              <ThemedText style={styles.fieldLabel}>Roll Number</ThemedText>
-              <View style={styles.inputContainer}>
-                <MaterialIcons name="numbers" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter roll number"
-                  value={formData.rollNo}
-                  onChangeText={onRollNoChange}
-                  keyboardType="numeric"
+                <ThemedText style={styles.fieldLabel}>Section *</ThemedText>
+                <CustomDropdown
+                  value={selectedSection}
+                  items={sections}
+                  onSelect={setSelectedSection}
+                  placeholder="Select Section"
+                  style={loading ? { opacity: 0.5 } : {}}
                   editable={!loading}
                 />
-              </View>
-            </View>
 
-            {/* ADDRESS DETAILS */}
+                <ThemedText style={styles.fieldLabel}>Student Type</ThemedText>
+                <CustomDropdown
+                  value={selectedStudentType}
+                  items={studentTypes}
+                  onSelect={setSelectedStudentType}
+                  placeholder="Select Student Type"
+                  style={loading ? { opacity: 0.5 } : {}}
+                  editable={!loading}
+                />
+
+                <ThemedText style={styles.fieldLabel}>Admission Number *</ThemedText>
+                <View style={styles.inputContainer}>
+                  <AntDesign name="idcard" size={20} style={styles.inputIcon} />
+                  <CustomInput
+                    placeholder="Enter admission number"
+                    value={admissionNo}
+                    onChangeText={setAdmissionNo}
+                    keyboardType="default"
+                    editable={!loading}
+                  />
+                </View>
+
+                <ThemedText style={styles.fieldLabel}>Roll Number</ThemedText>
+                <View style={styles.inputContainer}>
+                  <MaterialIcons name="numbers" size={20} style={styles.inputIcon} />
+                  <CustomInput
+                    placeholder="Enter roll number"
+                    value={rollNo}
+                    onChangeText={setRollNo}
+                    keyboardType="default"
+                    editable={!loading}
+                  />
+                </View>
+
+                <View style={styles.sectionDivider} />
+              </View>
+            )}
+
+            {/* ADDRESS DETAILS - Always visible */}
             <View style={styles.formGroup}>
               <View style={styles.groupTitleContainer}>
                 <View style={styles.groupTitleChip}>
@@ -947,7 +1184,7 @@ export default function CreateStudent({ visible, onClose }) {
               </View>
             </View>
 
-            {/* PARENT DETAILS */}
+            {/* PARENT DETAILS - Always visible */}
             <View style={styles.formGroup}>
               <View style={styles.groupTitleContainer}>
                 <View style={styles.groupTitleChip}>
@@ -1009,79 +1246,86 @@ export default function CreateStudent({ visible, onClose }) {
               </View>
             </View>
 
-            {/* SERVICES DETAILS */}
-            <View style={styles.formGroup}>
-              <View style={styles.groupTitleContainer}>
-                <View style={styles.groupTitleChip}>
-                  <MaterialIcons name="bus-alert" size={22} color={colors.primary} />
-                  <ThemedText type='subtitle' style={styles.groupTitleText}>Services</ThemedText>
+            {/* CREATE MODE - SERVICES & DISCOUNTS */}
+            {!isEditMode && (
+              <>
+                {/* SERVICES DETAILS */}
+                <View style={styles.formGroup}>
+                  <View style={styles.groupTitleContainer}>
+                    <View style={styles.groupTitleChip}>
+                      <MaterialIcons name="bus-alert" size={22} color={colors.primary} />
+                      <ThemedText type='subtitle' style={styles.groupTitleText}>Services</ThemedText>
+                    </View>
+                  </View>
+
+                  <ThemedText style={styles.fieldLabel}>Using School Transport?</ThemedText>
+                  <CustomDropdown
+                    value={isUsingSchoolTransport}
+                    items={yesNoOptions}
+                    onSelect={setIsUsingSchoolTransport}
+                    placeholder="Select Yes/No"
+                    style={loading ? { opacity: 0.5 } : {}}
+                    editable={!loading}
+                  />
+
+                  <ThemedText style={styles.fieldLabel}>Using School Hostel?</ThemedText>
+                  <CustomDropdown
+                    value={isUsingSchoolHostel}
+                    items={yesNoOptions}
+                    onSelect={setIsUsingSchoolHostel}
+                    placeholder="Select Yes/No"
+                    style={loading ? { opacity: 0.5 } : {}}
+                    editable={!loading}
+                  />
                 </View>
-              </View>
 
-              <ThemedText style={styles.fieldLabel}>Using School Transport?</ThemedText>
-              <CustomDropdown
-                value={formData.isUsingSchoolTransport}
-                items={yesNoOptions}
-                onSelect={onIsUsingSchoolTransportSelect}
-                placeholder="Select Yes/No"
-                style={loading ? { opacity: 0.5 } : {}}
-              />
+                {/* DISCOUNTS DETAILS */}
+                <View style={styles.formGroup}>
+                  <View style={styles.groupTitleContainer}>
+                    <View style={styles.groupTitleChip}>
+                      <MaterialIcons name="discount" size={22} color={colors.primary} />
+                      <ThemedText type='subtitle' style={styles.groupTitleText}>Fee Discounts (%)</ThemedText>
+                    </View>
+                  </View>
 
-              <ThemedText style={styles.fieldLabel}>Using School Hostel?</ThemedText>
-              <CustomDropdown
-                value={formData.isUsingSchoolHostel}
-                items={yesNoOptions}
-                onSelect={onIsUsingSchoolHostelSelect}
-                placeholder="Select Yes/No"
-                style={loading ? { opacity: 0.5 } : {}}
-              />
-            </View>
+                  <ThemedText style={styles.fieldLabel}>School Fee Discount</ThemedText>
+                  <View style={styles.inputContainer}>
+                    <Feather name="percent" size={20} style={styles.inputIcon} />
+                    <CustomInput
+                      placeholder="Enter school fee discount"
+                      value={schoolFeeDiscount.toString()}
+                      onChangeText={(text) => setSchoolFeeDiscount(parseInt(text) || 0)}
+                      keyboardType="numeric"
+                      editable={!loading}
+                    />
+                  </View>
 
-            {/* DISCOUNTS DETAILS */}
-            <View style={styles.formGroup}>
-              <View style={styles.groupTitleContainer}>
-                <View style={styles.groupTitleChip}>
-                  <MaterialIcons name="discount" size={22} color={colors.primary} />
-                  <ThemedText type='subtitle' style={styles.groupTitleText}>Fee Discounts</ThemedText>
+                  <ThemedText style={styles.fieldLabel}>Transport Fee Discount</ThemedText>
+                  <View style={styles.inputContainer}>
+                    <Feather name="percent" size={20} style={styles.inputIcon} />
+                    <CustomInput
+                      placeholder="Enter transport fee discount"
+                      value={transportFeeDiscount.toString()}
+                      onChangeText={(text) => setTransportFeeDiscount(parseInt(text) || 0)}
+                      keyboardType="numeric"
+                      editable={!loading}
+                    />
+                  </View>
+
+                  <ThemedText style={styles.fieldLabel}>Hostel Fee Discount</ThemedText>
+                  <View style={styles.inputContainer}>
+                    <Feather name="percent" size={20} style={styles.inputIcon} />
+                    <CustomInput
+                      placeholder="Enter hostel fee discount"
+                      value={hostelFeeDiscount.toString()}
+                      onChangeText={(text) => setHostelFeeDiscount(parseInt(text) || 0)}
+                      keyboardType="numeric"
+                      editable={!loading}
+                    />
+                  </View>
                 </View>
-              </View>
-
-              <ThemedText style={styles.fieldLabel}>School Fee Discount</ThemedText>
-              <View style={styles.inputContainer}>
-                <Feather name="percent" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter school fee discount"
-                  value={formData.schoolFeeDiscount.toString()}
-                  onChangeText={onSchoolFeeDiscountChange}
-                  keyboardType="numeric"
-                  editable={!loading}
-                />
-              </View>
-
-              <ThemedText style={styles.fieldLabel}>Transport Fee Discount</ThemedText>
-              <View style={styles.inputContainer}>
-                <Feather name="percent" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter transport fee discount"
-                  value={formData.transportFeeDiscount.toString()}
-                  onChangeText={onTransportFeeDiscountChange}
-                  keyboardType="numeric"
-                  editable={!loading}
-                />
-              </View>
-
-              <ThemedText style={styles.fieldLabel}>Hostel Fee Discount</ThemedText>
-              <View style={styles.inputContainer}>
-                <Feather name="percent" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter hostel fee discount"
-                  value={formData.hostelFeeDiscount.toString()}
-                  onChangeText={onHostelFeeDiscountChange}
-                  keyboardType="numeric"
-                  editable={!loading}
-                />
-              </View>
-            </View>
+              </>
+            )}
           </View>
         </ScrollView>
 
@@ -1106,12 +1350,50 @@ export default function CreateStudent({ visible, onClose }) {
                   <FontAwesome5 name="check-circle" size={18} color="#FFFFFF" />
                 )}
                 <ThemedText style={styles.saveBtnText}>
-                  {loading ? 'Saving...' : 'Save Student'}
+                  {loading ? (isEditMode ? 'Updating...' : 'Saving...') : (isEditMode ? 'Update Student' : 'Save Student')}
                 </ThemedText>
               </TouchableOpacity>
             </LinearGradient>
           </View>
         </View>
+
+        {/* DELETE CONFIRMATION MODAL */}
+        <Modal
+          visible={showDeleteModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowDeleteModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={[styles.modalIcon, { backgroundColor: colors.danger + '20' }]}>
+                <MaterialIcons name="delete" size={30} color={colors.danger} />
+              </View>
+              <ThemedText style={styles.modalTitle}>Delete Profile Picture</ThemedText>
+              <ThemedText style={styles.modalMessage}>
+                Are you sure you want to delete the profile picture? This action cannot be undone.
+              </ThemedText>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  onPress={() => setShowDeleteModal(false)}
+                >
+                  <ThemedText style={[styles.modalButtonText, styles.modalButtonTextCancel]}>
+                    Cancel
+                  </ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonDelete]}
+                  onPress={confirmDeleteProfilePic}
+                >
+                  <ThemedText style={[styles.modalButtonText, styles.modalButtonTextDelete]}>
+                    Delete
+                  </ThemedText>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Toast Notification */}
         <ToastNotification

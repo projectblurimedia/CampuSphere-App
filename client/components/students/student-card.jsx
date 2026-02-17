@@ -19,9 +19,12 @@ export default function StudentCard({ student }) {
   }
 
   const renderAvatar = () => {
-    if (student.profilePic) {
+    const name = student.name || `${student.firstName || ''} ${student.lastName || ''}`.trim() || 'S'
+    const profilePic = student.profilePicUrl
+    
+    if (profilePic) {
       return (
-        <Image source={{ uri: student.profilePic }} style={styles.studentAvatar} />
+        <Image source={{ uri: profilePic }} style={styles.studentAvatar} />
       )
     }
     
@@ -31,37 +34,9 @@ export default function StudentCard({ student }) {
         style={styles.studentAvatar}
       >
         <ThemedText style={[styles.avatarText, { color: '#fff' }]}>
-          {student.name.charAt(0).toUpperCase()}
+          {name.charAt(0).toUpperCase()}
         </ThemedText>
       </LinearGradient>
-    )
-  }
-
-  const renderFeesBadge = () => {
-    const isPaid = student.fees === 'Paid'
-    return (
-      <View style={[
-        styles.statusBadge, 
-        { 
-          backgroundColor: isPaid ? `${colors.success}15` : `${colors.warning}15`,
-          borderColor: isPaid ? colors.success : colors.warning
-        }
-      ]}>
-        <Ionicons 
-          name={isPaid ? "checkmark-circle" : "alert-circle"} 
-          size={12} 
-          color={isPaid ? colors.success : colors.warning} 
-          style={styles.badgeIcon}
-        />
-        <ThemedText style={{ 
-          fontSize: 11, 
-          fontWeight: '600',
-          color: isPaid ? colors.success : colors.warning,
-          marginLeft: 4
-        }}>
-          {student.fees}
-        </ThemedText>
-      </View>
     )
   }
 
@@ -78,67 +53,24 @@ export default function StudentCard({ student }) {
       >
         <View style={styles.innerCard}>
           {/* Header */}
-          <View style={styles.studentHeader}>
+          <View style={styles.studentDetails}>
             {renderAvatar()}
             <View style={styles.studentInfo}>
-              <ThemedText type="subtitle" style={[styles.studentName, { color: colors.text }]}>
-                {student.name}
+              <ThemedText 
+                type="subtitle" 
+                style={[styles.studentName, { color: colors.text }]}
+                numberOfLines={1}
+              >
+                {student.name || `${student.firstName || ''} ${student.lastName || ''}`.trim()}
               </ThemedText>
               <View style={styles.rollContainer}>
                 <Ionicons name="id-card-outline" size={12} color={colors.textSecondary} />
                 <ThemedText style={[styles.rollText, { color: colors.textSecondary, marginLeft: 4 }]}>
-                  Roll No: {student.rollNo}
+                  Roll No: {student.rollNo || student.admissionNo || 'N/A'}
                 </ThemedText>
               </View>
             </View>
-            {renderFeesBadge()}
-          </View>
-
-          {/* Divider */}
-          <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-          {/* Details */}
-          <View style={styles.studentDetails}>
-            <View style={styles.detailRow}>
-              <View style={styles.detailItem}>
-                <Ionicons name="school-outline" size={16} color={colors.primary} />
-                <ThemedText style={[styles.detailLabel, { color: colors.text, marginLeft: 8 }]}>
-                  {student.class}
-                </ThemedText>
-              </View>
-              <View style={styles.detailItem}>
-                <Feather name="calendar" size={16} color={colors.primary} />
-                <ThemedText style={[styles.detailLabel, { color: colors.text, marginLeft: 8 }]}>
-                  {student.attendance}
-                </ThemedText>
-              </View>
-            </View>
-
-            {/* Parent and Phone Row */}
-            {(student.parent || student.contact) && (
-              <View style={styles.parentRow}>
-                <View style={styles.parentItem}>
-                  <Ionicons name="person-outline" size={14} color={colors.textSecondary} />
-                  <ThemedText style={[styles.parentText, { color: colors.textSecondary, marginLeft: 8 }]}>
-                    {student.parent || 'N/A'}
-                  </ThemedText>
-                </View>
-                <View style={styles.parentItem}>
-                  <Feather name="phone" size={14} color={colors.textSecondary} />
-                  <ThemedText style={[styles.parentText, { color: colors.textSecondary, marginLeft: 8 }]}>
-                    {student.contact || 'N/A'}
-                  </ThemedText>
-                </View>
-              </View>
-            )}
-
-            {/* Action Button */}
-            <TouchableOpacity style={[styles.viewBtn, { borderColor: colors.primary }]}>
-              <ThemedText style={[styles.viewBtnText, { color: colors.primary }]}>
-                View Details
-              </ThemedText>
-              <Ionicons name="chevron-forward" size={14} color={colors.primary} />
-            </TouchableOpacity>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </View>
         </View>
       </TouchableOpacity>
@@ -163,7 +95,7 @@ const styles = StyleSheet.create({
   studentCard: {
     borderRadius: 20,
     borderWidth: 1,
-    marginBottom: 16,
+    marginBottom: 12,
     overflow: 'hidden',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
@@ -174,10 +106,9 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 20,
   },
-  studentHeader: {
+  studentDetails: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
   },
   studentAvatar: {
     width: 52,
@@ -195,6 +126,7 @@ const styles = StyleSheet.create({
   },
   studentInfo: {
     flex: 1,
+    marginRight: 8,
   },
   studentName: {
     fontSize: 16,
@@ -207,66 +139,5 @@ const styles = StyleSheet.create({
   },
   rollText: {
     fontSize: 12,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  badgeIcon: {
-    marginRight: 2,
-  },
-  divider: {
-    height: 1,
-    marginBottom: 12,
-  },
-  studentDetails: {
-    gap: 8,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  detailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 0.48,
-  },
-  detailLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  parentRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  parentItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 0.48,
-  },
-  parentText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  viewBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderRadius: 12,
-    marginTop: 4,
-  },
-  viewBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
   },
 })

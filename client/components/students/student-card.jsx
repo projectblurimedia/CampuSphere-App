@@ -94,13 +94,13 @@ export default function StudentCard({ student }) {
 const styles = StyleSheet.create({
   studentCard: {
     borderRadius: 20,
-    borderWidth: 1,
+    borderWidth: 2,
     marginBottom: 12,
     overflow: 'hidden',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
-    elevation: 8,
+    elevation: 4,
   },
   innerCard: {
     padding: 16,

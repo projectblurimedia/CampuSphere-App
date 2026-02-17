@@ -23,6 +23,7 @@ import { ToastNotification } from '@/components/ui/ToastNotification'
 import CreateStudent from '@/pages/menu/createStudent/CreateStudent'
 import StudentFeeDetails from '@/pages/menu/feeDetails/StudentFeeDetails'
 import StudentAttendance from './StudentAttendance'
+import StudentMarks from './StudentMarks'
 
 export default function Student({ student, onClose }) {
   const { colors } = useTheme()
@@ -35,6 +36,7 @@ export default function Student({ student, onClose }) {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showFeeDetails, setShowFeeDetails] = useState(false)
   const [showAttendanceModal, setShowAttendanceModal] = useState(false)
+  const [showMarksModal, setShowMarksModal] = useState(false)
   
   // Toast state
   const [toast, setToast] = useState(null)
@@ -138,7 +140,10 @@ export default function Student({ student, onClose }) {
       setShowMoreMenu(false)
       setShowAttendanceModal(true)
     } },
-    { id: 2, icon: 'school', label: 'Marks', color: '#2196F3', action: 'marks' },
+    { id: 2, icon: 'school', label: 'Marks', color: '#2196F3', action: 'marks', handler: () => {
+      setShowMoreMenu(false)
+      setShowMarksModal(true)
+    } },
     { id: 3, icon: 'attach-money', label: 'Fee Details', color: '#FF9800', action: 'fees', handler: handleFeeDetails },
     { id: 4, icon: 'edit', label: 'Edit Student', color: colors.primary, action: 'edit', handler: handleEdit },
     { id: 5, icon: 'assignment', label: 'View Reports', color: '#9C27B0', action: 'reports' },
@@ -164,14 +169,9 @@ export default function Student({ student, onClose }) {
       )
     }
     
-    // Generate a consistent color based on student name
-    const colors_list = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#D4A5A5', '#9B59B6', '#3498DB']
-    const colorIndex = name.charCodeAt(0) % colors_list.length
-    const backgroundColor = colors_list[colorIndex]
-    
     return (
-      <View style={[styles.studentAvatar, { backgroundColor }]}>
-        <ThemedText style={[styles.avatarText, { color: '#fff' }]}>
+      <View style={[styles.studentAvatar, { backgroundColor: '#fffffff6' }]}>
+        <ThemedText style={[styles.avatarText, { color: '#1d9bf0' }]}>
           {name.charAt(0).toUpperCase()}
         </ThemedText>
       </View>
@@ -424,7 +424,7 @@ export default function Student({ student, onClose }) {
                 <View style={[styles.sectionIconContainer, { backgroundColor: `${colors.primary}15` }]}>
                   <Ionicons name="person" size={18} color={colors.primary} />
                 </View>
-                <ThemedText style={[styles.sectionTitle, { color: colors.text }]}>
+                <ThemedText style={[styles  .sectionTitle, { color: colors.text }]}>
                   Student Details
                 </ThemedText>
               </View>
@@ -641,6 +641,14 @@ export default function Student({ student, onClose }) {
         <StudentAttendance
           visible={showAttendanceModal}
           onClose={() => setShowAttendanceModal(false)}
+          student={studentData || student}
+        />
+      )}
+
+      {showMarksModal && (
+        <StudentMarks
+          visible={showMarksModal}
+          onClose={() => setShowMarksModal(false)}
           student={studentData || student}
         />
       )}

@@ -746,87 +746,135 @@ export const getAllStudents = async (req, res) => {
   }
 }
 
-// Search students
+/**
+ * @desc    Search students by name (OPTIMIZED - firstName and lastName only)
+ * @route   GET /api/students/search
+ * @access  Private
+ */
 export const searchStudents = async (req, res) => {
   try {
     const {
-      query: searchQuery,
+      query,
       class: classFilter,
       section,
-      parentPhone,
-      admissionNo,
-      rollNo,
+      gender,
       page = 1,
       limit = 20,
       sortBy = 'firstName',
       sortOrder = 'asc',
     } = req.query
 
+    // Build where clause efficiently
     const where = {
       isActive: true
     }
 
-    if (searchQuery) {
-      where.OR = [
-        { firstName: { contains: searchQuery, mode: 'insensitive' } },
-        { lastName: { contains: searchQuery, mode: 'insensitive' } },
-        { parentName: { contains: searchQuery, mode: 'insensitive' } },
-        { admissionNo: { contains: searchQuery, mode: 'insensitive' } },
-        { village: { contains: searchQuery, mode: 'insensitive' } }
-      ]
+    // OPTIMIZED: Search only by firstName and lastName
+    if (query && query.trim() !== '') {
+      const searchTerm = query.trim()
+      
+      // Split search term into words for better matching
+      const searchWords = searchTerm.split(' ').filter(word => word.length > 0)
+      
+      if (searchWords.length === 1) {
+        // Single word - search in both firstName and lastName
+        where.OR = [
+          { firstName: { contains: searchWords[0], mode: 'insensitive' } },
+          { lastName: { contains: searchWords[0], mode: 'insensitive' } },
+        ]
+      } else if (searchWords.length >= 2) {
+        // Multiple words - try to match firstName + lastName pattern
+        where.OR = [
+          {
+            AND: [
+              { firstName: { contains: searchWords[0], mode: 'insensitive' } },
+              { lastName: { contains: searchWords.slice(1).join(' '), mode: 'insensitive' } },
+            ]
+          },
+          {
+            AND: [
+              { firstName: { contains: searchWords.slice(0, -1).join(' '), mode: 'insensitive' } },
+              { lastName: { contains: searchWords[searchWords.length - 1], mode: 'insensitive' } },
+            ]
+          },
+          // Also try matching any word in either field for flexibility
+          {
+            OR: searchWords.map(word => ({
+              OR: [
+                { firstName: { contains: word, mode: 'insensitive' } },
+                { lastName: { contains: word, mode: 'insensitive' } },
+              ]
+            }))
+          }
+        ]
+      }
     }
 
-    if (classFilter) {
+    // Apply class filter (using index)
+    if (classFilter && classFilter !== 'All' && classFilter !== 'all') {
       const classEnum = mapClassToEnum(classFilter)
       if (classEnum) {
         where.class = classEnum
       }
     }
 
-    if (section) {
-      where.section = section.toUpperCase()
+    // Apply section filter (using index)
+    if (section && section !== 'All' && section !== 'all') {
+      const validatedSection = validateSection(section)
+      if (validatedSection) {
+        where.section = validatedSection
+      }
     }
 
-    if (parentPhone) {
-      const cleanedPhone = formatPhoneNumber(parentPhone)
-      where.OR = [
-        { parentPhone: { contains: cleanedPhone, mode: 'insensitive' } },
-        { parentPhone2: { contains: cleanedPhone, mode: 'insensitive' } },
-      ]
+    // Apply gender filter
+    if (gender && gender !== 'All' && gender !== 'all') {
+      where.gender = gender.toUpperCase()
     }
 
-    if (admissionNo) {
-      where.admissionNo = { contains: admissionNo, mode: 'insensitive' }
-    }
-
-    if (rollNo) {
-      where.rollNo = { contains: rollNo, mode: 'insensitive' }
-    }
-
+    // Pagination
     const pageNum = parseInt(page)
     const limitNum = parseInt(limit)
     const skip = (pageNum - 1) * limitNum
 
+    // Sorting (using indexes on firstName and lastName)
     const orderBy = {}
-    orderBy[sortBy] = sortOrder
+    const validSortFields = ['firstName', 'lastName', 'rollNo', 'admissionNo', 'createdAt']
+    const sortField = validSortFields.includes(sortBy) ? sortBy : 'firstName'
+    orderBy[sortField] = sortOrder === 'desc' ? 'desc' : 'asc'
 
+    // Execute count and find in parallel for better performance
     const [students, total] = await Promise.all([
       prisma.student.findMany({
         where,
         orderBy,
         take: limitNum,
         skip,
-        include: {
-          feeDetails: {
-            orderBy: { createdAt: 'desc' },
-            take: 1
-          }
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          rollNo: true,
+          admissionNo: true,
+          class: true,
+          section: true,
+          gender: true,
+          profilePicUrl: true,
+          parentName: true,
+          parentPhone: true,
+          village: true,
+          studentType: true,
+          createdAt: true,
         }
       }),
       prisma.student.count({ where })
     ])
 
-    const studentsWithDisplay = addDisplayClassToStudents(students)
+    // Add display class names
+    const studentsWithDisplay = students.map(student => ({
+      ...student,
+      name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
+      displayClass: mapEnumToDisplayName(student.class),
+    }))
 
     res.status(200).json({
       success: true,
@@ -842,6 +890,74 @@ export const searchStudents = async (req, res) => {
     })
   } catch (error) {
     console.error('Search students error:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to search students',
+    })
+  }
+}
+
+/**
+ * @desc    Quick search for autocomplete (ULTRA OPTIMIZED)
+ * @route   GET /api/students/quick-search
+ * @access  Private
+ */
+export const quickSearchStudents = async (req, res) => {
+  try {
+    const { query, limit = 10 } = req.query
+
+    if (!query || query.trim() === '') {
+      return res.status(200).json({
+        success: true,
+        data: []
+      })
+    }
+
+    const searchTerm = query.trim()
+
+    // Ultra fast search - only returns id and name for autocomplete
+    const students = await prisma.student.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { firstName: { contains: searchTerm, mode: 'insensitive' } },
+          { lastName: { contains: searchTerm, mode: 'insensitive' } },
+        ]
+      },
+      take: parseInt(limit),
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        rollNo: true,
+        admissionNo: true,
+        class: true,
+        section: true,
+        profilePicUrl: true,
+      },
+      orderBy: [
+        { firstName: 'asc' },
+        { lastName: 'asc' }
+      ]
+    })
+
+    const formattedStudents = students.map(student => ({
+      id: student.id,
+      name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
+      rollNo: student.rollNo,
+      admissionNo: student.admissionNo,
+      class: mapEnumToDisplayName(student.class),
+      section: student.section,
+      profilePicUrl: student.profilePicUrl,
+      displayText: `${student.firstName || ''} ${student.lastName || ''} (${student.rollNo || student.admissionNo})`.trim()
+    }))
+
+    res.status(200).json({
+      success: true,
+      data: formattedStudents
+    })
+  } catch (error) {
+    console.error('Quick search error:', error)
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to search students',

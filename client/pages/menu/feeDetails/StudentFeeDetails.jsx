@@ -1820,7 +1820,7 @@ export default function StudentFeeDetails({ visible, onClose, student, onPayment
                 <View style={{ flex: 1, alignItems: 'center' }}>
                   <ThemedText style={styles.title}>Fee Details</ThemedText>
                   <ThemedText style={styles.subtitle}>
-                    {student?.name || 'Student'}
+                    {student?.firstName || 'Student'}
                   </ThemedText>
                 </View>
                 

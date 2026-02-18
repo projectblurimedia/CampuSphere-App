@@ -11,11 +11,12 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Dimensions
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
-import { FontAwesome5, Ionicons, Feather, MaterialIcons, MaterialCommunityIcons, Entypo } from '@expo/vector-icons'
+import { FontAwesome5, Ionicons, Feather, MaterialIcons, MaterialCommunityIcons, Entypo, AntDesign } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import axiosApi from '@/utils/axiosApi'
@@ -24,6 +25,8 @@ import CreateStudent from '@/pages/menu/createStudent/CreateStudent'
 import StudentFeeDetails from '@/pages/menu/feeDetails/StudentFeeDetails'
 import StudentAttendance from './StudentAttendance'
 import StudentMarks from './StudentMarks'
+
+const { width } = Dimensions.get('window')
 
 export default function Student({ student, onClose }) {
   const { colors } = useTheme()
@@ -43,6 +46,8 @@ export default function Student({ student, onClose }) {
   
   // Animations
   const slideAnimation = useRef(new Animated.Value(0)).current
+  const fadeAnimation = useRef(new Animated.Value(0)).current
+  const scaleAnimation = useRef(new Animated.Value(0.95)).current
 
   // Show toast notification
   const showToast = useCallback((message, type = 'error') => {
@@ -63,6 +68,21 @@ export default function Student({ student, onClose }) {
       if (response.data.success) {
         const data = response.data.data
         setStudentData(data)
+        
+        // Animate content fade in
+        Animated.parallel([
+          Animated.timing(fadeAnimation, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+          Animated.spring(scaleAnimation, {
+            toValue: 1,
+            friction: 6,
+            tension: 50,
+            useNativeDriver: true,
+          })
+        ]).start()
       } else {
         showToast(response.data.message || 'Failed to load student data', 'error')
       }
@@ -136,18 +156,18 @@ export default function Student({ student, onClose }) {
   }
 
   const moreActions = [
-    { id: 1, icon: 'event-note', label: 'Attendance', color: '#4CAF50', action: 'attendance', handler: () => {
+    { id: 1, icon: 'calendar-check', iconSet: MaterialCommunityIcons, label: 'Attendance', color: '#4CAF50', action: 'attendance', handler: () => {
       setShowMoreMenu(false)
       setShowAttendanceModal(true)
     } },
-    { id: 2, icon: 'school', label: 'Marks', color: '#2196F3', action: 'marks', handler: () => {
+    { id: 2, icon: 'star', iconSet: MaterialIcons, label: 'Marks', color: '#2196F3', action: 'marks', handler: () => {
       setShowMoreMenu(false)
       setShowMarksModal(true)
     } },
-    { id: 3, icon: 'attach-money', label: 'Fee Details', color: '#FF9800', action: 'fees', handler: handleFeeDetails },
-    { id: 4, icon: 'edit', label: 'Edit Student', color: colors.primary, action: 'edit', handler: handleEdit },
-    { id: 5, icon: 'assignment', label: 'View Reports', color: '#9C27B0', action: 'reports' },
-    { id: 6, icon: 'delete', label: 'Delete Student', color: '#F44336', action: 'delete', handler: handleDelete },
+    { id: 3, icon: 'currency-inr', iconSet: MaterialCommunityIcons, label: 'Fee Details', color: '#FF9800', action: 'fees', handler: handleFeeDetails },
+    { id: 4, icon: 'edit', iconSet: MaterialIcons, label: 'Edit Student', color: colors.primary, action: 'edit', handler: handleEdit },
+    { id: 5, icon: 'file-document', iconSet: MaterialCommunityIcons, label: 'View Reports', color: '#9C27B0', action: 'reports' },
+    { id: 6, icon: 'delete', iconSet: MaterialIcons, label: 'Delete Student', color: '#F44336', action: 'delete', handler: handleDelete },
   ]
 
   const handleMoreAction = (action) => {
@@ -169,44 +189,31 @@ export default function Student({ student, onClose }) {
       )
     }
     
+    // Generate consistent gradient based on name
+    const gradients = [
+      ['#4158D0', '#C850C0'],
+      ['#FF512F', '#F09819'],
+      ['#11998e', '#38ef7d'],
+      ['#834d9b', '#d04ed6'],
+      ['#4776E6', '#8E54E9'],
+      ['#FF416C', '#FF4B2B'],
+    ]
+    
+    const gradientIndex = name.charCodeAt(0) % gradients.length
+    const gradient = gradients[gradientIndex]
+    
     return (
-      <View style={[styles.studentAvatar, { backgroundColor: '#fffffff6' }]}>
-        <ThemedText style={[styles.avatarText, { color: '#1d9bf0' }]}>
+      <LinearGradient
+        colors={gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.studentAvatar}
+      >
+        <ThemedText style={styles.avatarText}>
           {name.charAt(0).toUpperCase()}
         </ThemedText>
-      </View>
+      </LinearGradient>
     )
-  }
-
-  const getStudentTypeIcon = (type) => {
-    switch(type) {
-      case 'DAY_SCHOLAR':
-        return { icon: 'home', color: '#FF9800', label: 'Day Scholar' }
-      case 'HOSTELLER':
-        return { icon: 'apartment', color: '#9C27B0', label: 'Hosteller' }
-      default:
-        return { icon: 'school', color: colors.primary, label: type?.replace(/_/g, ' ') || 'Day Scholar' }
-    }
-  }
-
-  const getGenderIcon = (gender) => {
-    switch(gender) {
-      case 'MALE':
-        return { icon: 'male', color: '#2196F3' }
-      case 'FEMALE':
-        return { icon: 'female', color: '#E91E63' }
-      default:
-        return { icon: 'genderless', color: '#757575' }
-    }
-  }
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A'
-    const date = new Date(dateString)
-    const day = date.getDate().toString().padStart(2, '0')
-    const month = (date.getMonth() + 1).toString().padStart(2, '0')
-    const year = date.getFullYear()
-    return `${day}/${month}/${year}`
   }
 
   const renderMoreMenu = () => {
@@ -223,28 +230,63 @@ export default function Student({ student, onClose }) {
           styles.moreMenu, 
           { 
             backgroundColor: colors.cardBackground,
+            borderColor: colors.border,
             opacity,
             transform: [{ translateY }]
           }
         ]}
       >
-        {moreActions.map((action) => (
-          <TouchableOpacity
-            key={action.id}
-            style={styles.menuItem}
-            onPress={() => handleMoreAction(action)}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.menuIconContainer, { backgroundColor: `${action.color}15` }]}>
-              <MaterialIcons name={action.icon} size={20} color={action.color} />
-            </View>
-            <ThemedText style={[styles.menuItemText, { color: colors.text, flex: 1 }]}>
-              {action.label}
-            </ThemedText>
-            <Feather name="chevron-right" size={16} color={colors.textSecondary} />
-          </TouchableOpacity>
-        ))}
+        {moreActions.map((action, index) => {
+          const IconComponent = action.iconSet || MaterialIcons
+          return (
+            <TouchableOpacity
+              key={action.id}
+              style={[
+                styles.menuItem,
+                index === moreActions.length - 1 && styles.lastMenuItem,
+                { borderBottomColor: colors.border }
+              ]}
+              onPress={() => handleMoreAction(action)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconContainer, { backgroundColor: `${action.color}15` }]}>
+                <IconComponent name={action.icon} size={20} color={action.color} />
+              </View>
+              <ThemedText style={[styles.menuItemText, { color: colors.text, flex: 1 }]}>
+                {action.label}
+              </ThemedText>
+              <Feather name="chevron-right" size={16} color={colors.textSecondary} />
+            </TouchableOpacity>
+          )
+        })}
       </Animated.View>
+    )
+  }
+
+  const renderDetailCard = (icon, iconSet, title, value, color, bgColor, isFullWidth = false) => {
+    const IconComponent = iconSet || Ionicons
+    
+    return (
+      <View style={[
+        styles.detailCard, 
+        isFullWidth && styles.fullWidthCard,
+        { 
+          backgroundColor: colors.cardBackground,
+          borderColor: colors.border 
+        }
+      ]}>
+        <View style={[styles.detailIconWrapper, { backgroundColor: bgColor }]}>
+          <IconComponent name={icon} size={22} color={color} />
+        </View>
+        <View style={styles.detailCardContent}>
+          <ThemedText style={[styles.detailCardLabel, { color: colors.textSecondary }]}>
+            {title}
+          </ThemedText>
+          <ThemedText style={[styles.detailCardValue, { color: colors.text }]} numberOfLines={1}>
+            {value || 'N/A'}
+          </ThemedText>
+        </View>
+      </View>
     )
   }
 
@@ -266,7 +308,7 @@ export default function Student({ student, onClose }) {
               </TouchableOpacity>
               
               <View style={styles.headerTitle}>
-                <ThemedText type="subtitle" style={styles.title}>
+                <ThemedText type='subtitle' style={styles.title}>
                   Student Profile
                 </ThemedText>
                 <ThemedText style={styles.subtitle}>
@@ -280,10 +322,12 @@ export default function Student({ student, onClose }) {
         </LinearGradient>
         
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.tint} />
-          <ThemedText style={{ color: colors.textSecondary, marginTop: 12 }}>
-            Loading student details...
-          </ThemedText>
+          <View style={[styles.loadingCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+            <ActivityIndicator size="large" color={colors.tint} />
+            <ThemedText style={[styles.loadingText, { color: colors.textSecondary }]}>
+              Loading student details...
+            </ThemedText>
+          </View>
         </View>
       </View>
     )
@@ -302,12 +346,10 @@ export default function Student({ student, onClose }) {
   const displayContact2 = studentData?.parentPhone2
   const displayEmail = studentData?.parentEmail
   const displayGender = studentData?.gender || student.gender
+  const displayBloodGroup = studentData?.bloodGroup
   const displayStudentType = studentData?.studentType || 'DAY_SCHOLAR'
   const displayIsUsingTransport = studentData?.isUsingSchoolTransport || false
   const displayIsUsingHostel = studentData?.isUsingSchoolHostel || false
-  
-  const studentTypeInfo = getStudentTypeIcon(displayStudentType)
-  const genderInfo = getGenderIcon(displayGender)
 
   return (
     <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
@@ -328,7 +370,7 @@ export default function Student({ student, onClose }) {
             </TouchableOpacity>
             
             <View style={styles.headerTitle}>
-              <ThemedText type="subtitle" style={styles.title}>
+              <ThemedText type='subtitle' style={styles.title}>
                 Student Profile
               </ThemedText>
               <ThemedText style={styles.subtitle}>
@@ -360,8 +402,16 @@ export default function Student({ student, onClose }) {
           />
         }
       >
-        <View style={styles.contentContainer}>
-          {/* Profile Card with same background as header */}
+        <Animated.View 
+          style={[
+            styles.contentContainer,
+            {
+              opacity: fadeAnimation,
+              transform: [{ scale: scaleAnimation }]
+            }
+          ]}
+        >
+          {/* Profile Card - Simplified with only class-section */}
           <LinearGradient
             colors={[colors?.gradientStart, colors?.gradientEnd]}
             start={{ x: 0, y: 0 }}
@@ -372,153 +422,199 @@ export default function Student({ student, onClose }) {
               {renderAvatar()}
               
               <View style={styles.profileInfo}>
-                <ThemedText style={styles.profileName}>
+                <ThemedText type='subtitle' style={styles.profileName}>
                   {displayName}
                 </ThemedText>
                 
-                <View style={styles.profileBadges}>
-                  <View style={styles.classBadge}>
+                <View style={styles.classSectionContainer}>
+                  <View style={styles.classSectionBadge}>
                     <Ionicons name="school-outline" size={14} color="#FFFFFF" />
-                    <ThemedText style={styles.badgeText}>
+                    <ThemedText style={styles.classSectionText}>
                       {displayClass} - {displaySection}
                     </ThemedText>
                   </View>
-                  
-                  <View style={styles.rollBadge}>
-                    <Ionicons name="id-card-outline" size={14} color="#FFFFFF" />
-                    <ThemedText style={styles.badgeText}>
-                      Roll: {displayRollNo || 'N/A'}
-                    </ThemedText>
-                  </View>
-                </View>
-
-                {/* Student Type Tags */}
-                <View style={styles.tagsContainer}>
-                  <View style={[styles.typeTag, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-                    <MaterialIcons name={studentTypeInfo.icon} size={14} color="#FFFFFF" />
-                    <ThemedText style={styles.tagText}>{studentTypeInfo.label}</ThemedText>
-                  </View>
-                  
-                  {displayIsUsingTransport && (
-                    <View style={[styles.typeTag, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-                      <Ionicons name="bus-outline" size={12} color="#FFFFFF" />
-                      <ThemedText style={styles.tagText}>Transport</ThemedText>
-                    </View>
-                  )}
-                  
-                  {displayIsUsingHostel && (
-                    <View style={[styles.typeTag, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-                      <Ionicons name="bed-outline" size={12} color="#FFFFFF" />
-                      <ThemedText style={styles.tagText}>Hostel</ThemedText>
-                    </View>
-                  )}
                 </View>
               </View>
             </View>
           </LinearGradient>
 
+          {/* Quick Actions - Redesigned */}
+          <View style={styles.quickActions}>
+            <TouchableOpacity 
+              style={[styles.quickAction, { backgroundColor: `${colors.primary}08`, borderColor: `${colors.primary}20` }]}
+              onPress={() => setShowAttendanceModal(true)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: `${colors.primary}15` }]}>
+                <MaterialCommunityIcons name="calendar-check" size={22} color={colors.primary} />
+              </View>
+              <ThemedText style={[styles.quickActionText, { color: colors.primary }]}>
+                Attendance
+              </ThemedText>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.quickAction, { backgroundColor: '#FF980008', borderColor: '#FF980020' }]}
+              onPress={() => setShowMarksModal(true)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#FF980015' }]}>
+                <MaterialIcons name="star" size={22} color="#FF9800" />
+              </View>
+              <ThemedText style={[styles.quickActionText, { color: '#FF9800' }]}>
+                Marks
+              </ThemedText>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.quickAction, { backgroundColor: '#4CAF5008', borderColor: '#4CAF5020' }]}
+              onPress={handleFeeDetails}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#4CAF5015' }]}>
+                <MaterialCommunityIcons name="currency-inr" size={22} color="#4CAF50" />
+              </View>
+              <ThemedText style={[styles.quickActionText, { color: '#4CAF50' }]}>
+                Fees
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
+
           {/* Student Details Section */}
-          <View style={[styles.sectionCard, { backgroundColor: colors.cardBackground }]}>
-            <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
+          <View style={[styles.sectionCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+            <View style={styles.sectionHeader}>
               <View style={styles.sectionTitleContainer}>
-                <View style={[styles.sectionIconContainer, { backgroundColor: `${colors.primary}15` }]}>
+                <View style={[styles.sectionIconContainer, { backgroundColor: `${colors.primary}10` }]}>
                   <Ionicons name="person" size={18} color={colors.primary} />
                 </View>
-                <ThemedText style={[styles  .sectionTitle, { color: colors.text }]}>
+                <ThemedText style={[styles.sectionTitle, { color: colors.text }]}>
                   Student Details
                 </ThemedText>
               </View>
             </View>
 
             <View style={styles.detailsGrid}>
-              {/* Gender */}
-              <View style={styles.detailItem}>
-                <View style={[styles.detailIconContainer, { backgroundColor: `${genderInfo.color}15` }]}>
-                  <Ionicons name={genderInfo.icon} size={20} color={genderInfo.color} />
-                </View>
-                <View style={styles.detailContent}>
-                  <ThemedText style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                    Gender
-                  </ThemedText>
-                  <ThemedText style={[styles.detailValue, { color: colors.text }]}>
-                    {displayGender?.charAt(0) + displayGender?.slice(1).toLowerCase() || 'N/A'}
-                  </ThemedText>
-                </View>
+              {/* Gender and Roll No in same row */}
+              <View style={styles.rowContainer}>
+                {renderDetailCard(
+                  displayGender === 'MALE' ? 'male' : displayGender === 'FEMALE' ? 'female' : 'genderless',
+                  Ionicons,
+                  'Gender',
+                  displayGender?.charAt(0) + displayGender?.slice(1).toLowerCase(),
+                  displayGender === 'MALE' ? '#2196F3' : displayGender === 'FEMALE' ? '#E91E63' : '#757575',
+                  displayGender === 'MALE' ? '#2196F310' : displayGender === 'FEMALE' ? '#E91E6310' : '#75757510'
+                )}
+
+                {displayRollNo && renderDetailCard(
+                  'id-card',
+                  Ionicons,
+                  'Roll No',
+                  displayRollNo,
+                  '#9C27B0',
+                  '#9C27B010'
+                )}
               </View>
 
-              {/* Date of Birth */}
-              <View style={styles.detailItem}>
-                <View style={[styles.detailIconContainer, { backgroundColor: '#FF6B6B15' }]}>
-                  <MaterialCommunityIcons name="cake-variant" size={20} color="#FF6B6B" />
-                </View>
-                <View style={styles.detailContent}>
-                  <ThemedText style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                    Date of Birth
-                  </ThemedText>
-                  <ThemedText style={[styles.detailValue, { color: colors.text }]}>
-                    {formatDate(displayDob)}
-                  </ThemedText>
-                </View>
-              </View>
-
-              {/* Admission No */}
-              <View style={styles.detailItem}>
-                <View style={[styles.detailIconContainer, { backgroundColor: `${colors.primary}15` }]}>
-                  <Ionicons name="id-card-outline" size={20} color={colors.primary} />
-                </View>
-                <View style={styles.detailContent}>
-                  <ThemedText style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                    Admission No
-                  </ThemedText>
-                  <ThemedText style={[styles.detailValue, { color: colors.text }]}>
-                    {displayAdmissionNo || 'N/A'}
-                  </ThemedText>
-                </View>
-              </View>
-
-              {/* Village */}
-              {displayVillage && (
-                <View style={styles.detailItem}>
-                  <View style={[styles.detailIconContainer, { backgroundColor: '#4CAF5015' }]}>
-                    <Ionicons name="location-outline" size={20} color="#4CAF50" />
-                  </View>
-                  <View style={styles.detailContent}>
-                    <ThemedText style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                      Village
-                    </ThemedText>
-                    <ThemedText style={[styles.detailValue, { color: colors.text }]}>
-                      {displayVillage}
-                    </ThemedText>
-                  </View>
-                </View>
+              {renderDetailCard(
+                'cake-variant',
+                MaterialCommunityIcons,
+                'Date of Birth',
+                formatDate(displayDob),
+                '#FF6B6B',
+                '#FF6B6B10'
               )}
 
-              {/* Address */}
-              {displayAddress && (
-                <View style={[styles.detailItem, styles.fullWidth]}>
-                  <View style={[styles.detailIconContainer, { backgroundColor: '#FF980015' }]}>
-                    <Ionicons name="home-outline" size={20} color="#FF9800" />
-                  </View>
-                  <View style={styles.detailContent}>
-                    <ThemedText style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                      Address
-                    </ThemedText>
-                    <ThemedText style={[styles.detailValue, { color: colors.text }]}>
-                      {displayAddress}
-                    </ThemedText>
-                  </View>
-                </View>
+              {renderDetailCard(
+                'id-card',
+                MaterialCommunityIcons,
+                'Admission No',
+                displayAdmissionNo,
+                colors.primary,
+                `${colors.primary}10`
+              )}
+
+              {displayBloodGroup && renderDetailCard(
+                'water',
+                MaterialCommunityIcons,
+                'Blood Group',
+                displayBloodGroup,
+                '#F44336',
+                '#F4433610'
+              )}
+
+              {displayStudentType && renderDetailCard(
+                displayStudentType === 'HOSTELLER' ? 'bed' : 'home',
+                Ionicons,
+                'Student Type',
+                displayStudentType.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase()),
+                displayStudentType === 'HOSTELLER' ? '#9C27B0' : '#FF9800',
+                displayStudentType === 'HOSTELLER' ? '#9C27B010' : '#FF980010'
+              )}
+
+              {displayVillage && renderDetailCard(
+                'location',
+                Ionicons,
+                'Village',
+                displayVillage,
+                '#4CAF50',
+                '#4CAF5010'
+              )}
+
+              {displayAddress && renderDetailCard(
+                'home',
+                Ionicons,
+                'Address',
+                displayAddress,
+                '#FF9800',
+                '#FF980010',
+                true
               )}
             </View>
           </View>
 
+          {/* Transport & Hostel Info */}
+          {(displayIsUsingTransport || displayIsUsingHostel) && (
+            <View style={[styles.sectionCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleContainer}>
+                  <View style={[styles.sectionIconContainer, { backgroundColor: '#00BCD410' }]}>
+                    <MaterialCommunityIcons name="offer" size={18} color="#00a8ce" />
+                  </View>
+                  <ThemedText style={[styles.sectionTitle, { color: colors.text }]}>
+                    Facilities
+                  </ThemedText>
+                </View>
+              </View>
+
+              <View style={styles.facilitiesContainer}>
+                {displayIsUsingTransport && (
+                  <View style={[styles.facilityBadge, { backgroundColor: '#00BCD410' }]}>
+                    <Ionicons name="bus-outline" size={16} color="#00BCD4" />
+                    <ThemedText style={[styles.facilityText, { color: '#00BCD4' }]}>
+                      School Transport
+                    </ThemedText>
+                  </View>
+                )}
+                
+                {displayIsUsingHostel && (
+                  <View style={[styles.facilityBadge, { backgroundColor: '#9C27B010' }]}>
+                    <Ionicons name="bed-outline" size={16} color="#9C27B0" />
+                    <ThemedText style={[styles.facilityText, { color: '#9C27B0' }]}>
+                      Hostel Facility
+                    </ThemedText>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
           {/* Parent Details Section */}
           {(displayParent || displayContact || displayContact2 || displayEmail) && (
-            <View style={[styles.sectionCard, { backgroundColor: colors.cardBackground }]}>
-              <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
+            <View style={[styles.sectionCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+              <View style={styles.sectionHeader}>
                 <View style={styles.sectionTitleContainer}>
-                  <View style={[styles.sectionIconContainer, { backgroundColor: `${colors.primary}15` }]}>
-                    <Ionicons name="people" size={18} color={colors.primary} />
+                  <View style={[styles.sectionIconContainer, { backgroundColor: '#9C27B010' }]}>
+                    <Ionicons name="people" size={18} color="#9C27B0" />
                   </View>
                   <ThemedText style={[styles.sectionTitle, { color: colors.text }]}>
                     Parent Information
@@ -527,77 +623,49 @@ export default function Student({ student, onClose }) {
               </View>
 
               <View style={styles.detailsGrid}>
-                {/* Parent Name */}
-                {displayParent && (
-                  <View style={[styles.detailItem, styles.fullWidth]}>
-                    <View style={[styles.detailIconContainer, { backgroundColor: '#9C27B015' }]}>
-                      <Ionicons name="person-outline" size={20} color="#9C27B0" />
-                    </View>
-                    <View style={styles.detailContent}>
-                      <ThemedText style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                        Parent Name
-                      </ThemedText>
-                      <ThemedText style={[styles.detailValue, { color: colors.text }]}>
-                        {displayParent}
-                      </ThemedText>
-                    </View>
-                  </View>
+                {displayParent && renderDetailCard(
+                  'person-outline',
+                  Ionicons,
+                  'Parent Name',
+                  displayParent,
+                  '#9C27B0',
+                  '#9C27B010',
+                  true
                 )}
                 
-                {/* Primary Contact */}
-                {displayContact && (
-                  <View style={styles.detailItem}>
-                    <View style={[styles.detailIconContainer, { backgroundColor: '#2196F315' }]}>
-                      <Feather name="phone" size={20} color="#2196F3" />
-                    </View>
-                    <View style={styles.detailContent}>
-                      <ThemedText style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                        Primary Contact
-                      </ThemedText>
-                      <ThemedText style={[styles.detailValue, { color: colors.text }]}>
-                        {displayContact}
-                      </ThemedText>
-                    </View>
-                  </View>
-                )}
+                <View style={styles.rowContainer}>
+                  {displayContact && renderDetailCard(
+                    'call-outline',
+                    Ionicons,
+                    'Primary Contact',
+                    displayContact,
+                    '#2196F3',
+                    '#2196F310'
+                  )}
 
-                {/* Secondary Contact */}
-                {displayContact2 && (
-                  <View style={styles.detailItem}>
-                    <View style={[styles.detailIconContainer, { backgroundColor: '#4CAF5015' }]}>
-                      <Feather name="phone" size={20} color="#4CAF50" />
-                    </View>
-                    <View style={styles.detailContent}>
-                      <ThemedText style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                        Secondary Contact
-                      </ThemedText>
-                      <ThemedText style={[styles.detailValue, { color: colors.text }]}>
-                        {displayContact2}
-                      </ThemedText>
-                    </View>
-                  </View>
-                )}
+                  {displayContact2 && renderDetailCard(
+                    'call-outline',
+                    Ionicons,
+                    'Secondary Contact',
+                    displayContact2,
+                    '#4CAF50',
+                    '#4CAF5010'
+                  )}
+                </View>
 
-                {/* Email */}
-                {displayEmail && (
-                  <View style={[styles.detailItem, styles.fullWidth]}>
-                    <View style={[styles.detailIconContainer, { backgroundColor: '#FF980015' }]}>
-                      <Ionicons name="mail-outline" size={20} color="#FF9800" />
-                    </View>
-                    <View style={styles.detailContent}>
-                      <ThemedText style={[styles.detailLabel, { color: colors.textSecondary }]}>
-                        Email
-                      </ThemedText>
-                      <ThemedText style={[styles.detailValue, { color: colors.text }]}>
-                        {displayEmail}
-                      </ThemedText>
-                    </View>
-                  </View>
+                {displayEmail && renderDetailCard(
+                  'mail-outline',
+                  Ionicons,
+                  'Email',
+                  displayEmail,
+                  '#FF9800',
+                  '#FF980010',
+                  true
                 )}
               </View>
             </View>
           )}
-        </View>
+        </Animated.View>
       </ScrollView>
 
       {/* More Menu Modal */}
@@ -632,7 +700,6 @@ export default function Student({ student, onClose }) {
         student={studentData || student}
         onPaymentSuccess={(result) => {
           showToast('Payment completed successfully', 'success')
-          // Refresh student data to update fee details
           fetchStudentData()
         }}
       />
@@ -665,6 +732,15 @@ export default function Student({ student, onClose }) {
       />
     </View>
   )
+}
+
+const formatDate = (dateString) => {
+  if (!dateString) return 'N/A'
+  const date = new Date(dateString)
+  const day = date.getDate().toString().padStart(2, '0')
+  const month = (date.getMonth() + 1).toString().padStart(2, '0')
+  const year = date.getFullYear()
+  return `${day}/${month}/${year}`
 }
 
 const styles = StyleSheet.create({
@@ -723,20 +799,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 20,
+    paddingBottom: 16,
   },
   contentContainer: {
-    padding: 20,
+    padding: 16,
     gap: 16,
   },
   profileCard: {
-    borderRadius: 24,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 5,
+    borderRadius: 20,
+    padding: 16,
   },
   profileContent: {
     flexDirection: 'row',
@@ -744,92 +815,82 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   studentAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
+    borderWidth: 2,
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   avatarText: {
-    fontSize: 32,
-    fontWeight: '700',
+    fontSize: 28,
+    color: '#FFFFFF',
   },
   profileInfo: {
     flex: 1,
-    gap: 8,
+    gap: 6,
   },
   profileName: {
     fontSize: 18,
-    fontWeight: '700',
     color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
-  profileBadges: {
+  classSectionContainer: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
     flexWrap: 'wrap',
   },
-  classBadge: {
+  classSectionBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 16,
   },
-  rollBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 16,
-  },
-  badgeText: {
+  classSectionText: {
     color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 13,
   },
-  tagsContainer: {
+  quickActions: {
     flexDirection: 'row',
+    justifyContent: 'space-around',
     gap: 8,
-    marginTop: 4,
-    flexWrap: 'wrap',
   },
-  typeTag: {
-    flexDirection: 'row',
+  quickAction: {
+    flex: 1,
     alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 14,
     gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    borderWidth: 1,
   },
-  tagText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '500',
+  quickActionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quickActionText: {
+    fontSize: 13,
+    fontFamily: 'Poppins-SemiBold',
   },
   sectionCard: {
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    borderWidth: 1,
   },
   sectionHeader: {
-    paddingBottom: 12,
     marginBottom: 16,
-    borderBottomWidth: 1,
   },
   sectionTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   sectionIconContainer: {
     width: 36,
@@ -840,60 +901,95 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    letterSpacing: 0.2,
+    fontFamily: 'Poppins-SemiBold',
   },
   detailsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 20,
+    flexDirection: 'column',
+    gap: 10,
   },
-  detailItem: {
+  rowContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    width: '48%',
-  },
-  fullWidth: {
+    gap: 10,
     width: '100%',
   },
-  detailIconContainer: {
+  detailCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  fullWidthCard: {
+    width: '100%',
+  },
+  detailIconWrapper: {
     width: 40,
     height: 40,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  detailContent: {
+  detailCardContent: {
     flex: 1,
   },
-  detailLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-    marginBottom: 2,
+  detailCardLabel: {
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.2,
+    marginBottom: -2,
   },
-  detailValue: {
+  detailCardValue: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Poppins-SemiBold',
+  },
+  facilitiesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  facilityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  facilityText: {
+    fontSize: 13,
+    fontFamily: 'Poppins-SemiBold',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    padding: 20,
+  },
+  loadingCard: {
+    padding: 30,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 14,
   },
   moreMenu: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 120 : 100, 
-    right: 20,
-    borderRadius: 16,
+    top: Platform.OS === 'ios' ? 120 : 100,
+    right: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
     width: 240,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
     zIndex: 9999,
     overflow: 'hidden',
   },
@@ -903,7 +999,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.03)',
+  },
+  lastMenuItem: {
+    borderBottomWidth: 0,
   },
   menuIconContainer: {
     width: 36,
@@ -915,6 +1013,5 @@ const styles = StyleSheet.create({
   },
   menuItemText: {
     fontSize: 14,
-    fontWeight: '500',
   },
 })

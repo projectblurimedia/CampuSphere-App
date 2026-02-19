@@ -6,7 +6,9 @@ import {
   updateEmployee,
   deleteEmployee,
   searchEmployees,
+  quickSearchEmployees,
   getEmployeeStatistics,
+  getTodayBirthdays,
   downloadEmployeeTemplate,
   bulkImportEmployees,
   testImport
@@ -14,10 +16,14 @@ import {
 
 const router = express.Router()
 
+// Employee search routes (place before /:id to avoid conflicts)
+router.get('/search', searchEmployees)
+router.get('/quick-search', quickSearchEmployees)
+router.get('/birthdays', getTodayBirthdays)
+router.get('/statistics', getEmployeeStatistics)
+
 // Employee CRUD routes
 router.get('/', getAllEmployees)
-router.get('/search', searchEmployees)
-router.get('/statistics', getEmployeeStatistics)
 router.get('/:id', getEmployeeById)
 router.post('/', createEmployee)
 router.put('/:id', updateEmployee)

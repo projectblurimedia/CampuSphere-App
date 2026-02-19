@@ -1,15 +1,15 @@
 import React, { useState } from 'react'
 import { View, StyleSheet, TouchableOpacity, Platform, StatusBar, Modal } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { Ionicons, FontAwesome5, MaterialIcons, FontAwesome6 } from '@expo/vector-icons'
+import { Ionicons, FontAwesome5, MaterialIcons, FontAwesome6, MaterialCommunityIcons } from '@expo/vector-icons'
 import { ThemedText } from '@/components/ui/themed-text'
 import { useNavigation } from 'expo-router'
 import { useTheme } from '@/hooks/useTheme'
 import DashboardMenu from '@/components/dashboard/dashboard-menu'
 import StudentsMenu from '@/components/students/students-menu'
-import StaffMenu from '@/components/staff/staff-menu'
+import EmployeeMenu from '@/components/employee/employee-menu'
 import CashflowMenu from '@/components/cashflow/cashflow-menu'
-import AcademicsMenu from '@/components/academics/academics-menu'
+import ProfileMenu from '@/components/profile/profile-menu'
 
 export default function CustomHeader({ title, showBackButton = false, iconName = 'school', currentRoute = 'index' }) {
   const navigation = useNavigation()
@@ -34,14 +34,14 @@ export default function CustomHeader({ title, showBackButton = false, iconName =
     switch(name) {
       case 'students':
         return <FontAwesome6 name="hands-holding-child" size={20} color={color} />
-      case 'staff':
+      case 'employees':
         return <FontAwesome5 name="chalkboard-teacher" size={18} color={color} />
       case 'home':
         return <MaterialIcons name="dashboard" size={size} color={color} />
       case 'cashflow':
         return <MaterialIcons name="payments" size={size} color={color} />
-      case 'academics':
-        return <MaterialIcons name="school" size={size} color={color} />
+      case 'profile':
+        return <MaterialCommunityIcons name="account-circle" size={size} color={color} />
       default:
         return <MaterialIcons name="school" size={size} color={color} />
     }
@@ -81,9 +81,9 @@ export default function CustomHeader({ title, showBackButton = false, iconName =
             onClose={handleCloseMenu}
           />
         )
-      case 'staff':
+      case 'employees':
         return (
-          <StaffMenu
+          <EmployeeMenu
             visible={menuVisible}
             onClose={handleCloseMenu}
           />
@@ -95,9 +95,9 @@ export default function CustomHeader({ title, showBackButton = false, iconName =
             onClose={handleCloseMenu}
           />
         )
-      case 'academics':
+      case 'profile':
         return (
-          <AcademicsMenu
+          <ProfileMenu
             visible={menuVisible}
             onClose={handleCloseMenu}
           />

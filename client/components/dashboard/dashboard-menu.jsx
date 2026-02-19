@@ -160,6 +160,14 @@ export default function DashboardMenu({ visible, onClose }) {
       gradient: ['#3b82f6', '#2563eb'], 
       componentName: 'feeDetails'
     },
+    { 
+      id: 12, 
+      title: 'Time Tables',
+      icon: 'calendar-clock',
+      iconType: 'MaterialCommunityIcons', 
+      gradient: ['#ec4899', '#d946ef'], 
+      componentName: 'timeTables'
+    },
   ]
 
   const sections = [
@@ -182,6 +190,10 @@ export default function DashboardMenu({ visible, onClose }) {
     {
       title: 'Fees',
       data: menuItems.filter(item => [10,11].includes(item.id)),
+    },
+    {
+      title: 'Schedules',
+      data: menuItems.filter(item => [12].includes(item.id)),
     },
   ]
 
@@ -363,7 +375,7 @@ export default function DashboardMenu({ visible, onClose }) {
                       <TouchableOpacity
                         activeOpacity={.9} 
                         key={item.id}
-                        style={[styles.item, { backgroundColor: colors.cardBackground }]}
+                        style={[styles.item, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
                         onPress={() => handleMenuItemPress(item)}
                       >
                         <View style={styles.itemContent}>
@@ -527,6 +539,7 @@ const styles = StyleSheet.create({
   item: {
     borderRadius: 12,
     marginBottom: 8,
+    borderWidth: 1,
     ...Platform.select({
       ios: { 
         shadowColor: '#000', 

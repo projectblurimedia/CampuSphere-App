@@ -1,12 +1,13 @@
-import { View, TouchableOpacity, StyleSheet, Platform } from "react-native"
+import { View, TouchableOpacity, StyleSheet, Platform, Image } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import Animated, {
   FadeIn,
   FadeOut,
   LinearTransition,
 } from "react-native-reanimated"
-import { FontAwesome5, FontAwesome6, MaterialIcons, Feather } from "@expo/vector-icons"
+import { FontAwesome5, FontAwesome6, MaterialIcons, Feather, MaterialCommunityIcons } from "@expo/vector-icons"
 import { useTheme } from '@/hooks/useTheme'
+import { useSelector } from 'react-redux'
 
 const AnimatedTouchableOpacity =
   Animated.createAnimatedComponent(TouchableOpacity)
@@ -14,6 +15,33 @@ const AnimatedTouchableOpacity =
 const CustomTabBar = ({ state, descriptors, navigation }) => {
   const { colors, isDark } = useTheme()
   const insets = useSafeAreaInsets()
+  
+  // Get employee from Redux store
+  const { employee } = useSelector((state) => state.employee)
+
+  const getProfileImage = () => {
+    if (employee?.profilePicUrl) {
+      return (
+        <Image 
+          source={{ uri: employee.profilePicUrl }} 
+          style={styles.profileImage}
+        />
+      )
+    }
+    return <MaterialCommunityIcons name="account-circle" size={22} color={colors.tabBarInactive} />
+  }
+
+  const getFocusedProfileImage = () => {
+    if (employee?.profilePicUrl) {
+      return (
+        <Image 
+          source={{ uri: employee.profilePicUrl }} 
+          style={[styles.profileImage, { borderColor: '#FFFFFF' }]}
+        />
+      )
+    }
+    return <MaterialCommunityIcons name="account-circle" size={22} color="#FFFFFF" />
+  }
 
   return (
     <View style={[
@@ -51,18 +79,18 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
             }
           }
 
-          const getIconByRouteName = (routeName, color) => {
+          const getIconByRouteName = (routeName, color, isFocused) => {
             switch (routeName) {
               case "students":
                 return <FontAwesome6 name="hands-holding-child" size={22} color={color} />
-              case "staff":
-                return <FontAwesome5 name="chalkboard-teacher" size={20} color={color} />
+              case "employees":
+                return <FontAwesome5 name="chalkboard-teacher" size={18} color={color} />
               case "index":
                 return <MaterialIcons name="dashboard" size={24} color={color} />
               case "cashflow":
                 return <MaterialIcons name="payments" size={22} color={color} />
-              case "academics":
-                return <MaterialIcons name="school" size={22} color={color} />
+              case "profile":
+                return isFocused ? getFocusedProfileImage() : getProfileImage()
               default:
                 return <Feather name="home" size={20} color={color} />
             }
@@ -84,7 +112,8 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
             >
               {getIconByRouteName(
                 route.name,
-                isFocused ? '#FFFFFF' : colors.tabBarInactive
+                isFocused ? '#FFFFFF' : colors.tabBarInactive,
+                isFocused
               )}
               {isFocused && (
                 <Animated.Text
@@ -107,8 +136,8 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     borderTopWidth: 1,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    // borderTopLeftRadius: 20,
+    // borderTopRightRadius: 20,
     position: "absolute",
     bottom: 0,
     left: 0,
@@ -143,6 +172,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-SemiBold',
     fontSize: 11,
     maxWidth: 80,
+    marginBottom: -2,
+  },
+  profileImage: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
 })
 

@@ -63,7 +63,7 @@ const CustomInput = React.memo(({
           flex: 1,
           height: '100%',
           fontSize: 15,
-          color: colors.text,
+          color: editable ? colors.text : colors.textSecondary,
           paddingVertical: 0,
           paddingRight: 10,
           margin: 0,
@@ -183,7 +183,7 @@ const CustomDropdown = ({
       flex: 1,
       fontSize: 15,
       fontFamily: 'Poppins-Medium',
-      color: value ? colors.text : colors.textSecondary,
+      color: value ? (disabled ? colors.textSecondary : colors.text) : colors.textSecondary,
     },
     dropdownList: {
       position: 'absolute',
@@ -231,7 +231,7 @@ const CustomDropdown = ({
           {selectedLabel}
         </ThemedText>
         <Animated.View style={{ transform: [{ rotate }] }}>
-          <Ionicons name="chevron-down" size={16} color={colors.primary} />
+          <Ionicons name="chevron-down" size={16} color={disabled ? colors.textSecondary : colors.primary} />
         </Animated.View>
       </TouchableOpacity>
       
@@ -282,14 +282,14 @@ const CustomDropdown = ({
   )
 }
 
-export default function CreateEmployee({ visible, onClose }) {
+export default function CreateEmployee({ visible, onClose, employeeData }) {
   const { colors } = useTheme()
 
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     gender: 'NOT_SPECIFIED',
-    dob: new Date(Date.now() - 18 * 365 * 24 * 60 * 60 * 1000),
+    dob: new Date(),
     email: '',
     phone: '',
     address: '',
@@ -302,9 +302,12 @@ export default function CreateEmployee({ visible, onClose }) {
   })
 
   const [profilePic, setProfilePic] = useState(null)
+  const [existingProfilePic, setExistingProfilePic] = useState(null)
+  const [removeProfilePic, setRemoveProfilePic] = useState(false)
   const [showDatePicker, setShowDatePicker] = useState({ dob: false, joiningDate: false })
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   // Gender options (matching schema)
   const genderOptions = useMemo(() => [
@@ -322,6 +325,30 @@ export default function CreateEmployee({ visible, onClose }) {
     { label: 'Teacher', value: 'Teacher' },
     { label: 'Other', value: 'Other' },
   ], [])
+
+  // Load employee data in edit mode
+  useEffect(() => {
+    if (visible && employeeData) {
+      setFormData({
+        firstName: employeeData.firstName || '',
+        lastName: employeeData.lastName || '',
+        gender: employeeData.gender || 'NOT_SPECIFIED',
+        dob: employeeData.dob ? new Date(employeeData.dob) : new Date(),
+        email: employeeData.email || '',
+        phone: employeeData.phone || '',
+        address: employeeData.address || '',
+        village: employeeData.village || '',
+        designation: employeeData.designation || '',
+        joiningDate: employeeData.joiningDate ? new Date(employeeData.joiningDate) : new Date(),
+        qualification: employeeData.qualification || '',
+        aadharNumber: employeeData.aadharNumber || '',
+        panNumber: employeeData.panNumber || '',
+      })
+      setExistingProfilePic(employeeData.profilePicUrl || null)
+      setProfilePic(null)
+      setRemoveProfilePic(false)
+    }
+  }, [visible, employeeData])
 
   // Update form data
   const updateFormData = useCallback((updates) => {
@@ -357,8 +384,24 @@ export default function CreateEmployee({ visible, onClose }) {
 
     if (!result.canceled) {
       setProfilePic(result.assets[0])
+      setExistingProfilePic(null)
+      setRemoveProfilePic(false)
     }
   }, [loading, showToast])
+
+  // Handle delete profile picture
+  const handleDeleteProfilePic = useCallback(() => {
+    setShowDeleteModal(true)
+  }, [])
+
+  // Confirm delete profile picture
+  const confirmDeleteProfilePic = useCallback(() => {
+    setProfilePic(null)
+    setExistingProfilePic(null)
+    setRemoveProfilePic(true)
+    setShowDeleteModal(false)
+    showToast('Profile picture will be removed on save', 'success')
+  }, [showToast])
 
   // Validate form data
   const validateForm = useCallback(() => {
@@ -427,13 +470,13 @@ export default function CreateEmployee({ visible, onClose }) {
           if (key === 'dob' || key === 'joiningDate') {
             formDataToSend.append(key, new Date(formData[key]).toISOString())
           } else if (key === 'aadharNumber' && formData[key].trim() === '') {
-            // Skip empty aadharNumber
+            formDataToSend.append(key, '')
           } else if (key === 'panNumber' && formData[key].trim() === '') {
-            // Skip empty panNumber
+            formDataToSend.append(key, '')
           } else if (key === 'qualification' && formData[key].trim() === '') {
-            // Skip empty qualification
+            formDataToSend.append(key, '')
           } else if (key === 'village' && formData[key].trim() === '') {
-            // Skip empty village
+            formDataToSend.append(key, '')
           } else {
             formDataToSend.append(key, formData[key].toString().trim())
           }
@@ -451,60 +494,54 @@ export default function CreateEmployee({ visible, onClose }) {
         })
       }
 
-      const response = await axiosApi.post('/employees', formDataToSend, {
+      // Add removeProfilePic flag
+      if (removeProfilePic) {
+        formDataToSend.append('removeProfilePic', 'true')
+      }
+
+      const response = await axiosApi.put(`/employees/${employeeData.id}`, formDataToSend, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       })
 
       if (response.data.success) {
-        showToast('Employee created successfully!', 'success')
-        resetForm()
-        setTimeout(() => onClose(), 1500)
+        showToast('Employee updated successfully!', 'success')
+        setTimeout(() => onClose(true), 1500)
       } else {
-        showToast(response.data.message || 'Failed to create employee', 'error')
+        showToast(response.data.message || 'Failed to update employee', 'error')
       }
     } catch (error) {
-      console.error('Create employee error:', error)
-      let errorMessage = 'Failed to create employee'
+      console.error('Update employee error:', error)
+      let errorMessage = 'Failed to update employee'
       
       if (error.response) {
         errorMessage = error.response.data?.message || 
                       error.response.data?.error || 
                       error.response.data?.errors?.join(', ') || 
                       'Server error occurred'
+        
+        // Handle specific error messages
+        if (error.response.status === 400) {
+          if (error.response.data.message?.includes('email already exists')) {
+            errorMessage = 'Email already exists in the system'
+          } else if (error.response.data.message?.includes('phone already exists')) {
+            errorMessage = 'Phone number already exists in the system'
+          } else if (error.response.data.message?.includes('aadhar already exists')) {
+            errorMessage = 'Aadhar number already exists in the system'
+          }
+        }
       } else if (error.request) {
         errorMessage = 'No response from server. Check your internet connection.'
       } else {
-        errorMessage = error.message || 'Failed to create employee'
+        errorMessage = error.message || 'Failed to update employee'
       }
       
       showToast(errorMessage, 'error')
     } finally {
       setLoading(false)
     }
-  }, [formData, profilePic, validateForm, loading, onClose, showToast])
-
-  // Reset form
-  const resetForm = useCallback(() => {
-    setFormData({
-      firstName: '',
-      lastName: '',
-      gender: 'NOT_SPECIFIED',
-      dob: new Date(Date.now() - 18 * 365 * 24 * 60 * 60 * 1000),
-      email: '',
-      phone: '',
-      address: '',
-      village: '',
-      designation: '',
-      joiningDate: new Date(),
-      qualification: '',
-      aadharNumber: '',
-      panNumber: '',
-    })
-    setProfilePic(null)
-    setShowDatePicker({ dob: false, joiningDate: false })
-  }, [])
+  }, [formData, profilePic, removeProfilePic, employeeData, validateForm, loading, onClose, showToast])
 
   // Date change handlers
   const onDateChange = useCallback((field) => (event, selectedDate) => {
@@ -531,10 +568,9 @@ export default function CreateEmployee({ visible, onClose }) {
 
   const handleClose = useCallback(() => {
     if (!loading) {
-      resetForm()
-      onClose()
+      onClose(false)
     }
-  }, [loading, resetForm, onClose])
+  }, [loading, onClose])
 
   const styles = useMemo(() => StyleSheet.create({
     container: {
@@ -614,6 +650,9 @@ export default function CreateEmployee({ visible, onClose }) {
       alignItems: 'center',
       marginBottom: 16,
     },
+    profilePicWrapper: {
+      position: 'relative',
+    },
     profilePicOuter: {
       width: 96,
       height: 96,
@@ -637,6 +676,23 @@ export default function CreateEmployee({ visible, onClose }) {
       width: '100%',
       height: '100%',
       borderRadius: 45,
+    },
+    deletePicButton: {
+      position: 'absolute',
+      bottom: 0,
+      right: 0,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 2,
+      borderColor: colors.cardBackground,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 3.84,
+      elevation: 5,
     },
     profilePicHint: {
       color: colors.textSecondary,
@@ -739,7 +795,79 @@ export default function CreateEmployee({ visible, onClose }) {
       fontSize: 16,
       marginLeft: 8,
     },
+    // Modal Styles
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalContent: {
+      width: SCREEN_WIDTH * 0.8,
+      backgroundColor: colors.cardBackground,
+      borderRadius: 20,
+      padding: 20,
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    modalIcon: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: colors.danger + '20',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.text,
+      marginBottom: 8,
+    },
+    modalMessage: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      marginBottom: 20,
+    },
+    modalButtons: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    modalButton: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    modalButtonCancel: {
+      backgroundColor: colors.inputBackground,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    modalButtonDelete: {
+      backgroundColor: colors.danger,
+    },
+    modalButtonText: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    modalButtonTextCancel: {
+      color: colors.text,
+    },
+    modalButtonTextDelete: {
+      color: '#FFFFFF',
+    },
   }), [colors])
+
+  // Get current profile picture to display
+  const currentProfilePic = profilePic?.uri || existingProfilePic
 
   return (
     <Modal visible={visible} animationType="fade" onRequestClose={handleClose} statusBarTranslucent>
@@ -758,8 +886,8 @@ export default function CreateEmployee({ visible, onClose }) {
                 <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
               </TouchableOpacity>
               <View style={{ flex: 1, alignItems: 'center' }}>
-                <ThemedText type='subtitle' style={styles.title}>Create New Employee</ThemedText>
-                <ThemedText style={styles.subtitle}>Fill the employee details below</ThemedText>
+                <ThemedText type='subtitle' style={styles.title}>Edit Employee</ThemedText>
+                <ThemedText style={styles.subtitle}>Update employee details</ThemedText>
               </View>
               <View style={{ width: 44 }} />
             </View>
@@ -773,6 +901,42 @@ export default function CreateEmployee({ visible, onClose }) {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.card}>
+            {/* PROFILE PICTURE */}
+            <View style={styles.formGroup}>
+              <View style={styles.profilePicContainer}>
+                <View style={styles.profilePicWrapper}>
+                  <TouchableOpacity onPress={handleProfilePic} activeOpacity={0.8} disabled={loading}>
+                    <LinearGradient
+                      colors={[colors.gradientStart, colors.gradientEnd]}
+                      style={styles.profilePicOuter}
+                    >
+                      <View style={styles.profilePicInner}>
+                        {currentProfilePic ? (
+                          <Image source={{ uri: currentProfilePic }} style={styles.profilePicImage} />
+                        ) : (
+                          <Feather name="camera" size={30} color={colors.textSecondary} />
+                        )}
+                      </View>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                  
+                  {/* Delete button - only show when there's a profile picture */}
+                  {currentProfilePic && (
+                    <TouchableOpacity
+                      style={[styles.deletePicButton, { backgroundColor: colors.danger }]}
+                      onPress={handleDeleteProfilePic}
+                      disabled={loading}
+                    >
+                      <MaterialIcons name="delete" size={18} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <ThemedText style={styles.profilePicHint}>
+                  Tap to change profile picture
+                </ThemedText>
+              </View>
+            </View>
+
             {/* PERSONAL DETAILS */}
             <View style={styles.formGroup}>
               <View style={styles.groupTitleContainer}>
@@ -780,26 +944,6 @@ export default function CreateEmployee({ visible, onClose }) {
                   <MaterialIcons name="person" size={22} color={colors.primary} />
                   <ThemedText type='subtitle' style={styles.groupTitleText}>Personal Details</ThemedText>
                 </View>
-              </View>
-
-              <View style={styles.profilePicContainer}>
-                <TouchableOpacity onPress={handleProfilePic} activeOpacity={0.8} disabled={loading}>
-                  <LinearGradient
-                    colors={[colors.gradientStart, colors.gradientEnd]}
-                    style={styles.profilePicOuter}
-                  >
-                    <View style={styles.profilePicInner}>
-                      {profilePic?.uri ? (
-                        <Image source={{ uri: profilePic.uri }} style={styles.profilePicImage} />
-                      ) : (
-                        <Feather name="camera" size={30} color={colors.textSecondary} />
-                      )}
-                    </View>
-                  </LinearGradient>
-                </TouchableOpacity>
-                <ThemedText style={styles.profilePicHint}>
-                  Tap to add profile picture
-                </ThemedText>
               </View>
 
               <ThemedText style={styles.fieldLabel}>First Name *</ThemedText>
@@ -857,7 +1001,7 @@ export default function CreateEmployee({ visible, onClose }) {
                     value={formData.dob}
                     mode="date"
                     display="default"
-                    maximumDate={new Date(Date.now() - 18 * 365 * 24 * 60 * 60 * 1000)} // Minimum 18 years
+                    maximumDate={new Date()}
                     onChange={onDateChange('dob')}
                   />
                 )}
@@ -1054,12 +1198,50 @@ export default function CreateEmployee({ visible, onClose }) {
                   <FontAwesome5 name="check-circle" size={18} color="#FFFFFF" />
                 )}
                 <ThemedText style={styles.saveBtnText}>
-                  {loading ? 'Saving...' : 'Save Employee'}
+                  {loading ? 'Updating...' : 'Update Employee'}
                 </ThemedText>
               </TouchableOpacity>
             </LinearGradient>
           </View>
         </View>
+
+        {/* DELETE CONFIRMATION MODAL */}
+        <Modal
+          visible={showDeleteModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowDeleteModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={[styles.modalIcon, { backgroundColor: colors.danger + '20' }]}>
+                <MaterialIcons name="delete" size={30} color={colors.danger} />
+              </View>
+              <ThemedText style={styles.modalTitle}>Delete Profile Picture</ThemedText>
+              <ThemedText style={styles.modalMessage}>
+                Are you sure you want to delete the profile picture? This action cannot be undone.
+              </ThemedText>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  onPress={() => setShowDeleteModal(false)}
+                >
+                  <ThemedText style={[styles.modalButtonText, styles.modalButtonTextCancel]}>
+                    Cancel
+                  </ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonDelete]}
+                  onPress={confirmDeleteProfilePic}
+                >
+                  <ThemedText style={[styles.modalButtonText, styles.modalButtonTextDelete]}>
+                    Delete
+                  </ThemedText>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Toast Notification */}
         <ToastNotification

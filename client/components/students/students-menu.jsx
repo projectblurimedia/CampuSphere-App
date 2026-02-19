@@ -268,7 +268,7 @@ export default function StudentsMenu({ visible, onClose }) {
                       <TouchableOpacity
                         activeOpacity={0.7} 
                         key={item.id}
-                        style={[styles.item, { backgroundColor: colors.cardBackground }]}
+                        style={[styles.item, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
                         onPress={() => handleMenuItemPress(item)}
                       >
                         <View style={styles.itemContent}>
@@ -424,6 +424,7 @@ const styles = StyleSheet.create({
   item: {
     borderRadius: 12,
     marginBottom: 8,
+    borderWidth: 1,
     ...Platform.select({
       ios: { 
         shadowColor: '#000', 
@@ -432,7 +433,7 @@ const styles = StyleSheet.create({
         shadowRadius: 4 
       },
       android: { 
-        elevation: 2 
+        elevation: 1
       },
     }),
   },

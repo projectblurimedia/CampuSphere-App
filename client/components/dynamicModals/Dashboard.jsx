@@ -14,6 +14,7 @@ const componentMap = {
   'uploadMarks': () => import('@/pages/menu/uploadMarks/UploadMarks'),
   'feeManagement': () => import('@/pages/menu/feeManagement/FeeManagement'),
   'feeDetails': () => import('@/pages/menu/feeDetails/FeeDetails'),
+  'timeTables': () => import('@/pages/menu/timeTables/TimeTables'),
   
   // Cashflow components
   'AddIncome': () => import('@/pages/cashflow/CashflowForm'),

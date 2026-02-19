@@ -35,9 +35,9 @@ export default function TabLayout() {
         }} 
       />
       <Tabs.Screen 
-        name="staff" 
+        name="employees" 
         options={{ 
-          title: "Staff",
+          title: "Employees",
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="groups" size={size} color={color} />
           ),
@@ -62,11 +62,11 @@ export default function TabLayout() {
         }} 
       />
       <Tabs.Screen 
-        name="academics" 
+        name="profile" 
         options={{ 
-          title: "Academics",
+          title: "Profile",
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="school" size={size} color={color} />
+            <MaterialCommunityIcons name="account-circle" size={size} color={color} />
           ),
         }} 
       />
@@ -78,14 +78,14 @@ function getIconNameForRoute(routeName) {
   switch(routeName) {
     case 'students':
       return 'students'
-    case 'staff':
-      return 'staff'
+    case 'employees':
+      return 'employees'
     case 'index':
       return 'home'
     case 'cashflow':
       return 'cashflow'
-    case 'academics':
-      return 'academics'
+    case 'profile':
+      return 'profile'
     default:
       return 'school'
   }

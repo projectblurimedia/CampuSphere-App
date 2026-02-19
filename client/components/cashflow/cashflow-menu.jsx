@@ -199,7 +199,7 @@ export default function CashflowMenu({ visible, onClose }) {
                       <TouchableOpacity
                         activeOpacity={.9} 
                         key={item.id}
-                        style={[styles.item, { backgroundColor: colors.cardBackground }]}
+                        style={[styles.item, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
                         onPress={() => handleMenuItemPress(item)}
                       >
                         <View style={styles.itemContent}>
@@ -328,6 +328,7 @@ const styles = StyleSheet.create({
   item: {
     borderRadius: 12,
     marginBottom: 8,
+    borderWidth: 1,
     ...Platform.select({
       ios: { 
         shadowColor: '#000', 

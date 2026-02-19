@@ -12,10 +12,16 @@ import {
   getStudentsByClassAndSection,
   getClassesAndSections,
   quickSearchStudents,
+  getTodayBirthdays,
+  getAttendanceStatsByClassSection,
+  getMarksStatsByClassSection,
 } from '../controllers/studentController.js'
 
 const router = express.Router()
 
+router.get('/birthdays', getTodayBirthdays)
+router.get('/attendance-stats', getAttendanceStatsByClassSection)
+router.get('/marks-stats', getMarksStatsByClassSection)
 router.get('/classes-sections', getClassesAndSections)
 router.get('/search', searchStudents)
 router.get('/quick-search', quickSearchStudents)

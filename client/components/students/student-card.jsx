@@ -1,17 +1,23 @@
 import { useState } from 'react'
 import { View, StyleSheet, TouchableOpacity, Image, Modal } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
-import { Ionicons, Feather } from '@expo/vector-icons'
+import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useTheme } from '@/hooks/useTheme'
 import Student from '@/pages/student/Student'
 
-export default function StudentCard({ student }) {
+export default function StudentCard({ student, onPress }) {
   const { colors } = useTheme()
   const [showStudentModal, setShowStudentModal] = useState(false)
   
   const handleStudentPress = () => {
-    setShowStudentModal(true)
+    if (onPress) {
+      // If custom onPress is provided, use it
+      onPress(student)
+    } else {
+      // Default behavior - open Student modal
+      setShowStudentModal(true)
+    }
   }
 
   const closeStudentModal = () => {
@@ -75,6 +81,7 @@ export default function StudentCard({ student }) {
         </View>
       </TouchableOpacity>
 
+      {/* Default Student Modal - only shown when onPress is not provided */}
       <Modal
         animationType="fade"
         statusBarTranslucent

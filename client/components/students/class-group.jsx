@@ -278,7 +278,7 @@ export default function ClassGroup({
     },
     className: {
       fontSize: 16,
-      fontWeight: '600',
+      fontFamily: 'Poppins-SemiBold',
       color: colors.text,
     },
     classSubtext: {
@@ -420,7 +420,7 @@ export default function ClassGroup({
     },
     sectionName: {
       fontSize: 16,
-      fontWeight: '600',
+      fontFamily: 'Poppins-SemiBold',
       color: colors.text,
     },
     sectionStats: {
@@ -532,7 +532,7 @@ export default function ClassGroup({
                   style={styles.backButton}
                   onPress={handleBack}
                 >
-                  <FontAwesome5 name="chevron-left" size={20} color="#FFFFFF" />
+                  <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
                 </TouchableOpacity>
                 
                 <View style={styles.headerInfo}>
@@ -701,7 +701,7 @@ export default function ClassGroup({
                               </ThemedText>
                             </View>
                             <View style={styles.statItem}>
-                              <View style={[styles.statDot, { backgroundColor: colors.success || '#4CAF50' }]} />
+                              <View style={[styles.statDot, { backgroundColor:  '#ed2ae0' }]} />
                               <ThemedText style={styles.statText}>
                                 Girls: {sectionData.femaleCount || 0}
                               </ThemedText>

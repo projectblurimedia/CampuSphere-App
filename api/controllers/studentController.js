@@ -944,12 +944,13 @@ export const quickSearchStudents = async (req, res) => {
     const formattedStudents = students.map(student => ({
       id: student.id,
       name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
+      firstName: student.firstName,
+      lastName: student.lastName,
       rollNo: student.rollNo,
-      admissionNo: student.admissionNo,
       class: mapEnumToDisplayName(student.class),
+      displayClass: mapEnumToDisplayName(student.class),
       section: student.section,
       profilePicUrl: student.profilePicUrl,
-      displayText: `${student.firstName || ''} ${student.lastName || ''} (${student.rollNo || student.admissionNo})`.trim()
     }))
 
     res.status(200).json({
@@ -1564,5 +1565,854 @@ export const getClassesAndSections = async (req, res) => {
       success: false,
       message: error.message || 'Failed to get classes and sections'
     })
+  }
+}
+
+
+/**
+ * @desc    Get all students whose birthday is today
+ * @route   GET /api/students/today-birthdays
+ * @access  Private
+ */
+export const getTodayBirthdays = async (req, res) => {
+  try {
+    const today = new Date()
+    const todayMonth = today.getMonth() + 1
+    const todayDay = today.getDate()
+
+    console.log(`Fetching birthdays for: Month ${todayMonth}, Day ${todayDay}`)
+
+    // Use raw SQL to filter by month and day directly in the database
+    // This is much more efficient than fetching all students
+    const birthdayStudents = await prisma.$queryRaw`
+      SELECT 
+        id, 
+        "firstName", 
+        "lastName", 
+        dob, 
+        class, 
+        section, 
+        "profilePicUrl", 
+        "profilePicPublicId", 
+        gender, 
+        "rollNo",
+        "admissionNo",
+        "parentName",
+        "parentPhone",
+        "parentEmail"
+      FROM "Student"
+      WHERE 
+        "isActive" = true 
+        AND dob IS NOT NULL
+        AND EXTRACT(MONTH FROM dob) = ${todayMonth}
+        AND EXTRACT(DAY FROM dob) = ${todayDay}
+      ORDER BY 
+        class ASC, 
+        section ASC, 
+        "firstName" ASC
+    `
+
+    console.log(`Found ${birthdayStudents.length} students with birthday today`)
+
+    // If no students found, return early
+    if (birthdayStudents.length === 0) {
+      return res.status(200).json({
+        success: true,
+        count: 0,
+        date: today.toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        }),
+        data: [],
+        groupedByClass: {}
+      })
+    }
+
+    // Calculate age function
+    const calculateAge = (dob) => {
+      const today = new Date()
+      const birthDate = new Date(dob)
+      let age = today.getFullYear() - birthDate.getFullYear()
+      const monthDiff = today.getMonth() - birthDate.getMonth()
+      
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--
+      }
+      
+      return age
+    }
+
+    // Add display class name and formatted data
+    const studentsWithDisplay = birthdayStudents.map(student => ({
+      id: student.id,
+      name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
+      firstName: student.firstName,
+      lastName: student.lastName,
+      displayClass: mapEnumToDisplayName(student.class),
+      class: student.class,
+      classLabel: mapEnumToDisplayName(student.class),
+      section: student.section,
+      rollNo: student.rollNo,
+      admissionNo: student.admissionNo,
+      dob: student.dob,
+      age: calculateAge(student.dob),
+      ageYears: `${calculateAge(student.dob)} years`,
+      dobFormatted: new Date(student.dob).toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      }),
+      profilePicUrl: student.profilePicUrl,
+      parentName: student.parentName,
+      parentPhone: student.parentPhone,
+      parentEmail: student.parentEmail,
+      gender: student.gender
+    }))
+
+    // Group by class for better presentation
+    const groupedByClass = {}
+    studentsWithDisplay.forEach(student => {
+      const classKey = student.displayClass
+      if (!groupedByClass[classKey]) {
+        groupedByClass[classKey] = []
+      }
+      groupedByClass[classKey].push(student)
+    })
+
+    // Sort classes in correct order
+    const classOrder = [
+      'Pre-Nursery', 'Nursery', 'LKG', 'UKG',
+      'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5',
+      'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10',
+      'Class 11', 'Class 12'
+    ]
+
+    const sortedGroupedByClass = {}
+    Object.keys(groupedByClass)
+      .sort((a, b) => {
+        const aIndex = classOrder.indexOf(a)
+        const bIndex = classOrder.indexOf(b)
+        return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex)
+      })
+      .forEach(key => {
+        sortedGroupedByClass[key] = groupedByClass[key]
+      })
+
+    res.status(200).json({
+      success: true,
+      count: birthdayStudents.length,
+      date: today.toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      }),
+      data: studentsWithDisplay,
+      groupedByClass: sortedGroupedByClass
+    })
+  } catch (error) {
+    console.error('Get today birthdays error:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch birthday students',
+    })
+  }
+}
+
+
+
+/**
+ * @desc    Get comprehensive attendance statistics report for all classes and sections
+ * @route   GET /api/students/attendance-stats
+ * @access  Private
+ */
+export const getAttendanceStatsByClassSection = async (req, res) => {
+  try {
+    // Find the date range from actual attendance records
+    const dateRange = await prisma.attendance.aggregate({
+      _min: {
+        date: true
+      },
+      _max: {
+        date: true
+      }
+    })
+
+    const startDate = dateRange._min.date
+    const endDate = dateRange._max.date
+
+    // If no attendance records exist, return empty report
+    if (!startDate || !endDate) {
+      return res.status(200).json({
+        success: true,
+        message: 'No attendance records found in the system',
+        data: {
+          dateRange: null,
+          totalWorkingDays: 0,
+          schoolSummary: {
+            totalStudents: 0,
+            studentsWithAttendance: 0,
+            studentsWithoutAttendance: 0,
+            totalAttendanceRecords: 0,
+            overallAttendancePercentage: 0,
+            averagePresentPerDay: 0,
+            averageAbsentPerDay: 0
+          },
+          classes: []
+        }
+      })
+    }
+
+    // Calculate working days in this date range (excluding Sundays)
+    const totalWorkingDays = await calculateWorkingDaysInRange(startDate, endDate)
+
+    // Get all active students with their attendance
+    const students = await prisma.student.findMany({
+      where: {
+        isActive: true
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        class: true,
+        section: true,
+        rollNo: true,
+        admissionNo: true,
+        attendance: {
+          where: {
+            date: {
+              gte: startDate,
+              lte: endDate
+            }
+          },
+          orderBy: {
+            date: 'asc'
+          },
+          select: {
+            id: true,
+            date: true,
+            morning: true,
+            afternoon: true
+          }
+        }
+      },
+      orderBy: [
+        { class: 'asc' },
+        { section: 'asc' },
+        { firstName: 'asc' }
+      ]
+    })
+
+    // Group by class and section
+    const classSectionMap = new Map()
+    const schoolStats = {
+      totalStudents: students.length,
+      studentsWithAttendance: 0,
+      studentsWithoutAttendance: 0,
+      totalAttendanceRecords: 0,
+      totalPresentCount: 0,
+      totalAbsentCount: 0,
+      attendanceByDate: new Map() // For daily averages
+    }
+
+    // Process each student
+    students.forEach(student => {
+      const classKey = student.class
+      const sectionKey = student.section
+      const compositeKey = `${classKey}-${sectionKey}`
+
+      if (!classSectionMap.has(compositeKey)) {
+        classSectionMap.set(compositeKey, {
+          class: classKey,
+          classLabel: mapEnumToDisplayName(classKey),
+          section: sectionKey,
+          totalStudents: 0,
+          studentsWithAttendance: 0,
+          studentsWithoutAttendance: 0,
+          totalAttendanceRecords: 0,
+          totalPresentCount: 0,
+          totalAbsentCount: 0,
+          attendancePercentage: 0,
+          attendanceByDate: new Map(),
+          students: []
+        })
+      }
+
+      const sectionStats = classSectionMap.get(compositeKey)
+      sectionStats.totalStudents++
+
+      // Calculate individual student statistics
+      const attendanceCount = student.attendance.length
+      const presentCount = student.attendance.filter(a => 
+        a.morning === true || a.afternoon === true
+      ).length
+      const absentCount = student.attendance.filter(a => 
+        a.morning === false && a.afternoon === false
+      ).length
+
+      // Track per-date attendance for this section
+      student.attendance.forEach(record => {
+        const dateStr = record.date.toISOString().split('T')[0]
+        const isPresent = record.morning === true || record.afternoon === true
+        
+        // Update section's per-date stats
+        if (!sectionStats.attendanceByDate.has(dateStr)) {
+          sectionStats.attendanceByDate.set(dateStr, {
+            date: record.date,
+            present: 0,
+            absent: 0,
+            total: 0
+          })
+        }
+        const dateStats = sectionStats.attendanceByDate.get(dateStr)
+        dateStats.total++
+        if (isPresent) {
+          dateStats.present++
+        } else {
+          dateStats.absent++
+        }
+
+        // Update school's per-date stats
+        if (!schoolStats.attendanceByDate.has(dateStr)) {
+          schoolStats.attendanceByDate.set(dateStr, {
+            date: record.date,
+            present: 0,
+            absent: 0,
+            total: 0
+          })
+        }
+        const schoolDateStats = schoolStats.attendanceByDate.get(dateStr)
+        schoolDateStats.total++
+        if (isPresent) {
+          schoolDateStats.present++
+        } else {
+          schoolDateStats.absent++
+        }
+      })
+
+      // Update section statistics
+      if (attendanceCount > 0) {
+        sectionStats.studentsWithAttendance++
+        schoolStats.studentsWithAttendance++
+        
+        sectionStats.totalAttendanceRecords += attendanceCount
+        sectionStats.totalPresentCount += presentCount
+        sectionStats.totalAbsentCount += absentCount
+        
+        schoolStats.totalAttendanceRecords += attendanceCount
+        schoolStats.totalPresentCount += presentCount
+        schoolStats.totalAbsentCount += absentCount
+      } else {
+        sectionStats.studentsWithoutAttendance++
+        schoolStats.studentsWithoutAttendance++
+      }
+
+      // Add student details
+      sectionStats.students.push({
+        id: student.id,
+        name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
+        rollNo: student.rollNo || student.admissionNo,
+        attendanceCount,
+        presentCount,
+        absentCount,
+        attendancePercentage: attendanceCount > 0 
+          ? Number(((presentCount / attendanceCount) * 100).toFixed(2))
+          : 0,
+        hasAttendance: attendanceCount > 0
+      })
+    })
+
+    // Calculate percentages and format the response
+    const classes = []
+    let schoolTotalPresentPercentage = 0
+
+    // Process each class-section
+    for (const [_, sectionStats] of classSectionMap) {
+      // Calculate section attendance percentage
+      if (sectionStats.totalAttendanceRecords > 0) {
+        sectionStats.attendancePercentage = Number(
+          ((sectionStats.totalPresentCount / sectionStats.totalAttendanceRecords) * 100).toFixed(2)
+        )
+      }
+
+      // Convert attendanceByDate Map to array for response
+      const dailyAttendance = Array.from(sectionStats.attendanceByDate.values())
+        .map(day => ({
+          date: day.date.toISOString().split('T')[0],
+          present: day.present,
+          absent: day.absent,
+          total: day.total,
+          percentage: Number(((day.present / day.total) * 100).toFixed(2))
+        }))
+        .sort((a, b) => new Date(a.date) - new Date(b.date))
+
+      // Calculate average daily attendance for this section
+      const avgDailyAttendance = dailyAttendance.length > 0
+        ? Number((dailyAttendance.reduce((sum, day) => sum + day.percentage, 0) / dailyAttendance.length).toFixed(2))
+        : 0
+
+      classes.push({
+        class: sectionStats.class,
+        classLabel: sectionStats.classLabel,
+        section: sectionStats.section,
+        summary: {
+          totalStudents: sectionStats.totalStudents,
+          studentsWithAttendance: sectionStats.studentsWithAttendance,
+          studentsWithoutAttendance: sectionStats.studentsWithoutAttendance,
+          totalAttendanceRecords: sectionStats.totalAttendanceRecords,
+          totalPresent: sectionStats.totalPresentCount,
+          totalAbsent: sectionStats.totalAbsentCount,
+          overallAttendancePercentage: sectionStats.attendancePercentage,
+          averageDailyAttendance: avgDailyAttendance,
+          status: sectionStats.studentsWithAttendance === 0 ? 'No attendance data' : 'Data available'
+        },
+        dailyAttendance,
+        students: sectionStats.students
+      })
+    }
+
+    // Calculate school-wide statistics
+    const schoolDailyAttendance = Array.from(schoolStats.attendanceByDate.values())
+      .map(day => ({
+        date: day.date.toISOString().split('T')[0],
+        present: day.present,
+        absent: day.absent,
+        total: day.total,
+        percentage: Number(((day.present / day.total) * 100).toFixed(2))
+      }))
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+
+    const avgSchoolDailyAttendance = schoolDailyAttendance.length > 0
+      ? Number((schoolDailyAttendance.reduce((sum, day) => sum + day.percentage, 0) / schoolDailyAttendance.length).toFixed(2))
+      : 0
+
+    const schoolSummary = {
+      totalStudents: schoolStats.totalStudents,
+      studentsWithAttendance: schoolStats.studentsWithAttendance,
+      studentsWithoutAttendance: schoolStats.studentsWithoutAttendance,
+      totalAttendanceRecords: schoolStats.totalAttendanceRecords,
+      totalPresent: schoolStats.totalPresentCount,
+      totalAbsent: schoolStats.totalAbsentCount,
+      overallAttendancePercentage: schoolStats.totalAttendanceRecords > 0
+        ? Number(((schoolStats.totalPresentCount / schoolStats.totalAttendanceRecords) * 100).toFixed(2))
+        : 0,
+      averageDailyAttendance: avgSchoolDailyAttendance,
+      averagePresentPerDay: schoolDailyAttendance.length > 0
+        ? Number((schoolDailyAttendance.reduce((sum, day) => sum + day.present, 0) / schoolDailyAttendance.length).toFixed(2))
+        : 0,
+      averageAbsentPerDay: schoolDailyAttendance.length > 0
+        ? Number((schoolDailyAttendance.reduce((sum, day) => sum + day.absent, 0) / schoolDailyAttendance.length).toFixed(2))
+        : 0
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        dateRange: {
+          from: startDate.toISOString().split('T')[0],
+          to: endDate.toISOString().split('T')[0],
+          totalWorkingDays
+        },
+        schoolSummary,
+        dailyAttendance: schoolDailyAttendance,
+        classes: classes.sort((a, b) => {
+          // Sort by class label then section
+          if (a.classLabel === b.classLabel) {
+            return a.section.localeCompare(b.section)
+          }
+          return a.classLabel.localeCompare(b.classLabel)
+        })
+      }
+    })
+
+  } catch (error) {
+    console.error('Get attendance stats error:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch attendance statistics',
+    })
+  }
+}
+
+/**
+ * @desc    Get comprehensive marks statistics report for all classes and sections
+ * @route   GET /api/students/marks-stats
+ * @access  Private
+ */
+export const getMarksStatsByClassSection = async (req, res) => {
+  try {
+    // Get all available exam types from the database
+    const examTypes = await prisma.marks.findMany({
+      distinct: ['examType'],
+      select: {
+        examType: true
+      },
+      orderBy: {
+        examType: 'asc'
+      }
+    })
+
+    // If no marks records exist, return empty report
+    if (examTypes.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'No marks records found in the system',
+        data: {
+          availableExams: [],
+          schoolSummary: {
+            totalStudents: 0,
+            studentsWithMarks: 0,
+            studentsWithoutMarks: 0
+          },
+          exams: []
+        }
+      })
+    }
+
+    // Get all active students
+    const allStudents = await prisma.student.findMany({
+      where: {
+        isActive: true
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        class: true,
+        section: true,
+        rollNo: true,
+        admissionNo: true
+      }
+    })
+
+    // Create a map of students by class-section for quick lookup
+    const studentsByClassSection = new Map()
+    allStudents.forEach(student => {
+      const classKey = student.class
+      const sectionKey = student.section
+      const compositeKey = `${classKey}-${sectionKey}`
+
+      if (!studentsByClassSection.has(compositeKey)) {
+        studentsByClassSection.set(compositeKey, {
+          class: classKey,
+          classLabel: mapEnumToDisplayName(classKey),
+          section: sectionKey,
+          students: []
+        })
+      }
+      studentsByClassSection.get(compositeKey).students.push({
+        id: student.id,
+        name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
+        rollNo: student.rollNo || student.admissionNo,
+        hasMarks: false
+      })
+    })
+
+    // Get all marks records
+    const allMarks = await prisma.marks.findMany({
+      include: {
+        student: {
+          select: {
+            firstName: true,
+            lastName: true,
+            class: true,
+            section: true,
+            rollNo: true,
+            admissionNo: true
+          }
+        }
+      },
+      orderBy: [
+        { uploadedAt: 'desc' }
+      ]
+    })
+
+    // Group marks by exam type and class-section
+    const examData = new Map()
+
+    allMarks.forEach(marks => {
+      const examType = marks.examType
+      const studentClass = marks.student.class
+      const studentSection = marks.student.section
+      const compositeKey = `${examType}-${studentClass}-${studentSection}`
+
+      if (!examData.has(examType)) {
+        examData.set(examType, {
+          examType,
+          examTypeLabel: marks.examType.replace(/_/g, ' '),
+          totalStudentsWithMarks: 0,
+          classSections: new Map(),
+          subjectSummary: new Map()
+        })
+      }
+
+      const exam = examData.get(examType)
+      
+      if (!exam.classSections.has(compositeKey)) {
+        exam.classSections.set(compositeKey, {
+          class: studentClass,
+          classLabel: mapEnumToDisplayName(studentClass),
+          section: studentSection,
+          totalStudents: 0,
+          studentsWithMarks: 0,
+          totalObtained: 0,
+          totalMaximum: 0,
+          gradeDistribution: {
+            A_PLUS: 0, A: 0, B_PLUS: 0, B: 0, C: 0, D: 0, E: 0, F: 0, NA: 0
+          },
+          resultDistribution: {
+            PASS: 0, FAIL: 0, NA: 0
+          },
+          subjectStats: new Map(),
+          students: []
+        })
+      }
+
+      const sectionStats = exam.classSections.get(compositeKey)
+      
+      // Get the base student info from our map
+      const studentCompositeKey = `${studentClass}-${studentSection}`
+      const classSectionData = studentsByClassSection.get(studentCompositeKey)
+      
+      if (classSectionData) {
+        const studentInfo = classSectionData.students.find(s => s.id === marks.studentId)
+        
+        if (studentInfo) {
+          sectionStats.totalStudents = classSectionData.students.length
+          sectionStats.studentsWithMarks++
+          exam.totalStudentsWithMarks++
+
+          // Add marks totals
+          sectionStats.totalObtained += marks.totalObtained || 0
+          sectionStats.totalMaximum += marks.totalMaximum || 0
+
+          // Update grade distribution
+          if (marks.overallGrade) {
+            sectionStats.gradeDistribution[marks.overallGrade] = 
+              (sectionStats.gradeDistribution[marks.overallGrade] || 0) + 1
+          }
+
+          // Update result distribution
+          if (marks.overallResult) {
+            sectionStats.resultDistribution[marks.overallResult] = 
+              (sectionStats.resultDistribution[marks.overallResult] || 0) + 1
+          }
+
+          // Parse marksData for subject-wise statistics
+          if (marks.marksData && typeof marks.marksData === 'object') {
+            Object.entries(marks.marksData).forEach(([subjectName, subjectData]) => {
+              // Update section subject stats
+              if (!sectionStats.subjectStats.has(subjectName)) {
+                sectionStats.subjectStats.set(subjectName, {
+                  subject: subjectName,
+                  totalObtained: 0,
+                  totalMaximum: 0,
+                  count: 0,
+                  gradeDistribution: {},
+                  resultDistribution: {}
+                })
+              }
+              
+              const subjectStats = sectionStats.subjectStats.get(subjectName)
+              subjectStats.totalObtained += subjectData.marks || 0
+              subjectStats.totalMaximum += subjectData.totalMarks || 0
+              subjectStats.count++
+              
+              if (subjectData.grade) {
+                subjectStats.gradeDistribution[subjectData.grade] = 
+                  (subjectStats.gradeDistribution[subjectData.grade] || 0) + 1
+              }
+              
+              if (subjectData.result) {
+                subjectStats.resultDistribution[subjectData.result] = 
+                  (subjectStats.resultDistribution[subjectData.result] || 0) + 1
+              }
+
+              // Update exam-wide subject summary
+              if (!exam.subjectSummary.has(subjectName)) {
+                exam.subjectSummary.set(subjectName, {
+                  subject: subjectName,
+                  totalObtained: 0,
+                  totalMaximum: 0,
+                  count: 0
+                })
+              }
+              const examSubjectStats = exam.subjectSummary.get(subjectName)
+              examSubjectStats.totalObtained += subjectData.marks || 0
+              examSubjectStats.totalMaximum += subjectData.totalMarks || 0
+              examSubjectStats.count++
+            })
+          }
+
+          // Add student marks details
+          sectionStats.students.push({
+            studentId: marks.studentId,
+            name: studentInfo.name,
+            rollNo: studentInfo.rollNo,
+            totalObtained: marks.totalObtained || 0,
+            totalMaximum: marks.totalMaximum || 0,
+            percentage: marks.percentage ? Number(marks.percentage.toFixed(2)) : 0,
+            grade: marks.overallGrade || 'NA',
+            result: marks.overallResult || 'NA',
+            subjectWise: marks.marksData
+          })
+        }
+      }
+    })
+
+    // Format the response
+    const formattedExams = []
+
+    for (const [examType, exam] of examData) {
+      const classSections = []
+      let examTotalObtained = 0
+      let examTotalMaximum = 0
+      let examTotalStudents = 0
+
+      for (const [_, sectionStats] of exam.classSections) {
+        // Calculate section averages
+        const avgPercentage = sectionStats.totalMaximum > 0
+          ? Number(((sectionStats.totalObtained / sectionStats.totalMaximum) * 100).toFixed(2))
+          : 0
+
+        const passPercentage = sectionStats.studentsWithMarks > 0
+          ? Number(((sectionStats.resultDistribution.PASS / sectionStats.studentsWithMarks) * 100).toFixed(2))
+          : 0
+
+        // Format subject stats for this section
+        const subjectStats = Array.from(sectionStats.subjectStats.values()).map(subject => ({
+          subject: subject.subject,
+          averageMarks: subject.count > 0 
+            ? Number((subject.totalObtained / subject.count).toFixed(2))
+            : 0,
+          averagePercentage: subject.totalMaximum > 0
+            ? Number(((subject.totalObtained / subject.totalMaximum) * 100).toFixed(2))
+            : 0,
+          gradeDistribution: subject.gradeDistribution,
+          resultDistribution: subject.resultDistribution,
+          studentCount: subject.count
+        }))
+
+        classSections.push({
+          class: sectionStats.class,
+          classLabel: sectionStats.classLabel,
+          section: sectionStats.section,
+          summary: {
+            totalStudents: sectionStats.totalStudents,
+            studentsWithMarks: sectionStats.studentsWithMarks,
+            studentsWithoutMarks: sectionStats.totalStudents - sectionStats.studentsWithMarks,
+            totalObtained: sectionStats.totalObtained,
+            totalMaximum: sectionStats.totalMaximum,
+            averageMarks: sectionStats.studentsWithMarks > 0
+              ? Number((sectionStats.totalObtained / sectionStats.studentsWithMarks).toFixed(2))
+              : 0,
+            averagePercentage: avgPercentage,
+            passPercentage,
+            gradeDistribution: sectionStats.gradeDistribution,
+            resultDistribution: sectionStats.resultDistribution
+          },
+          subjectStats,
+          students: sectionStats.students.sort((a, b) => a.rollNo.localeCompare(b.rollNo))
+        })
+
+        examTotalObtained += sectionStats.totalObtained
+        examTotalMaximum += sectionStats.totalMaximum
+        examTotalStudents += sectionStats.studentsWithMarks
+      }
+
+      // Format exam-wide subject summary
+      const examSubjectSummary = Array.from(exam.subjectSummary.values()).map(subject => ({
+        subject: subject.subject,
+        totalObtained: subject.totalObtained,
+        totalMaximum: subject.totalMaximum,
+        averageMarks: subject.count > 0
+          ? Number((subject.totalObtained / subject.count).toFixed(2))
+          : 0,
+        averagePercentage: subject.totalMaximum > 0
+          ? Number(((subject.totalObtained / subject.totalMaximum) * 100).toFixed(2))
+          : 0,
+        studentCount: subject.count
+      }))
+
+      formattedExams.push({
+        examType: exam.examType,
+        examTypeLabel: exam.examTypeLabel,
+        summary: {
+          totalStudentsWithMarks: exam.totalStudentsWithMarks,
+          totalObtained: examTotalObtained,
+          totalMaximum: examTotalMaximum,
+          averagePercentage: examTotalMaximum > 0
+            ? Number(((examTotalObtained / examTotalMaximum) * 100).toFixed(2))
+            : 0,
+          subjectSummary: examSubjectSummary
+        },
+        classSections: classSections.sort((a, b) => {
+          if (a.classLabel === b.classLabel) {
+            return a.section.localeCompare(b.section)
+          }
+          return a.classLabel.localeCompare(b.classLabel)
+        })
+      })
+    }
+
+    // Calculate school-wide summary
+    const schoolSummary = {
+      totalStudents: allStudents.length,
+      totalExams: examTypes.length,
+      studentsWithMarks: allMarks.length, // This is number of marks records, not unique students
+      uniqueStudentsWithMarks: new Set(allMarks.map(m => m.studentId)).size,
+      studentsWithoutAnyMarks: allStudents.length - new Set(allMarks.map(m => m.studentId)).size
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        availableExams: examTypes.map(e => ({
+          examType: e.examType,
+          examTypeLabel: e.examType.replace(/_/g, ' ')
+        })),
+        schoolSummary,
+        exams: formattedExams.sort((a, b) => a.examType.localeCompare(b.examType))
+      }
+    })
+
+  } catch (error) {
+    console.error('Get marks stats error:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch marks statistics',
+    })
+  }
+}
+
+/**
+ * Helper function to calculate working days in a date range (excluding Sundays)
+ */
+async function calculateWorkingDaysInRange(startDate, endDate) {
+  try {
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    
+    let workingDays = 0
+    const currentDate = new Date(start)
+    
+    while (currentDate <= end) {
+      const dayOfWeek = currentDate.getDay() // 0 = Sunday
+      
+      // Skip Sundays
+      if (dayOfWeek !== 0) {
+        workingDays++
+      }
+      
+      currentDate.setDate(currentDate.getDate() + 1)
+    }
+    
+    return workingDays
+  } catch (error) {
+    console.error('Error calculating working days:', error)
+    // Approximate working days (roughly 6/7 of days if excluding only Sundays)
+    const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1
+    return Math.floor(daysDiff * 6 / 7)
   }
 }

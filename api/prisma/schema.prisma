@@ -30,8 +30,6 @@ enum Class {
   CLASS_8      @map("8")
   CLASS_9      @map("9")
   CLASS_10     @map("10")
-  CLASS_11     @map("11")
-  CLASS_12     @map("12")
 }
 
 enum Section {
@@ -129,6 +127,7 @@ model Student {
   profilePicPublicId      String?          @db.VarChar(500)
 
   isActive                Boolean          @default(true)
+  studiedClasses          Json             @default("[]") // Format: [{ "class": "CLASS_1", "section": "A", "academicYear": "2023-2024" }]
 
   createdAt               DateTime         @default(now())
   updatedAt               DateTime         @updatedAt
@@ -245,6 +244,9 @@ model FeeDetails {
   term2DueDate                DateTime?
   term3DueDate                DateTime?
 
+  previousYearFee             Int           @default(0) 
+  previousYearDetails         Json          @default("[]")
+
   isFullyPaid                 Boolean       @default(false)
   createdAt                   DateTime      @default(now())
   updatedBy                   String        @db.VarChar(50)
@@ -295,6 +297,7 @@ model PaymentHistory {
   receiptNo           String        @db.VarChar(50)
   paymentMode         PaymentMode
   description         String?       @db.Text
+  metadata            Json?         @default("{}") 
   
   // Payment method details
   chequeNo            String?       @db.VarChar(50)

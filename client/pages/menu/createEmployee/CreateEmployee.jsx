@@ -285,6 +285,8 @@ const CustomDropdown = ({
 export default function CreateEmployee({ visible, onClose, employeeData }) {
   const { colors } = useTheme()
 
+  const isEdit = !!employeeData
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -328,7 +330,7 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
 
   // Load employee data in edit mode
   useEffect(() => {
-    if (visible && employeeData) {
+    if (isEdit) {
       setFormData({
         firstName: employeeData.firstName || '',
         lastName: employeeData.lastName || '',
@@ -347,8 +349,28 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
       setExistingProfilePic(employeeData.profilePicUrl || null)
       setProfilePic(null)
       setRemoveProfilePic(false)
+    } else {
+      // Reset for create mode
+      setFormData({
+        firstName: '',
+        lastName: '',
+        gender: 'NOT_SPECIFIED',
+        dob: new Date(),
+        email: '',
+        phone: '',
+        address: '',
+        village: '',
+        designation: '',
+        joiningDate: new Date(),
+        qualification: '',
+        aadharNumber: '',
+        panNumber: '',
+      })
+      setProfilePic(null)
+      setExistingProfilePic(null)
+      setRemoveProfilePic(false)
     }
-  }, [visible, employeeData])
+  }, [visible, employeeData, isEdit])
 
   // Update form data
   const updateFormData = useCallback((updates) => {
@@ -494,26 +516,35 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
         })
       }
 
-      // Add removeProfilePic flag
-      if (removeProfilePic) {
+      // Add removeProfilePic flag only in edit mode
+      if (isEdit && removeProfilePic) {
         formDataToSend.append('removeProfilePic', 'true')
       }
 
-      const response = await axiosApi.put(`/employees/${employeeData.id}`, formDataToSend, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      })
+      let response;
+      if (isEdit) {
+        response = await axiosApi.put(`/employees/${employeeData.id}`, formDataToSend, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        })
+      } else {
+        response = await axiosApi.post('/employees', formDataToSend, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        })
+      }
 
       if (response.data.success) {
-        showToast('Employee updated successfully!', 'success')
+        showToast(isEdit ? 'Employee updated successfully!' : 'Employee created successfully!', 'success')
         setTimeout(() => onClose(true), 1500)
       } else {
-        showToast(response.data.message || 'Failed to update employee', 'error')
+        showToast(response.data.message || (isEdit ? 'Failed to update employee' : 'Failed to create employee'), 'error')
       }
     } catch (error) {
-      console.error('Update employee error:', error)
-      let errorMessage = 'Failed to update employee'
+      console.error(`${isEdit ? 'Update' : 'Create'} employee error:`, error)
+      let errorMessage = isEdit ? 'Failed to update employee' : 'Failed to create employee'
       
       if (error.response) {
         errorMessage = error.response.data?.message || 
@@ -534,14 +565,14 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
       } else if (error.request) {
         errorMessage = 'No response from server. Check your internet connection.'
       } else {
-        errorMessage = error.message || 'Failed to update employee'
+        errorMessage = error.message || (isEdit ? 'Failed to update employee' : 'Failed to create employee')
       }
       
       showToast(errorMessage, 'error')
     } finally {
       setLoading(false)
     }
-  }, [formData, profilePic, removeProfilePic, employeeData, validateForm, loading, onClose, showToast])
+  }, [formData, profilePic, removeProfilePic, employeeData, validateForm, loading, onClose, showToast, isEdit])
 
   // Date change handlers
   const onDateChange = useCallback((field) => (event, selectedDate) => {
@@ -886,8 +917,8 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
                 <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
               </TouchableOpacity>
               <View style={{ flex: 1, alignItems: 'center' }}>
-                <ThemedText type='subtitle' style={styles.title}>Edit Employee</ThemedText>
-                <ThemedText style={styles.subtitle}>Update employee details</ThemedText>
+                <ThemedText type='subtitle' style={styles.title}>{isEdit ? 'Edit Employee' : 'Create Employee'}</ThemedText>
+                <ThemedText style={styles.subtitle}>{isEdit ? 'Update employee details' : 'Add new employee details'}</ThemedText>
               </View>
               <View style={{ width: 44 }} />
             </View>
@@ -1198,7 +1229,7 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
                   <FontAwesome5 name="check-circle" size={18} color="#FFFFFF" />
                 )}
                 <ThemedText style={styles.saveBtnText}>
-                  {loading ? 'Updating...' : 'Update Employee'}
+                  {loading ? (isEdit ? 'Updating...' : 'Creating...') : (isEdit ? 'Update Employee' : 'Create Employee')}
                 </ThemedText>
               </TouchableOpacity>
             </LinearGradient>

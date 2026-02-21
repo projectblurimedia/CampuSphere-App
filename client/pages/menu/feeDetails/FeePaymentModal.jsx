@@ -37,6 +37,8 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
   const [validationErrors, setValidationErrors] = useState({})
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [animation] = useState(new Animated.Value(0))
+  const [showFeeBreakdown, setShowFeeBreakdown] = useState(false)
+  const [showDetailedBreakdown, setShowDetailedBreakdown] = useState(false)
   
   // Receipt modal state
   const [receiptModalVisible, setReceiptModalVisible] = useState(false)
@@ -89,6 +91,7 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
     try {
       setRemarks(paymentData.description || '')
       setValidationErrors({})
+      setShowDetailedBreakdown(false)
       
       // Initialize component amounts with default amounts for ALL components
       const initialAmounts = {}
@@ -109,6 +112,7 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
       setTotalAmount(total)
       setPaymentMethod('CASH')
       setTransactionId('')
+      setShowFeeBreakdown(false)
       
     } catch (error) {
       console.error('Error initializing payment form:', error)
@@ -125,6 +129,8 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
     setLoading(false)
     setValidationErrors({})
     setShowConfirmation(false)
+    setShowFeeBreakdown(false)
+    setShowDetailedBreakdown(false)
     setReceiptModalVisible(false)
     setReceiptData(null)
   }
@@ -157,6 +163,11 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
     
     if (totalAmount <= 0) {
       errors.total = 'Total amount must be greater than 0'
+    }
+    
+    // Validate total doesn't exceed payment data total due
+    if (paymentData && totalAmount > paymentData.totalDue) {
+      errors.total = `Total amount cannot exceed ₹${paymentData.totalDue.toLocaleString()}`
     }
     
     // Validate transaction details for non-cash payments
@@ -212,7 +223,29 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
       paymentMode: paymentMethod,
       description: remarks.trim() || paymentData.description,
       termNumber: paymentData.term || null,
-      receivedBy: receivedBy 
+      receivedBy: receivedBy,
+      paymentType: paymentData.paymentType,
+    }
+    
+    // Add previous year specific fields with more detail
+    if (paymentData.paymentType === 'previousYear') {
+      payload.previousYearIndex = paymentData.previousYearIndex
+      payload.previousYearDetails = paymentData.previousYearDetails
+      payload.academicYear = paymentData.previousYearDetails?.academicYear
+      
+      // Log to verify correct amounts are being sent
+      console.log('Sending previous year payment:', {
+        schoolFee: payload.schoolFeePaid,
+        transportFee: payload.transportFeePaid,
+        hostelFee: payload.hostelFeePaid,
+        total: payload.schoolFeePaid + payload.transportFeePaid + payload.hostelFeePaid,
+        year: payload.academicYear
+      })
+    }
+    
+    // For all previous years payment
+    if (paymentData.paymentType === 'allPreviousYears') {
+      payload.totalPreviousYearsDue = paymentData.previousYearFee
     }
     
     // Add transaction details for non-cash payments
@@ -401,13 +434,337 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
     onClose() // Close the payment modal as well
   }
 
+  // Helper function to get detailed breakdown for previous year payments - ONLY show unpaid components
+  const getPreviousYearBreakdown = () => {
+    if (!paymentData || paymentData.paymentType !== 'previousYear' || !paymentData.previousYearDetails) {
+      return null
+    }
+
+    const yearData = paymentData.previousYearDetails
+    const breakdown = []
+
+    if (yearData.termPayments) {
+      Object.entries(yearData.termPayments).forEach(([termKey, termData]) => {
+        // Only process terms that have remaining balance
+        if (termData.remaining > 0 && termData.components) {
+          const termNumber = termKey.replace('term', '')
+          const termBreakdown = {
+            term: termNumber,
+            totalDue: termData.due,
+            totalPaid: termData.paid,
+            remaining: termData.remaining,
+            components: []
+          }
+
+          // Add component details ONLY if they have remaining balance
+          if (termData.components.schoolFee?.remaining > 0) {
+            termBreakdown.components.push({
+              name: 'School Fee',
+              due: termData.components.schoolFee.due,
+              paid: termData.components.schoolFee.paid,
+              remaining: termData.components.schoolFee.remaining,
+              icon: 'book',
+              color: colors.primary
+            })
+          }
+          if (termData.components.transportFee?.remaining > 0) {
+            termBreakdown.components.push({
+              name: 'Transport Fee',
+              due: termData.components.transportFee.due,
+              paid: termData.components.transportFee.paid,
+              remaining: termData.components.transportFee.remaining,
+              icon: 'truck',
+              color: colors.info
+            })
+          }
+          if (termData.components.hostelFee?.remaining > 0) {
+            termBreakdown.components.push({
+              name: 'Hostel Fee',
+              due: termData.components.hostelFee.due,
+              paid: termData.components.hostelFee.paid,
+              remaining: termData.components.hostelFee.remaining,
+              icon: 'home',
+              color: colors.warning
+            })
+          }
+
+          // Only add term if it has components with remaining balance
+          if (termBreakdown.components.length > 0) {
+            breakdown.push(termBreakdown)
+          }
+        }
+      })
+    } else if (yearData.termDistribution) {
+      // Fallback to termDistribution if termPayments doesn't exist
+      Object.entries(yearData.termDistribution).forEach(([termNum, termData]) => {
+        const schoolFeeRemaining = Math.max(0, (termData.schoolFee || 0) - (termData.schoolFeePaid || 0))
+        const transportFeeRemaining = Math.max(0, (termData.transportFee || 0) - (termData.transportFeePaid || 0))
+        const hostelFeeRemaining = Math.max(0, (termData.hostelFee || 0) - (termData.hostelFeePaid || 0))
+        const totalRemaining = schoolFeeRemaining + transportFeeRemaining + hostelFeeRemaining
+        
+        if (totalRemaining > 0) {
+          const termBreakdown = {
+            term: termNum,
+            totalDue: termData.total || 0,
+            totalPaid: termData.totalPaid || 0,
+            remaining: totalRemaining,
+            components: []
+          }
+
+          if (schoolFeeRemaining > 0) {
+            termBreakdown.components.push({
+              name: 'School Fee',
+              due: termData.schoolFee || 0,
+              paid: termData.schoolFeePaid || 0,
+              remaining: schoolFeeRemaining,
+              icon: 'book',
+              color: colors.primary
+            })
+          }
+          if (transportFeeRemaining > 0) {
+            termBreakdown.components.push({
+              name: 'Transport Fee',
+              due: termData.transportFee || 0,
+              paid: termData.transportFeePaid || 0,
+              remaining: transportFeeRemaining,
+              icon: 'truck',
+              color: colors.info
+            })
+          }
+          if (hostelFeeRemaining > 0) {
+            termBreakdown.components.push({
+              name: 'Hostel Fee',
+              due: termData.hostelFee || 0,
+              paid: termData.hostelFeePaid || 0,
+              remaining: hostelFeeRemaining,
+              icon: 'home',
+              color: colors.warning
+            })
+          }
+
+          breakdown.push(termBreakdown)
+        }
+      })
+    }
+
+    return breakdown
+  }
+
+  const renderDetailedBreakdown = () => {
+    const breakdown = getPreviousYearBreakdown()
+    if (!breakdown || breakdown.length === 0) return null
+
+    return (
+      <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.warning + '40', marginTop: 12 }]}>
+        <TouchableOpacity 
+          style={styles.cardHeader}
+          onPress={() => setShowDetailedBreakdown(!showDetailedBreakdown)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.cardHeaderLeft}>
+            <MaterialIcons name="pie-chart" size={18} color={colors.warning} />
+            <ThemedText style={styles.cardTitle}>Payment Breakdown</ThemedText>
+          </View>
+          <MaterialIcons 
+            name={showDetailedBreakdown ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} 
+            size={20} 
+            color={colors.textSecondary} 
+          />
+        </TouchableOpacity>
+
+        {showDetailedBreakdown && (
+          <View style={styles.breakdownContainer}>
+            {breakdown.map((term, index) => (
+              <View key={index} style={styles.termBreakdownContainer}>
+                <View style={styles.termBreakdownHeader}>
+                  <ThemedText style={styles.termBreakdownTitle}>Term {term.term}</ThemedText>
+                  <View style={[styles.termStatusBadge, { backgroundColor: colors.warning + '20' }]}>
+                    <ThemedText style={[styles.termStatusText, { color: colors.warning }]}>
+                      Due: ₹{term.remaining.toLocaleString()}
+                    </ThemedText>
+                  </View>
+                </View>
+
+                {term.components.map((comp, compIndex) => (
+                  <View key={compIndex} style={styles.componentBreakdownRow}>
+                    <View style={styles.componentBreakdownLeft}>
+                      <Feather name={comp.icon} size={12} color={comp.color} />
+                      <ThemedText style={styles.componentBreakdownName}>{comp.name}</ThemedText>
+                    </View>
+                    <View style={styles.componentBreakdownRight}>
+                      <ThemedText style={[styles.componentBreakdownAmount, { color: colors.danger }]}>
+                        ₹{comp.due.toLocaleString()}
+                      </ThemedText>
+                      <ThemedText style={styles.componentBreakdownArrow}>→</ThemedText>
+                      <ThemedText style={[styles.componentBreakdownAmount, { color: colors.success }]}>
+                        ₹{comp.paid.toLocaleString()}
+                      </ThemedText>
+                      {comp.remaining > 0 && (
+                        <>
+                          <ThemedText style={styles.componentBreakdownArrow}>→</ThemedText>
+                          <ThemedText style={[styles.componentBreakdownAmount, { color: colors.warning }]}>
+                            ₹{comp.remaining.toLocaleString()}
+                          </ThemedText>
+                        </>
+                      )}
+                    </View>
+                  </View>
+                ))}
+
+                <View style={styles.termTotalRow}>
+                  <ThemedText style={styles.termTotalLabel}>Term Total</ThemedText>
+                  <View style={styles.termTotalAmounts}>
+                    <ThemedText style={styles.termTotalDue}>
+                      ₹{term.totalDue.toLocaleString()}
+                    </ThemedText>
+                    <ThemedText style={styles.termTotalSeparator}>→</ThemedText>
+                    <ThemedText style={[styles.termTotalPaid, { color: colors.success }]}>
+                      ₹{term.totalPaid.toLocaleString()}
+                    </ThemedText>
+                    <ThemedText style={styles.termTotalSeparator}>→</ThemedText>
+                    <ThemedText style={[styles.termTotalRemaining, { color: colors.warning }]}>
+                      ₹{term.remaining.toLocaleString()}
+                    </ThemedText>
+                  </View>
+                </View>
+
+                <View style={styles.termProgressContainer}>
+                  <View style={[styles.termProgressBar, { backgroundColor: colors.border }]}>
+                    <View 
+                      style={[
+                        styles.termProgressFill, 
+                        { 
+                          width: term.totalDue > 0 ? `${(term.totalPaid / term.totalDue * 100)}%` : '0%',
+                          backgroundColor: term.remaining === 0 ? colors.success : colors.warning
+                        }
+                      ]} 
+                    />
+                  </View>
+                  <ThemedText style={styles.termProgressText}>
+                    {term.totalDue > 0 ? `${((term.totalPaid / term.totalDue * 100)).toFixed(1)}% Paid` : '0% Paid'}
+                  </ThemedText>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    )
+  }
+
+  const renderFeeBreakdownInfo = () => {
+    if (!paymentData || !feeDetails) return null
+    
+    const { previousYearFee, currentYearDue, totalDue, paymentType, previousYearDetails } = paymentData
+    
+    // Determine what to show based on payment type
+    let showPreviousYears = previousYearFee > 0
+    let showCurrentYear = currentYearDue > 0
+    let breakdownTitle = 'Fee Breakdown'
+    
+    if (paymentType === 'previousYear') {
+      breakdownTitle = `Payment for ${previousYearDetails?.academicYear || 'Previous Year'}`
+      showCurrentYear = false
+    } else if (paymentType === 'allPreviousYears') {
+      breakdownTitle = 'Payment for All Previous Years'
+      showCurrentYear = false
+    } else if (paymentType === 'currentYear') {
+      breakdownTitle = 'Payment for Current Year'
+      showPreviousYears = false
+    } else if (paymentType === 'term') {
+      breakdownTitle = `Payment for Term ${paymentData.term}`
+      showPreviousYears = false
+    }
+    
+    return (
+      <TouchableOpacity 
+        style={[styles.feeBreakdownCard, { backgroundColor: colors.inputBackground }]}
+        onPress={() => setShowFeeBreakdown(!showFeeBreakdown)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.feeBreakdownHeader}>
+          <View style={styles.feeBreakdownTitleContainer}>
+            <Feather name="info" size={16} color={colors.primary} />
+            <ThemedText style={styles.feeBreakdownTitle}>{breakdownTitle}</ThemedText>
+          </View>
+          <MaterialIcons 
+            name={showFeeBreakdown ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} 
+            size={20} 
+            color={colors.textSecondary} 
+          />
+        </View>
+        
+        {showFeeBreakdown && (
+          <View style={styles.feeBreakdownContent}>
+            {showPreviousYears && previousYearFee > 0 && (
+              <View style={styles.feeBreakdownRow}>
+                <View style={styles.feeBreakdownLabelContainer}>
+                  <MaterialIcons name="history" size={14} color={colors.warning} />
+                  <ThemedText style={styles.feeBreakdownLabel}>
+                    {paymentType === 'previousYear' 
+                      ? `${previousYearDetails?.academicYear || 'Previous Year'} Pending`
+                      : 'Previous Years Pending'}
+                  </ThemedText>
+                </View>
+                <ThemedText style={[styles.feeBreakdownValue, { color: colors.warning }]}>
+                  ₹{previousYearFee.toLocaleString()}
+                </ThemedText>
+              </View>
+            )}
+            
+            {showCurrentYear && currentYearDue > 0 && (
+              <View style={styles.feeBreakdownRow}>
+                <View style={styles.feeBreakdownLabelContainer}>
+                  <Feather name="calendar" size={14} color={colors.primary} />
+                  <ThemedText style={styles.feeBreakdownLabel}>Current Year Due</ThemedText>
+                </View>
+                <ThemedText style={[styles.feeBreakdownValue, { color: colors.primary }]}>
+                  ₹{currentYearDue?.toLocaleString() || 0}
+                </ThemedText>
+              </View>
+            )}
+            
+            {(showPreviousYears || showCurrentYear) && (
+              <View style={styles.feeBreakdownDivider} />
+            )}
+            
+            <View style={styles.feeBreakdownRow}>
+              <View style={styles.feeBreakdownLabelContainer}>
+                <Feather name="credit-card" size={14} color={colors.primary} />
+                <ThemedText style={styles.feeBreakdownTotalLabel}>Payment Amount</ThemedText>
+              </View>
+              <ThemedText style={[styles.feeBreakdownTotalValue, { color: colors.primary }]}>
+                ₹{totalAmount.toLocaleString()}
+              </ThemedText>
+            </View>
+            
+            <View style={styles.feeBreakdownNote}>
+              <Feather name="info" size={12} color={colors.textSecondary} />
+              <ThemedText style={styles.feeBreakdownNoteText}>
+                {paymentType === 'previousYear' 
+                  ? `This payment will be applied to ${previousYearDetails?.academicYear || 'previous year'} fees only`
+                  : paymentType === 'allPreviousYears'
+                  ? 'This payment will be distributed across all previous years'
+                  : paymentType === 'currentYear'
+                  ? 'This payment will be applied to current year fees only'
+                  : paymentType === 'term'
+                  ? `This payment will be applied to Term ${paymentData.term} only`
+                  : 'This payment will be distributed across all outstanding fees'}
+              </ThemedText>
+            </View>
+          </View>
+        )}
+      </TouchableOpacity>
+    )
+  }
+
   const renderComponentInputs = () => {
     if (!paymentData?.defaultAmounts) return null
     
     const components = [
-      { key: 'schoolFee', label: 'School Fee' },
-      { key: 'transportFee', label: 'Transport Fee' },
-      { key: 'hostelFee', label: 'Hostel Fee' }
+      { key: 'schoolFee', label: 'School Fee', icon: 'book', color: colors.primary },
+      { key: 'transportFee', label: 'Transport Fee', icon: 'truck', color: colors.info },
+      { key: 'hostelFee', label: 'Hostel Fee', icon: 'home', color: colors.warning }
     ]
     
     return (
@@ -421,7 +778,7 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
           Enter amount to pay for each component (remaining due shown)
         </ThemedText>
         
-        {components.map(({ key, label }) => {
+        {components.map(({ key, label, icon, color }) => {
           const maxAmount = getMaxAmount(key)
           const currentAmount = parseInt(componentAmounts[key] || 0)
           const error = validationErrors[key]
@@ -432,7 +789,8 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
             <View key={key} style={styles.componentInputRow}>
               <View style={styles.componentInputInfo}>
                 <View style={styles.componentLabelRow}>
-                  <ThemedText style={styles.componentInputLabel}>
+                  <Feather name={icon} size={14} color={color} />
+                  <ThemedText style={[styles.componentInputLabel, { color }]}>
                     {label}
                   </ThemedText>
                   {error && (
@@ -658,7 +1016,11 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
           <View style={styles.paymentInfoItem}>
             <Feather name="calendar" size={14} color={colors.textSecondary} />
             <ThemedText style={styles.paymentInfoText}>
-              {paymentData.term ? `Term ${paymentData.term} Payment` : 'Full Academic Year Payment'}
+              {paymentData.term ? `Term ${paymentData.term} Payment` : 
+               paymentData.paymentType === 'previousYear' ? 'Previous Year Payment' :
+               paymentData.paymentType === 'allPreviousYears' ? 'All Previous Years' :
+               paymentData.paymentType === 'currentYear' ? 'Current Year Payment' :
+               'Full Payment'}
             </ThemedText>
           </View>
           <View style={styles.paymentInfoItem}>
@@ -691,6 +1053,12 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
         {/* Student Info */}
         {renderStudentInfo()}
 
+        {/* Fee Breakdown Info */}
+        {renderFeeBreakdownInfo()}
+
+        {/* Detailed Breakdown for Previous Year Payments */}
+        {paymentData.paymentType === 'previousYear' && renderDetailedBreakdown()}
+
         {/* Component Inputs */}
         {renderComponentInputs()}
 
@@ -722,9 +1090,21 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
             <View style={styles.summaryRow}>
               <ThemedText style={styles.summaryLabel}>Payment Type</ThemedText>
               <ThemedText style={styles.summaryValue}>
-                {paymentData.term ? `Term ${paymentData.term}` : 'Full Year'}
+                {paymentData.term ? `Term ${paymentData.term}` : 
+                 paymentData.paymentType === 'previousYear' ? 'Previous Year' :
+                 paymentData.paymentType === 'allPreviousYears' ? 'All Previous Years' :
+                 paymentData.paymentType === 'currentYear' ? 'Current Year' :
+                 'Full Year'}
               </ThemedText>
             </View>
+            {paymentData.previousYearFee > 0 && (
+              <View style={[styles.summaryRow, { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border }]}>
+                <ThemedText style={styles.summaryLabel}>Previous Years Pending</ThemedText>
+                <ThemedText style={[styles.summaryValue, { color: colors.warning }]}>
+                  ₹{paymentData.previousYearFee.toLocaleString()}
+                </ThemedText>
+              </View>
+            )}
           </View>
         </View>
 
@@ -808,7 +1188,12 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
     cardHeader: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'space-between',
       marginBottom: 12,
+    },
+    cardHeaderLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
     },
     cardTitle: {
       fontSize: 15,
@@ -822,6 +1207,198 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
       color: colors.textSecondary,
       fontFamily: 'Poppins-Medium',
       marginBottom: 16,
+    },
+    
+    // Fee Breakdown Card
+    feeBreakdownCard: {
+      borderRadius: 12,
+      padding: 12,
+      marginTop: 12,
+    },
+    feeBreakdownHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    feeBreakdownTitleContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    feeBreakdownTitle: {
+      fontSize: 14,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+    },
+    feeBreakdownContent: {
+      marginTop: 12,
+      gap: 8,
+    },
+    feeBreakdownRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    feeBreakdownLabelContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    feeBreakdownLabel: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontFamily: 'Poppins-Medium',
+    },
+    feeBreakdownValue: {
+      fontSize: 14,
+      fontFamily: 'Poppins-SemiBold',
+    },
+    feeBreakdownTotalLabel: {
+      fontSize: 14,
+      fontFamily: 'Poppins-Bold',
+      color: colors.text,
+    },
+    feeBreakdownTotalValue: {
+      fontSize: 16,
+      fontFamily: 'Poppins-Bold',
+    },
+    feeBreakdownDivider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginVertical: 4,
+    },
+    feeBreakdownNote: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 8,
+      paddingTop: 8,
+      borderTopWidth: 1,
+      borderTopColor: colors.border + '30',
+    },
+    feeBreakdownNoteText: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      fontFamily: 'Poppins-Medium',
+      flex: 1,
+    },
+    
+    // Detailed Breakdown
+    breakdownContainer: {
+      marginTop: 8,
+      gap: 16,
+    },
+    termBreakdownContainer: {
+      backgroundColor: colors.inputBackground,
+      borderRadius: 8,
+      padding: 12,
+    },
+    termBreakdownHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    termBreakdownTitle: {
+      fontSize: 13,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+    },
+    termStatusBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 8,
+    },
+    termStatusText: {
+      fontSize: 10,
+      fontFamily: 'Poppins-SemiBold',
+    },
+    componentBreakdownRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 6,
+    },
+    componentBreakdownLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      flex: 2,
+    },
+    componentBreakdownName: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      fontFamily: 'Poppins-Medium',
+    },
+    componentBreakdownRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      flex: 3,
+      justifyContent: 'flex-end',
+    },
+    componentBreakdownAmount: {
+      fontSize: 11,
+      fontFamily: 'Poppins-SemiBold',
+    },
+    componentBreakdownArrow: {
+      fontSize: 10,
+      color: colors.textSecondary,
+    },
+    termTotalRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginTop: 8,
+      paddingTop: 8,
+      borderTopWidth: 1,
+      borderTopColor: colors.border + '30',
+    },
+    termTotalLabel: {
+      fontSize: 12,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+    },
+    termTotalAmounts: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    termTotalDue: {
+      fontSize: 12,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+    },
+    termTotalPaid: {
+      fontSize: 12,
+      fontFamily: 'Poppins-SemiBold',
+    },
+    termTotalRemaining: {
+      fontSize: 12,
+      fontFamily: 'Poppins-SemiBold',
+    },
+    termTotalSeparator: {
+      fontSize: 11,
+      color: colors.textSecondary,
+    },
+    termProgressContainer: {
+      marginTop: 8,
+    },
+    termProgressBar: {
+      height: 4,
+      borderRadius: 2,
+      overflow: 'hidden',
+      marginBottom: 2,
+    },
+    termProgressFill: {
+      height: '100%',
+      borderRadius: 2,
+    },
+    termProgressText: {
+      fontSize: 9,
+      color: colors.textSecondary,
+      fontFamily: 'Poppins-Medium',
+      textAlign: 'right',
     },
     
     // Student Info
@@ -890,7 +1467,6 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
     componentInputLabel: {
       fontSize: 14,
       fontFamily: 'Poppins-SemiBold',
-      color: colors.text,
     },
     componentDetails: {
       gap: 4,

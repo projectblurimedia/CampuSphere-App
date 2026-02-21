@@ -9,6 +9,7 @@ const componentMap = {
   'createStudent': () => import('@/pages/menu/createStudent/CreateStudent'),
   'createEmployee': () => import('@/pages/menu/createEmployee/CreateEmployee'),
   'attendance': () => import('@/pages/menu/attendance/Attendance'),
+  'promote': () => import('@/pages/menu/promote/Promote'), // NEW: Promote component
   'bulkImportStudents': () => import('@/pages/menu/bulkImportStudents/BulkImportStudents'),
   'bulkImportEmployees': () => import('@/pages/menu/bulkImportEmployees/BulkImportEmployees'),
   'uploadMarks': () => import('@/pages/menu/uploadMarks/UploadMarks'),

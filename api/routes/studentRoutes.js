@@ -15,6 +15,9 @@ import {
   getTodayBirthdays,
   getAttendanceStatsByClassSection,
   getMarksStatsByClassSection,
+  promoteStudents,
+  getPromotionPreview,
+  getStudentPromotionHistory,
 } from '../controllers/studentController.js'
 
 const router = express.Router()
@@ -29,6 +32,10 @@ router.get('/statistics', getStudentStatistics)
 router.get('/classes-summary', getClassesSummary)
 router.get('/class-details', getClassDetails)
 router.get('/class-section-students', getStudentsByClassAndSection)
+
+router.post('/promote', promoteStudents)
+router.post('/promote/preview', getPromotionPreview)
+router.get('/:id/promotion-history', getStudentPromotionHistory)
 
 router.get('', getAllStudents)
 router.get('/:id', getStudentById)

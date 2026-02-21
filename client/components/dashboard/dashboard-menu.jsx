@@ -130,6 +130,14 @@ export default function DashboardMenu({ visible, onClose }) {
     },
     { 
       id: 8, 
+      title: 'Promote Students', 
+      icon: 'graduation-cap', 
+      iconType: 'FontAwesome5', 
+      gradient: ['#f97316', '#ea580c'], 
+      componentName: 'promote'
+    },
+    { 
+      id: 9, 
       title: 'Mark Attendance', 
       icon: 'clipboard-check', 
       iconType: 'MaterialCommunityIcons', 
@@ -137,7 +145,7 @@ export default function DashboardMenu({ visible, onClose }) {
       componentName: 'attendance'
     },
     { 
-      id: 9, 
+      id: 10, 
       title: 'Upload Marks',
       icon: 'upload', 
       iconType: 'Feather', 
@@ -145,7 +153,7 @@ export default function DashboardMenu({ visible, onClose }) {
       componentName: 'uploadMarks'
     },
     { 
-      id: 10, 
+      id: 11, 
       title: 'Fee Management', 
       icon: 'cogs', 
       iconType: 'FontAwesome5', 
@@ -153,7 +161,7 @@ export default function DashboardMenu({ visible, onClose }) {
       componentName: 'feeManagement'
     },
     { 
-      id: 11, 
+      id: 12, 
       title: 'Fee Details', 
       icon: 'file-invoice-dollar', 
       iconType: 'FontAwesome5', 
@@ -161,7 +169,7 @@ export default function DashboardMenu({ visible, onClose }) {
       componentName: 'feeDetails'
     },
     { 
-      id: 12, 
+      id: 13, 
       title: 'Time Tables',
       icon: 'calendar-clock',
       iconType: 'MaterialCommunityIcons', 
@@ -184,16 +192,20 @@ export default function DashboardMenu({ visible, onClose }) {
       data: menuItems.filter(item => [5,7].includes(item.id)),
     },
     {
-      title: 'Uploads',
+      title: 'Student Management',
       data: menuItems.filter(item => [8,9].includes(item.id)),
     },
     {
+      title: 'Uploads',
+      data: menuItems.filter(item => [10].includes(item.id)),
+    },
+    {
       title: 'Fees',
-      data: menuItems.filter(item => [10,11].includes(item.id)),
+      data: menuItems.filter(item => [11,12].includes(item.id)),
     },
     {
       title: 'Schedules',
-      data: menuItems.filter(item => [12].includes(item.id)),
+      data: menuItems.filter(item => [13].includes(item.id)),
     },
   ]
 
@@ -405,7 +417,7 @@ export default function DashboardMenu({ visible, onClose }) {
                 <View style={styles.items}>
                   <TouchableOpacity
                     activeOpacity={.9} 
-                    style={[styles.item, { backgroundColor: colors.cardBackground }]}
+                    style={[styles.item, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
                     onPress={() => setThemeModalVisible(true)}
                   >
                     <View style={styles.itemContent}>

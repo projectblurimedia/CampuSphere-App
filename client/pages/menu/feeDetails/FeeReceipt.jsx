@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
-import { FontAwesome5, Feather } from '@expo/vector-icons'
+import { FontAwesome5, Feather, MaterialIcons } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 import { schoolInfo } from './receiptHtmlTemplates'
 
@@ -233,6 +233,16 @@ export default function FeeReceipt({
                   <ThemedText style={styles.receiptValue}>Term {receiptData.payment.termNumber}</ThemedText>
                 </View>
               )}
+              
+              {/* Show Previous Year Info if this is a previous year payment */}
+              {receiptData.payment?.isPreviousYear && (
+                <View style={[styles.previousYearBadge, { backgroundColor: colors.warning + '20' }]}>
+                  <MaterialIcons name="history" size={14} color={colors.warning} />
+                  <ThemedText style={[styles.previousYearBadgeText, { color: colors.warning }]}>
+                    Previous Year Payment {receiptData.payment?.previousYearInfo?.academicYear ? `(${receiptData.payment.previousYearInfo.academicYear})` : ''}
+                  </ThemedText>
+                </View>
+              )}
             </View>
 
             {/* Fee Breakdown */}
@@ -330,28 +340,38 @@ export default function FeeReceipt({
               </View>
             </View>
 
-            {/* Fee Summary */}
+            {/* Fee Summary - Reorganized in correct order */}
             {receiptData.feeSummary && (
               <View style={[styles.receiptCard, { backgroundColor: colors.cardBackground }]}>
                 <ThemedText style={styles.receiptSectionTitle}>Fee Summary</ThemedText>
                 
+                {/* 1. Current Year Fee */}
                 <View style={styles.summaryRow}>
-                  <ThemedText style={styles.summaryLabel}>Original Total:</ThemedText>
-                  <ThemedText style={styles.summaryValue}>₹{receiptData.feeSummary.originalTotalFee?.toLocaleString()}</ThemedText>
-                </View>
-
-                <View style={styles.summaryRow}>
-                  <ThemedText style={styles.summaryLabel}>Total Discount:</ThemedText>
-                  <ThemedText style={[styles.summaryValue, { color: colors.warning }]}>
-                    ₹{receiptData.feeSummary.totalDiscount?.toLocaleString()}
+                  <ThemedText style={styles.summaryLabel}>Current Year Fee:</ThemedText>
+                  <ThemedText style={[styles.summaryValue, { color: colors.primary }]}>
+                    ₹{receiptData.feeSummary.discountedTotalFee?.toLocaleString()}
                   </ThemedText>
                 </View>
                 
-                <View style={styles.summaryRow}>
-                  <ThemedText style={styles.summaryLabel}>Total:</ThemedText>
-                  <ThemedText style={styles.summaryValue}>₹{receiptData.feeSummary.discountedTotalFee?.toLocaleString()}</ThemedText>
+                {/* 2. Previous Year Fee (if applicable) */}
+                {receiptData.feeSummary.previousYearFee > 0 && (
+                  <View style={styles.summaryRow}>
+                    <ThemedText style={styles.summaryLabel}>Previous Year Fee:</ThemedText>
+                    <ThemedText style={[styles.summaryValue, { color: colors.warning }]}>
+                      ₹{receiptData.feeSummary.previousYearFee?.toLocaleString()}
+                    </ThemedText>
+                  </View>
+                )}
+                
+                {/* 3. Grand Total */}
+                <View style={[styles.summaryRow, styles.grandTotalRow]}>
+                  <ThemedText style={styles.grandTotalLabel}>Grand Total:</ThemedText>
+                  <ThemedText style={[styles.grandTotalValue, { color: colors.text }]}>
+                    ₹{(receiptData.feeSummary.discountedTotalFee + receiptData.feeSummary.previousYearFee).toLocaleString()}
+                  </ThemedText>
                 </View>
                 
+                {/* 4. Total Paid */}
                 <View style={styles.summaryRow}>
                   <ThemedText style={styles.summaryLabel}>Total Paid:</ThemedText>
                   <ThemedText style={[styles.summaryValue, { color: colors.success }]}>
@@ -359,9 +379,10 @@ export default function FeeReceipt({
                   </ThemedText>
                 </View>
                 
-                <View style={styles.summaryRow}>
-                  <ThemedText style={styles.summaryLabel}>Total Due:</ThemedText>
-                  <ThemedText style={[styles.summaryValue, { color: colors.danger }]}>
+                {/* 5. Total Due */}
+                <View style={[styles.summaryRow, styles.totalDueRow]}>
+                  <ThemedText style={styles.totalDueLabel}>Total Due:</ThemedText>
+                  <ThemedText style={[styles.totalDueValue, { color: receiptData.feeSummary.totalDue > 0 ? colors.danger : colors.success }]}>
                     ₹{receiptData.feeSummary.totalDue?.toLocaleString()}
                   </ThemedText>
                 </View>
@@ -523,6 +544,20 @@ const styles = StyleSheet.create({
     flex: 0.6,
     textAlign: 'right',
   },
+  previousYearBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    gap: 6,
+  },
+  previousYearBadgeText: {
+    fontSize: 12,
+    fontFamily: 'Poppins-SemiBold',
+  },
   breakdownHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -576,16 +611,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
   },
   summaryLabel: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#666',
     fontFamily: 'Poppins-Medium',
   },
   summaryValue: {
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: 'Poppins-SemiBold',
+  },
+  grandTotalRow: {
+    marginTop: 4,
+    paddingTop: 8,
+    borderTopWidth: 2,
+    borderTopColor: '#1D9BF0',
+    borderBottomWidth: 1,
+  },
+  grandTotalLabel: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Bold',
+    color: '#333',
+  },
+  grandTotalValue: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Bold',
+  },
+  totalDueRow: {
+    marginTop: 4,
+    paddingTop: 8,
+    borderTopWidth: 2,
+    borderTopColor: '#dc3545',
+  },
+  totalDueLabel: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Bold',
+    color: '#333',
+  },
+  totalDueValue: {
+    fontSize: 18,
+    fontFamily: 'Poppins-Bold',
   },
   footerNote: {
     fontSize: 10,

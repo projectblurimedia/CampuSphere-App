@@ -27,8 +27,6 @@ export const mapClassToEnum = (classInput) => {
     '8': 'CLASS_8',
     '9': 'CLASS_9',
     '10': 'CLASS_10',
-    '11': 'CLASS_11',
-    '12': 'CLASS_12',
     'CLASS 1': 'CLASS_1',
     'CLASS 2': 'CLASS_2',
     'CLASS 3': 'CLASS_3',
@@ -39,8 +37,6 @@ export const mapClassToEnum = (classInput) => {
     'CLASS 8': 'CLASS_8',
     'CLASS 9': 'CLASS_9',
     'CLASS 10': 'CLASS_10',
-    'CLASS 11': 'CLASS_11',
-    'CLASS 12': 'CLASS_12',
   }
   
   return enumMap[upperStr] || null
@@ -64,8 +60,6 @@ export const mapEnumToDisplayName = (classEnum) => {
     'CLASS_8': 'Class 8',
     'CLASS_9': 'Class 9',
     'CLASS_10': 'Class 10',
-    'CLASS_11': 'Class 11',
-    'CLASS_12': 'Class 12',
   }
   
   return displayMap[classEnum] || `Class ${classEnum}`
@@ -250,10 +244,61 @@ export const classOrderMap = {
   'VIII': 12,
   'IX': 13,
   'X': 14,
-  'XI': 15,
-  'XII': 16
 }
 
 export function getClassOrder(className) {
   return classOrderMap[className] || 999
+}
+
+
+// Add this to your existing classMappings.js file
+
+/**
+ * Get the next class in sequence for promotion
+ * @param {string} currentClass - Current class enum value
+ * @returns {string|null} - Next class enum value or null if graduated
+ */
+export const getNextClass = (currentClass) => {
+  const classOrder = [
+    'PRE_NURSERY',
+    'NURSERY',
+    'LKG',
+    'UKG',
+    'CLASS_1',
+    'CLASS_2',
+    'CLASS_3',
+    'CLASS_4',
+    'CLASS_5',
+    'CLASS_6',
+    'CLASS_7',
+    'CLASS_8',
+    'CLASS_9',
+    'CLASS_10',
+  ]
+
+  const currentIndex = classOrder.indexOf(currentClass)
+  
+  if (currentIndex === -1) return null
+  if (currentIndex === classOrder.length - 1) return 'GRADUATED'
+  
+  return classOrder[currentIndex + 1]
+}
+
+/**
+ * Get academic year string based on current date
+ * @returns {string} - Academic year in format "2025-2026"
+ */
+export const getCurrentAcademicYear = () => {
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1 // 1-12
+  
+  // Academic year typically starts in June (month 6)
+  // If current month is >= 6, academic year is currentYear - (currentYear+1)
+  // If current month is < 6, academic year is (currentYear-1) - currentYear
+  if (currentMonth >= 6) {
+    return `${currentYear}-${currentYear + 1}`
+  } else {
+    return `${currentYear - 1}-${currentYear}`
+  }
 }

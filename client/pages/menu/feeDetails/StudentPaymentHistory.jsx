@@ -5,14 +5,14 @@ import {
   TouchableOpacity,
   Platform,
   Modal,
-  ScrollView,
   FlatList,
   ActivityIndicator,
+  Image,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
-import { FontAwesome5, Feather, MaterialIcons } from '@expo/vector-icons'
+import { FontAwesome5, Feather, MaterialIcons, Ionicons } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 import axiosApi from '@/utils/axiosApi'
 import { ToastNotification } from '@/components/ui/ToastNotification'
@@ -23,15 +23,23 @@ import FeeReceipt from './FeeReceipt'
 
 export default function StudentPaymentHistory({ visible, onClose, student, paymentHistory = [] }) {
   const { colors } = useTheme()
-  const [selectedFilter, setSelectedFilter] = useState('all')
   const [selectedPayment, setSelectedPayment] = useState(null)
   const [showFeeReceipt, setShowFeeReceipt] = useState(false)
   const [receiptData, setReceiptData] = useState(null)
-  const [loading, setLoading] = useState(false)
   const [loadingReceipt, setLoadingReceipt] = useState(false)
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' })
   const [downloading, setDownloading] = useState(false)
   const [printing, setPrinting] = useState(false)
+
+  // Function to get initials from student name
+  const getInitials = (name) => {
+    if (!name) return '?'
+    const nameParts = name.split(' ')
+    if (nameParts.length >= 2) {
+      return (nameParts[0][0] + nameParts[1][0]).toUpperCase()
+    }
+    return nameParts[0][0].toUpperCase()
+  }
 
   const showToast = (message, type = 'info') => {
     setToast({ visible: true, message, type })
@@ -73,12 +81,6 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
     }
   }
 
-  const getFilteredPayments = () => {
-    if (selectedFilter === 'all') return paymentHistory
-    const termNum = parseInt(selectedFilter.replace('term', ''))
-    return paymentHistory.filter(p => p.termNumber === termNum)
-  }
-
   const getPaymentMethodIcon = (method) => {
     switch (method) {
       case 'CASH': return 'money-bill-wave'
@@ -90,14 +92,23 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
     }
   }
 
-  const formatDate = (dateString) => {
+  const getPaymentMethodColor = (method) => {
+    switch(method) {
+      case 'CASH': return '#4CAF50'
+      case 'CARD': return '#2196F3'
+      case 'ONLINE_PAYMENT': return '#9C27B0'
+      case 'BANK_TRANSFER': return '#FF9800'
+      case 'CHEQUE': return '#F44336'
+      default: return colors.primary
+    }
+  }
+
+  const formatDateOnly = (dateString) => {
     const date = new Date(dateString)
     return date.toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      year: 'numeric'
     })
   }
 
@@ -167,7 +178,21 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
   }
 
   const renderPaymentItem = ({ item }) => {
-    const isPartial = item.termNumber ? false : true
+    const hasTerm = item.termNumber !== null && item.termNumber !== undefined
+    
+    // Get payment breakdown - check different possible structures
+    const breakdown = item.breakdown || {}
+    const schoolFeePaid = breakdown.schoolFeePaid || item.schoolFeePaid || 0
+    const transportFeePaid = breakdown.transportFeePaid || item.transportFeePaid || 0
+    const hostelFeePaid = breakdown.hostelFeePaid || item.hostelFeePaid || 0
+    const totalAmount = item.totalAmount || schoolFeePaid + transportFeePaid + hostelFeePaid
+    
+    // Check if any fees are paid
+    const hasAnyFee = schoolFeePaid > 0 || transportFeePaid > 0 || hostelFeePaid > 0
+    
+    // Get student snapshot if available
+    const studentSnapshot = item.studentSnapshot || item.studentDetails || {}
+    const hasSnapshot = studentSnapshot.firstName || studentSnapshot.name
     
     return (
       <TouchableOpacity
@@ -175,70 +200,169 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
         style={[styles.paymentCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
         onPress={() => handleViewReceipt(item)}
       >
+        {/* Header with Receipt No and Payment Mode */}
         <View style={styles.paymentHeader}>
           <View style={styles.receiptContainer}>
-            <MaterialIcons name="receipt" size={18} color={colors.primary} />
-            <ThemedText style={styles.receiptNo}>{item.receiptNo}</ThemedText>
+            <MaterialIcons name="receipt" size={16} color={colors.primary} />
+            <ThemedText style={styles.receiptNo} numberOfLines={1}>
+              {item.receiptNo || 'N/A'}
+            </ThemedText>
           </View>
-          <View style={[styles.termBadge, { backgroundColor: isPartial ? colors.warning + '20' : colors.primary + '20' }]}>
-            <ThemedText style={[styles.termBadgeText, { color: isPartial ? colors.warning : colors.primary }]}>
-              {item.termNumber ? `Term ${item.termNumber}` : 'Full Payment'}
+          <View style={[styles.paymentModeBadge, { backgroundColor: getPaymentMethodColor(item.paymentMode) + '15' }]}>
+            <FontAwesome5 
+              name={getPaymentMethodIcon(item.paymentMode)} 
+              size={10} 
+              color={getPaymentMethodColor(item.paymentMode)} 
+            />
+            <ThemedText style={[styles.paymentModeText, { color: getPaymentMethodColor(item.paymentMode) }]}>
+              {item.paymentMode?.replace('_', ' ') || 'CASH'}
             </ThemedText>
           </View>
         </View>
 
-        <View style={styles.paymentDateContainer}>
-          <Feather name="calendar" size={12} color={colors.textSecondary} />
-          <ThemedText style={styles.paymentDate}>{formatDate(item.date)}</ThemedText>
-        </View>
-
-        <View style={styles.paymentBreakdown}>
-          {item.schoolFeePaid > 0 && (
-            <View style={styles.breakdownRow}>
-              <ThemedText style={styles.breakdownLabel}>School Fee</ThemedText>
-              <ThemedText style={styles.breakdownAmount}>₹{item.schoolFeePaid.toLocaleString()}</ThemedText>
+        {/* Term Badge (if exists) */}
+        {hasTerm && (
+          <View style={styles.termBadgeContainer}>
+            <View style={[styles.termBadge, { backgroundColor: colors.primary + '15' }]}>
+              <MaterialIcons name="looks-one" size={12} color={colors.primary} />
+              <ThemedText style={[styles.termBadgeText, { color: colors.primary }]}>
+                Term {item.termNumber}
+              </ThemedText>
             </View>
-          )}
-          {item.transportFeePaid > 0 && (
-            <View style={styles.breakdownRow}>
-              <ThemedText style={styles.breakdownLabel}>Transport Fee</ThemedText>
-              <ThemedText style={styles.breakdownAmount}>₹{item.transportFeePaid.toLocaleString()}</ThemedText>
-            </View>
-          )}
-          {item.hostelFeePaid > 0 && (
-            <View style={styles.breakdownRow}>
-              <ThemedText style={styles.breakdownLabel}>Hostel Fee</ThemedText>
-              <ThemedText style={styles.breakdownAmount}>₹{item.hostelFeePaid.toLocaleString()}</ThemedText>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.paymentFooter}>
-          <View style={styles.paymentMethodContainer}>
-            <FontAwesome5 name={getPaymentMethodIcon(item.paymentMode)} size={12} color={colors.textSecondary} />
-            <ThemedText style={styles.paymentMethod}>{item.paymentMode.replace('_', ' ')}</ThemedText>
           </View>
-          <View style={styles.totalAmountContainer}>
+        )}
+
+        {/* Historical Student Info - Show if snapshot exists */}
+        {hasSnapshot && (
+          <View style={[styles.historicalInfo, { 
+            backgroundColor: colors.warning + '10', 
+            borderColor: colors.warning + '30',
+            marginBottom: 12,
+            padding: 8,
+            borderRadius: 8,
+            borderWidth: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8
+          }]}>
+            <MaterialIcons name="history" size={14} color={colors.warning} />
+            <ThemedText style={[styles.historicalText, { 
+              flex: 1,
+              fontSize: 11,
+              color: colors.text,
+              fontFamily: 'Poppins-Medium',
+              fontStyle: 'italic'
+            }]}>
+              At payment: {studentSnapshot.classLabel || studentSnapshot.class || 'N/A'} - {studentSnapshot.section || 'N/A'}
+            </ThemedText>
+          </View>
+        )}
+
+        {/* Fee Breakdown - Only show if there are fees paid */}
+        {hasAnyFee && (
+          <View style={[styles.paymentBreakdown, { 
+            marginBottom: 16, 
+            paddingVertical: 12,
+            borderTopWidth: 1,
+            borderBottomWidth: 1,
+            borderColor: colors.border + '30',
+            gap: 8
+          }]}>
+            {schoolFeePaid > 0 && (
+              <View style={styles.breakdownRow}>
+                <View style={styles.breakdownLabelContainer}>
+                  <Ionicons name="book-outline" size={12} color={colors.primary} />
+                  <ThemedText style={styles.breakdownLabel}>School Fee</ThemedText>
+                </View>
+                <ThemedText style={[styles.breakdownAmount, { color: colors.primary }]}>
+                  ₹{schoolFeePaid.toLocaleString()}
+                </ThemedText>
+              </View>
+            )}
+            {transportFeePaid > 0 && (
+              <View style={styles.breakdownRow}>
+                <View style={styles.breakdownLabelContainer}>
+                  <Ionicons name="bus-outline" size={12} color={colors.info} />
+                  <ThemedText style={styles.breakdownLabel}>Transport Fee</ThemedText>
+                </View>
+                <ThemedText style={[styles.breakdownAmount, { color: colors.info }]}>
+                  ₹{transportFeePaid.toLocaleString()}
+                </ThemedText>
+              </View>
+            )}
+            {hostelFeePaid > 0 && (
+              <View style={styles.breakdownRow}>
+                <View style={styles.breakdownLabelContainer}>
+                  <Ionicons name="home-outline" size={12} color={colors.warning} />
+                  <ThemedText style={styles.breakdownLabel}>Hostel Fee</ThemedText>
+                </View>
+                <ThemedText style={[styles.breakdownAmount, { color: colors.warning }]}>
+                  ₹{hostelFeePaid.toLocaleString()}
+                </ThemedText>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* If no fees breakdown, show a simple message */}
+        {!hasAnyFee && (
+          <View style={[styles.paymentBreakdown, { 
+            marginBottom: 16, 
+            paddingVertical: 12,
+            alignItems: 'center'
+          }]}>
+            <ThemedText style={{ color: colors.textSecondary, fontSize: 12 }}>
+              Payment details not available
+            </ThemedText>
+          </View>
+        )}
+
+        {/* Footer with Date and Total Amount */}
+        <View style={styles.paymentFooter}>
+          <View style={styles.dateContainer}>
+            <Feather name="calendar" size={12} color={colors.textSecondary} />
+            <ThemedText style={styles.dateText}>
+              {item.date ? formatDateOnly(item.date) : 'N/A'}
+            </ThemedText>
+          </View>
+          <View style={styles.totalContainer}>
             <ThemedText style={styles.totalLabel}>Total:</ThemedText>
             <ThemedText style={[styles.totalAmount, { color: colors.success }]}>
-              ₹{item.totalAmount.toLocaleString()}
+              ₹{totalAmount.toLocaleString()}
             </ThemedText>
           </View>
         </View>
 
-        <View style={styles.viewReceiptButton}>
-          <Feather name="eye" size={14} color={colors.primary} />
-          <ThemedText style={[styles.viewReceiptText, { color: colors.primary }]}>
-            View Receipt
-          </ThemedText>
-        </View>
+        {/* Received By */}
+        {item.receivedBy && (
+          <View style={[styles.receivedBy, { 
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            paddingTop: 8,
+            marginTop: 8,
+            borderTopWidth: 1,
+            borderTopColor: colors.border + '30'
+          }]}>
+            <Feather name="user-check" size={12} color={colors.textSecondary} />
+            <ThemedText style={[styles.receivedByText, { 
+              fontSize: 11,
+              color: colors.textSecondary,
+              fontFamily: 'Poppins-Medium'
+            }]}>
+              Received by: {item.receivedBy}
+            </ThemedText>
+          </View>
+        )}
       </TouchableOpacity>
     )
   }
 
   const renderEmptyComponent = () => (
     <View style={styles.emptyContainer}>
-      <MaterialIcons name="history" size={48} color={colors.textSecondary} />
+      <View style={[styles.emptyIconContainer, { backgroundColor: colors.primary + '15' }]}>
+        <MaterialIcons name="history" size={48} color={colors.primary} />
+      </View>
       <ThemedText style={styles.emptyTitle}>No Payment History</ThemedText>
       <ThemedText style={styles.emptySubtitle}>
         No payments have been recorded for this student yet.
@@ -246,51 +370,14 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
     </View>
   )
 
-  const renderFilterButtons = () => {
-    const filters = [
-      { key: 'all', label: 'All' },
-      { key: 'term1', label: 'Term 1' },
-      { key: 'term2', label: 'Term 2' },
-      { key: 'term3', label: 'Term 3' },
-    ]
-
-    return (
-      <View style={styles.filterContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {filters.map(filter => (
-            <TouchableOpacity
-              key={filter.key}
-              style={[
-                styles.filterButton,
-                { 
-                  backgroundColor: selectedFilter === filter.key ? colors.primary : colors.inputBackground,
-                  borderColor: selectedFilter === filter.key ? colors.primary : colors.border,
-                }
-              ]}
-              onPress={() => setSelectedFilter(filter.key)}
-              activeOpacity={0.8}
-            >
-              <ThemedText style={[
-                styles.filterText,
-                { color: selectedFilter === filter.key ? '#FFFFFF' : colors.text }
-              ]}>
-                {filter.label}
-              </ThemedText>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-    )
-  }
-
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: {
       paddingTop: Platform.OS === 'ios' ? 70 : 50,
-      paddingBottom: 16,
+      paddingBottom: 20,
       paddingHorizontal: 20,
-      borderBottomLeftRadius: 24,
-      borderBottomRightRadius: 24,
+      borderBottomLeftRadius: 30,
+      borderBottomRightRadius: 30,
     },
     headerRow: { 
       flexDirection: 'row', 
@@ -307,27 +394,55 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
       borderWidth: 1,
       borderColor: 'rgba(255, 255, 255, 0.4)',
     },
-    title: { fontSize: 18, color: '#FFFFFF', marginBottom: -5 },
-    subtitle: { marginTop: 4, fontSize: 11, color: 'rgba(255,255,255,0.9)' },
+    title: { 
+      fontSize: 18, 
+      color: '#FFFFFF', 
+      marginBottom: -5,
+      fontFamily: 'Poppins-SemiBold',
+    },
+    subtitle: { 
+      marginTop: 4, 
+      fontSize: 11, 
+      color: 'rgba(255,255,255,0.9)',
+      fontFamily: 'Poppins-Medium',
+    },
     
-    studentInfo: {
-      paddingHorizontal: 16,
-      paddingVertical: 12,
+    // Student Info Card - Exactly like in StudentFeeDetails
+    studentInfoCard: {
+      marginHorizontal: 16,
+      marginTop: 16,
+      marginBottom: 12,
+      padding: 16,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.cardBackground,
+    },
+    studentHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+      marginBottom: 12,
     },
     studentAvatar: {
       width: 50,
       height: 50,
       borderRadius: 20,
-      backgroundColor: colors.primary + '20',
       justifyContent: 'center',
       alignItems: 'center',
       marginRight: 12,
+      overflow: 'hidden',
+      backgroundColor: '#1d9bf0',
     },
-    studentDetails: {
+    avatarImage: {
+      width: '100%',
+      height: '100%',
+    },
+    avatarText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontFamily: 'Poppins-SemiBold',
+    },
+    studentInfo: {
       flex: 1,
     },
     studentName: {
@@ -337,24 +452,31 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
       marginBottom: 2,
     },
     studentClass: {
-      fontSize: 13,
+      fontSize: 14,
       color: colors.textSecondary,
       fontFamily: 'Poppins-Medium',
     },
-    
-    filterContainer: {
-      paddingHorizontal: 16,
-      paddingVertical: 12,
+    studentDetailsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
     },
-    filterButton: {
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 20,
-      borderWidth: 1,
-      marginRight: 8,
+    detailItem: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.inputBackground,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+      gap: 6,
     },
-    filterText: {
-      fontSize: 13,
+    detailText: {
+      fontSize: 10,
+      color: colors.text,
       fontFamily: 'Poppins-Medium',
     },
     
@@ -362,11 +484,18 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
       paddingHorizontal: 16,
       paddingBottom: 20,
     },
+    
+    // Payment Card
     paymentCard: {
-      borderRadius: 12,
+      borderRadius: 16,
       padding: 16,
       borderWidth: 1,
       marginBottom: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 2,
+      elevation: 2,
     },
     paymentHeader: {
       flexDirection: 'row',
@@ -377,45 +506,60 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
     receiptContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
+      gap: 8,
+      flex: 1,
     },
     receiptNo: {
-      fontSize: 14,
+      fontSize: 15,
       fontFamily: 'Poppins-SemiBold',
       color: colors.text,
+      flex: 1,
+    },
+    paymentModeBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 12,
+      gap: 6,
+    },
+    paymentModeText: {
+      fontSize: 11,
+      fontFamily: 'Poppins-SemiBold',
+    },
+    termBadgeContainer: {
+      marginBottom: 12,
     },
     termBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
       paddingHorizontal: 10,
-      paddingVertical: 4,
+      paddingVertical: 5,
       borderRadius: 12,
+      gap: 4,
+      alignSelf: 'flex-start',
     },
     termBadgeText: {
       fontSize: 11,
       fontFamily: 'Poppins-SemiBold',
     },
-    paymentDateContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      marginBottom: 12,
-    },
-    paymentDate: {
-      fontSize: 12,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
-    },
     paymentBreakdown: {
-      marginBottom: 12,
-      paddingVertical: 8,
+      marginBottom: 16,
+      paddingVertical: 12,
       borderTopWidth: 1,
       borderBottomWidth: 1,
       borderColor: colors.border + '30',
+      gap: 8,
     },
     breakdownRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: 4,
+    },
+    breakdownLabelContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
     },
     breakdownLabel: {
       fontSize: 13,
@@ -423,30 +567,28 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
       fontFamily: 'Poppins-Medium',
     },
     breakdownAmount: {
-      fontSize: 13,
+      fontSize: 14,
       fontFamily: 'Poppins-SemiBold',
-      color: colors.text,
     },
     paymentFooter: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 12,
     },
-    paymentMethodContainer: {
+    dateContainer: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
     },
-    paymentMethod: {
+    dateText: {
       fontSize: 12,
       color: colors.textSecondary,
       fontFamily: 'Poppins-Medium',
     },
-    totalAmountContainer: {
+    totalContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
+      gap: 6,
     },
     totalLabel: {
       fontSize: 13,
@@ -454,21 +596,8 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
       fontFamily: 'Poppins-Medium',
     },
     totalAmount: {
-      fontSize: 15,
-      fontFamily: 'Poppins-SemiBold',
-    },
-    viewReceiptButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 6,
-      paddingTop: 12,
-      borderTopWidth: 1,
-      borderTopColor: colors.border + '30',
-    },
-    viewReceiptText: {
-      fontSize: 13,
-      fontFamily: 'Poppins-SemiBold',
+      fontSize: 16,
+      fontFamily: 'Poppins-Bold',
     },
     
     emptyContainer: {
@@ -476,11 +605,18 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
       justifyContent: 'center',
       paddingVertical: 60,
     },
+    emptyIconContainer: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
     emptyTitle: {
       fontSize: 18,
       fontFamily: 'Poppins-SemiBold',
       color: colors.text,
-      marginTop: 16,
       marginBottom: 8,
     },
     emptySubtitle: {
@@ -516,7 +652,7 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
                 <View style={{ flex: 1, alignItems: 'center' }}>
                   <ThemedText style={styles.title}>Payment History</ThemedText>
                   <ThemedText style={styles.subtitle}>
-                    {student?.name || 'Student'}
+                    {paymentHistory.length} {paymentHistory.length === 1 ? 'record' : 'records'}
                   </ThemedText>
                 </View>
                 
@@ -525,26 +661,58 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
             </SafeAreaView>
           </LinearGradient>
 
-          <View style={styles.studentInfo}>
-            <View style={styles.studentAvatar}>
-              <MaterialIcons name="person" size={20} color={colors.primary} />
+          {/* Student Info Card - Exactly like in StudentFeeDetails */}
+          <View style={styles.studentInfoCard}>
+            <View style={styles.studentHeader}>
+              <View style={styles.studentAvatar}>
+                {student?.profilePicUrl ? (
+                  <Image 
+                    source={{ uri: student.profilePicUrl }} 
+                    style={styles.avatarImage}
+                  />
+                ) : (
+                  <ThemedText style={styles.avatarText}>
+                    {getInitials(student?.name || student?.firstName || 'Student')}
+                  </ThemedText>
+                )}
+              </View>
+              
+              <View style={styles.studentInfo}>
+                <ThemedText style={styles.studentName} numberOfLines={1}>
+                  {student?.name || `${student?.firstName || ''} ${student?.lastName || ''}`.trim() || 'Student'}
+                </ThemedText>
+                <ThemedText style={styles.studentClass}>
+                  {student?.displayClass || student?.class || 'N/A'} - {student?.section || 'N/A'}
+                </ThemedText>
+              </View>
             </View>
-            <View style={styles.studentDetails}>
-              <ThemedText style={styles.studentName}>
-                {student?.name || 'Student'}
-              </ThemedText>
-              <ThemedText style={styles.studentClass}>
-                 {student?.displayClass || student?.class} - {student?.section} • {student?.village}
-              </ThemedText>
+            
+            <View style={styles.studentDetailsGrid}>
+              <View style={styles.detailItem}>
+                <Ionicons name="person-outline" size={12} color={colors.primary} />
+                <ThemedText style={styles.detailText}>
+                  {student?.studentType?.replace('_', ' ') || 'Day Scholar'}
+                </ThemedText>
+              </View>
+              
+              {student?.village && (
+                <View style={styles.detailItem}>
+                  <Ionicons name="location-outline" size={12} color={colors.info} />
+                  <ThemedText style={styles.detailText}>{student.village}</ThemedText>
+                </View>
+              )}
+              
+              <View style={styles.detailItem}>
+                <Ionicons name="call-outline" size={12} color={colors.success} />
+                <ThemedText style={styles.detailText}>{student?.parentPhone || 'N/A'}</ThemedText>
+              </View>
             </View>
           </View>
 
-          {renderFilterButtons()}
-
           <FlatList
-            data={getFilteredPayments()}
+            data={paymentHistory}
             renderItem={renderPaymentItem}
-            keyExtractor={(item) => item.id || item.paymentId}
+            keyExtractor={(item) => item.id || item.paymentId || Math.random().toString()}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={true}
             ListEmptyComponent={renderEmptyComponent}

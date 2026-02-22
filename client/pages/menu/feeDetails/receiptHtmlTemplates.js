@@ -362,7 +362,7 @@ export const generateReceiptHTML = (receiptData) => {
           <!-- Class & Section -->
           <div class="info-item">
             <span class="info-label">Class & Section:</span>
-            <span class="info-value">${receiptData.student.class} - ${receiptData.student.section}</span>
+            <span class="info-value">${receiptData.student.displayClass} - ${receiptData.student.section}</span>
           </div>
           
           <!-- Payment Date with Time -->
@@ -856,7 +856,7 @@ export const generatePrintHTML = (receiptData) => {
           <!-- Class & Section -->
           <div class="info-item">
             <span class="info-label">Class & Section:</span>
-            <span class="info-value">${receiptData.student.class} - ${receiptData.student.section}</span>
+            <span class="info-value">${receiptData.student.displayClass} - ${receiptData.student.section}</span>
           </div>
           
           <!-- Payment Date with Time -->

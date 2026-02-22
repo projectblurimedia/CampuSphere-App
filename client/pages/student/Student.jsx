@@ -166,8 +166,7 @@ export default function Student({ student, onClose }) {
     } },
     { id: 3, icon: 'currency-inr', iconSet: MaterialCommunityIcons, label: 'Fee Details', color: '#FF9800', action: 'fees', handler: handleFeeDetails },
     { id: 4, icon: 'edit', iconSet: MaterialIcons, label: 'Edit Student', color: colors.primary, action: 'edit', handler: handleEdit },
-    { id: 5, icon: 'file-document', iconSet: MaterialCommunityIcons, label: 'View Reports', color: '#9C27B0', action: 'reports' },
-    { id: 6, icon: 'delete', iconSet: MaterialIcons, label: 'Delete Student', color: '#F44336', action: 'delete', handler: handleDelete },
+    { id: 6, icon: 'delete', iconSet: MaterialIcons, label: 'Inactive Student', color: '#F44336', action: 'delete', handler: handleDelete },
   ]
 
   const handleMoreAction = (action) => {

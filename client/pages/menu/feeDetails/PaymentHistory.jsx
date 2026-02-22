@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Dimensions,
+  Image,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -23,7 +24,7 @@ import FeeReceipt from './FeeReceipt'
 import * as Sharing from 'expo-sharing'
 import * as XLSX from 'xlsx'
 import * as Print from 'expo-print'
-import { Paths, File } from 'expo-file-system'
+import { File, Paths } from 'expo-file-system'
 import { generateReceiptHTML, generatePrintHTML } from './receiptHtmlTemplates'
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window')
@@ -135,23 +136,37 @@ const CustomDropdown = ({
   )
 }
 
-// Memoized Payment Item Component
+// Memoized Payment Item Component - Removed eye icon, added initials avatar
 const PaymentItem = React.memo(({ item, onPress, colors, formatDate, getPaymentModeColor, getPaymentModeIcon }) => {
+  // Function to get initials from student name
+  const getInitials = (name) => {
+    if (!name) return '?'
+    const nameParts = name.split(' ')
+    if (nameParts.length >= 2) {
+      return (nameParts[0][0] + nameParts[1][0]).toUpperCase()
+    }
+    return nameParts[0][0].toUpperCase()
+  }
+
   return (
     <TouchableOpacity
       activeOpacity={0.9}
       style={[styles.paymentCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
       onPress={() => onPress(item)}
     >
-      {/* Eye Icon - Absolute positioned with white background */}
-      <View style={[styles.eyeIconContainer, { backgroundColor: colors.background }]}>
-        <Feather name="eye" size={16} color={colors.primary} />
-      </View>
-
       <View style={styles.paymentHeader}>
         <View style={styles.studentInfo}>
-          <View style={[styles.studentAvatar, { backgroundColor: colors.primary + '20' }]}>
-            <MaterialIcons name="person" size={20} color={colors.primary} />
+          <View style={[styles.studentAvatar, { backgroundColor: '#1d9bf0' }]}>
+            {item.student?.profilePicUrl ? (
+              <Image 
+                source={{ uri: item.student.profilePicUrl }} 
+                style={styles.avatarImage}
+              />
+            ) : (
+              <ThemedText style={styles.avatarText}>
+                {getInitials(item.student?.name)}
+              </ThemedText>
+            )}
           </View>
           <View style={styles.studentDetails}>
             <ThemedText style={styles.studentName}>{item.student?.name || 'N/A'}</ThemedText>
@@ -241,12 +256,12 @@ export default function PaymentHistory({ visible, onClose }) {
   const [refreshing, setRefreshing] = useState(false)
   const [payments, setPayments] = useState([])
   const [summary, setSummary] = useState(null)
+  const [totalRecords, setTotalRecords] = useState(0) // New state for total records
   const [pagination, setPagination] = useState({
     current: 1,
     totalPages: 1,
     hasNext: false,
     hasPrev: false,
-    total: 0
   })
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' })
   const [exporting, setExporting] = useState(false)
@@ -372,8 +387,6 @@ export default function PaymentHistory({ visible, onClose }) {
         { label: 'Class 8', value: '8' },
         { label: 'Class 9', value: '9' },
         { label: 'Class 10', value: '10' },
-        { label: 'Class 11', value: '11' },
-        { label: 'Class 12', value: '12' },
       ]
       
       const fallbackClassSections = {
@@ -534,20 +547,46 @@ export default function PaymentHistory({ visible, onClose }) {
           total: newPayments.length
         }
         
+        // Set total records from response
+        setTotalRecords(response.data.total || newPayments.length || 0)
+        
+        // Enhance payments with previous year info if available
+        const enhancedPayments = newPayments.map(payment => {
+          // Check if this payment includes previous year metadata
+          if (payment.metadata) {
+            return {
+              ...payment,
+              isPreviousYearPayment: payment.metadata.paymentType === 'previousYear' || 
+                                     payment.metadata.paymentType === 'allPreviousYears',
+              previousYearInfo: payment.metadata.academicYear ? {
+                academicYear: payment.metadata.academicYear,
+                paymentType: payment.metadata.paymentType
+              } : null
+            }
+          }
+          return payment
+        })
+        
         if (append) {
-          setPayments(prev => [...prev, ...newPayments])
+          setPayments(prev => [...prev, ...enhancedPayments])
         } else {
-          setPayments(newPayments)
+          setPayments(enhancedPayments)
         }
         
         setSummary(newSummary)
-        setPagination(newPagination)
+        setPagination({
+          current: newPagination.current || page,
+          totalPages: newPagination.totalPages || 1,
+          hasNext: newPagination.hasNext || false,
+          hasPrev: newPagination.hasPrev || false,
+        })
       } else {
         showToast(response.data.message || 'Failed to fetch payment history', 'error')
         // Clear data on error
         if (!append) {
           setPayments([])
           setSummary(null)
+          setTotalRecords(0)
         }
       }
     } catch (error) {
@@ -570,12 +609,12 @@ export default function PaymentHistory({ visible, onClose }) {
       if (!append) {
         setPayments([])
         setSummary(null)
+        setTotalRecords(0)
         setPagination({
           current: 1,
           totalPages: 1,
           hasNext: false,
           hasPrev: false,
-          total: 0
         })
       }
     } finally {
@@ -593,6 +632,7 @@ export default function PaymentHistory({ visible, onClose }) {
     if (visible && !isLoadingClasses) {
       setInitialLoading(true)
       setPayments([]) // Clear existing data
+      setTotalRecords(0) // Reset total records
       fetchPaymentHistory(1, false)
     }
     
@@ -606,6 +646,7 @@ export default function PaymentHistory({ visible, onClose }) {
   const handleRefresh = useCallback(() => {
     setRefreshing(true)
     setPayments([]) // Clear existing data
+    setTotalRecords(0) // Reset total records
     fetchPaymentHistory(1, false)
   }, [fetchPaymentHistory])
 
@@ -671,6 +712,7 @@ export default function PaymentHistory({ visible, onClose }) {
     // Show loading immediately and fetch data
     setInitialLoading(true)
     setPayments([]) // Clear existing data
+    setTotalRecords(0) // Reset total records
     fetchPaymentHistory(1, false)
     showToast('Filters cleared', 'success')
   }, [fetchPaymentHistory, showToast])
@@ -686,6 +728,7 @@ export default function PaymentHistory({ visible, onClose }) {
       // Show loading immediately and fetch data
       setInitialLoading(true)
       setPayments([]) // Clear existing data
+      setTotalRecords(0) // Reset total records
       fetchPaymentHistory(1, false)
       showToast('Filters applied', 'success')
     } else {
@@ -703,20 +746,19 @@ export default function PaymentHistory({ visible, onClose }) {
     try {
       setExporting(true)
 
-      // Prepare data for Excel
       const excelData = payments.map(payment => ({
         'Receipt No': payment.receiptNo,
         'Date': formatDate(payment.date),
-        'Student Name': payment.student.name,
-        'Class': payment.student.displayClass,
-        'Section': payment.student.section,
-        'Term': payment.termNumber || 'Full Payment',
-        'School Fee (₹)': payment.breakdown.schoolFeePaid || 0,
-        'Transport Fee (₹)': payment.breakdown.transportFeePaid || 0,
-        'Hostel Fee (₹)': payment.breakdown.hostelFeePaid || 0,
+        'Student Name': payment.student?.name || 'N/A',
+        'Class': payment.student?.displayClass || 'N/A',
+        'Section': payment.student?.section || 'N/A',
+        'School Fee (₹)': payment.breakdown?.schoolFeePaid || 0,
+        'Transport Fee (₹)': payment.breakdown?.transportFeePaid || 0,
+        'Hostel Fee (₹)': payment.breakdown?.hostelFeePaid || 0,
         'Total Amount (₹)': payment.totalAmount,
-        'Payment Mode': payment.paymentMode.replace('_', ' '),
+        'Payment Mode': payment.paymentMode?.replace('_', ' ') || 'N/A',
         'Description': payment.description || '',
+        'Received By': payment.receivedBy || 'N/A',
       }))
 
       // Create worksheet
@@ -1029,7 +1071,6 @@ export default function PaymentHistory({ visible, onClose }) {
     </Modal>
   ), [showFilterModal, colors, tempFilters, classItems, sectionItems, isLoadingClasses, clearFilters, applyFilters, cancelFilterModal])
 
-  // Render stats modal
   const renderStatsModal = useCallback(() => (
     <Modal
       visible={showStatsModal}
@@ -1249,7 +1290,7 @@ export default function PaymentHistory({ visible, onClose }) {
               <View style={{ flex: 1, alignItems: 'center' }}>
                 <ThemedText style={styles.title}>Payment History</ThemedText>
                 <ThemedText style={styles.subtitle}>
-                  {pagination.total} records found
+                  {initialLoading || loading ? 'Loading...' : `${totalRecords} ${totalRecords === 1 ? 'record' : 'records'} found`}
                 </ThemedText>
               </View>
               
@@ -1438,25 +1479,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
   },
-  eyeIconContainer: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-  },
   paymentHeader: {
     padding: 12,
-    paddingRight: 48, // Make room for eye icon
   },
   studentInfo: {
     flexDirection: 'row',
@@ -1470,6 +1494,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'Poppins-SemiBold',
   },
   studentDetails: {
     flex: 1,

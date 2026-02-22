@@ -193,12 +193,8 @@ export default function FeeReceipt({
                 <ThemedText style={styles.receiptValue}>{receiptData.student?.name}</ThemedText>
               </View>
               <View style={styles.receiptRow}>
-                <ThemedText style={styles.receiptLabel}>Admission No:</ThemedText>
-                <ThemedText style={styles.receiptValue}>{receiptData.student?.admissionNo}</ThemedText>
-              </View>
-              <View style={styles.receiptRow}>
                 <ThemedText style={styles.receiptLabel}>Class & Section:</ThemedText>
-                <ThemedText style={styles.receiptValue}>{receiptData.student?.class} - {receiptData.student?.section}</ThemedText>
+                <ThemedText style={styles.receiptValue}>{receiptData.student?.displayClass || receiptData.student?.classLabel} - {receiptData.student?.section}</ThemedText>
               </View>
               <View style={styles.receiptRow}>
                 <ThemedText style={styles.receiptLabel}>Parent Name:</ThemedText>

@@ -298,8 +298,8 @@ model PaymentHistory {
   paymentMode         PaymentMode
   description         String?       @db.Text
   metadata            Json?         @default("{}") 
+  studentDetails      Json          @default("{}") 
   
-  // Payment method details
   chequeNo            String?       @db.VarChar(50)
   bankName            String?       @db.VarChar(100)
   transactionId       String?       @db.VarChar(100)

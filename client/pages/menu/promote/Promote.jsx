@@ -301,8 +301,7 @@ const PromotionConfirmationModal = ({
   visible, 
   onConfirm, 
   onCancel, 
-  selectedCount,
-  selectedClasses,
+  studentCount,
   academicYear,
   isProcessing = false
 }) => {
@@ -330,20 +329,6 @@ const PromotionConfirmationModal = ({
       scaleAnim.setValue(0.8)
     }
   }, [visible])
-
-  // Group selected classes by class-section
-  const classGroups = {}
-  selectedClasses.forEach(item => {
-    const key = `${item.class}-${item.section}`
-    if (!classGroups[key]) {
-      classGroups[key] = {
-        class: item.class,
-        section: item.section,
-        count: 0
-      }
-    }
-    classGroups[key].count++
-  })
 
   const backdropOpacity = fadeAnim
   const modalScale = scaleAnim
@@ -391,8 +376,8 @@ const PromotionConfirmationModal = ({
 
           <ThemedText style={[styles.confirmModalMessage, { color: colors.textSecondary, fontFamily: 'Poppins-Medium' }]}>
             {isProcessing 
-              ? `Please wait while we promote ${selectedCount} student${selectedCount !== 1 ? 's' : ''}`
-              : `Are you sure you want to promote ${selectedCount} student${selectedCount !== 1 ? 's' : ''}?`
+              ? `Please wait while we promote all ${studentCount} students`
+              : `Are you sure you want to promote all ${studentCount} students to the next academic year?`
             }
           </ThemedText>
 
@@ -410,27 +395,13 @@ const PromotionConfirmationModal = ({
 
               <View style={styles.confirmDivider} />
 
-              {Object.values(classGroups).map(({ class: className, section, count }) => (
-                <View key={`${className}-${section}`} style={styles.confirmDetailRow}>
-                  <Ionicons name="people" size={16} color={colors.textSecondary} />
-                  <ThemedText style={[styles.confirmDetailLabel, { color: colors.textSecondary, fontFamily: 'Poppins-Medium' }]}>
-                    {className} - {section}:
-                  </ThemedText>
-                  <ThemedText style={[styles.confirmDetailValue, { color: colors.text, fontFamily: 'Poppins-SemiBold' }]}>
-                    {count} student{count !== 1 ? 's' : ''}
-                  </ThemedText>
-                </View>
-              ))}
-
-              <View style={styles.confirmDivider} />
-
               <View style={styles.confirmTotalRow}>
                 <ThemedText style={[styles.confirmTotalLabel, { color: colors.text, fontFamily: 'Poppins-SemiBold' }]}>
-                  Total Selected:
+                  Total Students:
                 </ThemedText>
                 <View style={[styles.confirmTotalBadge, { backgroundColor: colors.primary + '20' }]}>
                   <ThemedText style={[styles.confirmTotalValue, { color: colors.primary, fontFamily: 'Poppins-Bold' }]}>
-                    {selectedCount}
+                    {studentCount}
                   </ThemedText>
                 </View>
               </View>
@@ -441,7 +412,7 @@ const PromotionConfirmationModal = ({
             <View style={styles.confirmWarningContainer}>
               <Feather name="info" size={14} color="#F59E0B" />
               <ThemedText style={[styles.confirmWarningText, { fontFamily: 'Poppins-Medium' }]}>
-                This will archive attendance, marks, and set up new class fees
+                This will archive attendance, marks, and set up new class fees for all students
               </ThemedText>
             </View>
           )}
@@ -478,7 +449,7 @@ const PromotionConfirmationModal = ({
                 </View>
               ) : (
                 <ThemedText style={[styles.confirmActionButtonText, { fontFamily: 'Poppins-SemiBold' }]}>
-                  Promote Now
+                  Promote All
                 </ThemedText>
               )}
             </TouchableOpacity>
@@ -683,71 +654,6 @@ const SuccessResultModal = ({
                 </View>
               </View>
             </View>
-
-            {results && results.length > 0 && (
-              <View style={styles.successResultsContainer}>
-                <View style={styles.successResultsHeader}>
-                  <MaterialIcons name="list" size={18} color={colors.primary} />
-                  <ThemedText style={[styles.successResultsTitle, { color: colors.text, fontFamily: 'Poppins-SemiBold' }]}>
-                    Promoted Students
-                  </ThemedText>
-                  <View style={[styles.successResultsBadge, { backgroundColor: colors.primary + '20' }]}>
-                    <ThemedText style={[styles.successResultsCount, { color: colors.primary, fontFamily: 'Poppins-SemiBold' }]}>
-                      {results.length}
-                    </ThemedText>
-                  </View>
-                </View>
-
-                <View style={styles.successResultsList}>
-                  {results.map((student, index) => (
-                    <View 
-                      key={student.id || index} 
-                      style={[styles.successResultItem, { borderBottomColor: colors.border }]}
-                    >
-                      <View style={styles.successResultLeft}>
-                        <View style={[
-                          styles.successResultIcon,
-                          { backgroundColor: getStatusColor(student.status) + '20' }
-                        ]}>
-                          <Feather 
-                            name={getStatusIcon(student.status)} 
-                            size={14} 
-                            color={getStatusColor(student.status)} 
-                          />
-                        </View>
-                        <View style={styles.successResultInfo}>
-                          <ThemedText style={[styles.successResultName, { color: colors.text, fontFamily: 'Poppins-Medium' }]}>
-                            {student.name}
-                          </ThemedText>
-                          <View style={styles.successResultMeta}>
-                            <View style={styles.successResultClass}>
-                              <MaterialIcons name="class" size={12} color={colors.textSecondary} />
-                              <ThemedText style={[styles.successResultClassText, { color: colors.textSecondary, fontFamily: 'Poppins-Medium' }]}>
-                                {student.archivedRecord?.classLabel}
-                              </ThemedText>
-                            </View>
-                            <View style={styles.successResultAttendance}>
-                              <Feather name="users" size={12} color={colors.textSecondary} />
-                              <ThemedText style={[styles.successResultMetaText, { color: colors.textSecondary, fontFamily: 'Poppins-Medium' }]}>
-                                {student.archivedRecord?.attendancePercentage || 0}%
-                              </ThemedText>
-                            </View>
-                          </View>
-                        </View>
-                      </View>
-                      <View style={[
-                        styles.successResultStatus,
-                        { backgroundColor: getStatusColor(student.status) + '20' }
-                      ]}>
-                        <ThemedText style={[styles.successResultStatusText, { color: getStatusColor(student.status), fontFamily: 'Poppins-SemiBold' }]}>
-                          {student.status}
-                        </ThemedText>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
           </ScrollView>
 
           <TouchableOpacity
@@ -780,8 +686,7 @@ export default function Promote({ visible, onClose }) {
   // State for students
   const [studentsByClassSection, setStudentsByClassSection] = useState([])
   const [allStudents, setAllStudents] = useState([])
-  const [selectedStudents, setSelectedStudents] = useState({})
-  const [sectionSelection, setSectionSelection] = useState({})
+  const [collapsedSections, setCollapsedSections] = useState({})
   
   // State for UI
   const [isLoading, setIsLoading] = useState(false)
@@ -887,20 +792,12 @@ export default function Promote({ visible, onClose }) {
         
         setStudentsByClassSection(sections)
         
-        // Initialize selections
-        const initialSelected = {}
-        const initialSectionSelection = {}
-        
-        students.forEach(student => {
-          initialSelected[student.id] = false
-        })
-        
+        // Initialize collapsed sections (all expanded by default)
+        const initialCollapsed = {}
         sections.forEach(section => {
-          initialSectionSelection[section.title] = false
+          initialCollapsed[section.title] = false
         })
-        
-        setSelectedStudents(initialSelected)
-        setSectionSelection(initialSectionSelection)
+        setCollapsedSections(initialCollapsed)
         
       } else {
         throw new Error(response.data.message || 'Failed to load students')
@@ -931,83 +828,30 @@ export default function Promote({ visible, onClose }) {
     loadAllStudents()
   }, [])
 
-  // Handle select all in a section
-  const handleSelectSection = useCallback((sectionTitle) => {
-    setSectionSelection(prev => {
-      const newSectionSelection = !prev[sectionTitle]
-      
-      // Find all students in this section
-      const section = studentsByClassSection.find(s => s.title === sectionTitle)
-      if (section) {
-        setSelectedStudents(prevSelected => {
-          const newSelected = { ...prevSelected }
-          section.data.forEach(student => {
-            newSelected[student.id] = newSectionSelection
-          })
-          return newSelected
-        })
-      }
-      
-      return {
-        ...prev,
-        [sectionTitle]: newSectionSelection
-      }
-    })
-  }, [studentsByClassSection])
+  // Toggle section collapse/expand
+  const toggleSection = useCallback((sectionTitle) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [sectionTitle]: !prev[sectionTitle]
+    }))
+  }, [])
 
-  // Handle individual student selection
-  const handleSelectStudent = useCallback((studentId, sectionTitle) => {
-    setSelectedStudents(prev => {
-      const newSelection = {
-        ...prev,
-        [studentId]: !prev[studentId]
-      }
-      
-      // Check if all students in this section are selected
-      const section = studentsByClassSection.find(s => s.title === sectionTitle)
-      if (section) {
-        const allSelected = section.data.every(student => newSelection[student.id])
-        setSectionSelection(prevSection => ({
-          ...prevSection,
-          [sectionTitle]: allSelected
-        }))
-      }
-      
-      return newSelection
-    })
-  }, [studentsByClassSection])
+  // Get all student IDs
+  const getAllStudentIds = useCallback(() => {
+    return allStudents.map(student => student.id)
+  }, [allStudents])
 
-  // Get selected student count
-  const getSelectedCount = useCallback(() => {
-    return Object.values(selectedStudents).filter(Boolean).length
-  }, [selectedStudents])
-
-  // Get selected students by class-section
-  const getSelectedByClassSection = useCallback(() => {
-    const selected = []
-    Object.entries(selectedStudents).forEach(([id, isSelected]) => {
-      if (isSelected) {
-        const student = allStudents.find(s => s.id === id)
-        if (student) {
-          selected.push({
-            id: student.id,
-            name: student.name || `${student.firstName} ${student.lastName}`.trim(),
-            class: student.displayClass || student.class,
-            section: student.section,
-            nextClass: getNextClass(student.displayClass || student.class)
-          })
-        }
-      }
-    })
-    return selected
-  }, [allStudents, selectedStudents])
+  // Get total student count
+  const getTotalStudentCount = useCallback(() => {
+    return allStudents.length
+  }, [allStudents])
 
   // Handle promote button press
   const handlePromotePress = useCallback(() => {
-    const selectedCount = getSelectedCount()
+    const totalStudents = getTotalStudentCount()
     
-    if (selectedCount === 0) {
-      showToast('Please select at least one student to promote', 'warning')
+    if (totalStudents === 0) {
+      showToast('No students available to promote', 'warning')
       return
     }
 
@@ -1017,20 +861,18 @@ export default function Promote({ visible, onClose }) {
     }
 
     setShowConfirmModal(true)
-  }, [getSelectedCount, academicYear])
+  }, [getTotalStudentCount, academicYear])
 
   // Handle promotion confirmation
   const handlePromoteConfirm = useCallback(async () => {
     setShowConfirmModal(false)
     setIsProcessing(true)
 
-    const selectedIds = allStudents
-      .filter(student => selectedStudents[student.id])
-      .map(student => student.id)
+    const studentIds = getAllStudentIds()
 
     try {
       const payload = {
-        studentIds: selectedIds,
+        studentIds: studentIds,
         academicYear,
         action: 'promote' // Always promote
       }
@@ -1061,7 +903,7 @@ export default function Promote({ visible, onClose }) {
     } finally {
       setIsProcessing(false)
     }
-  }, [allStudents, selectedStudents, academicYear])
+  }, [getAllStudentIds, academicYear])
 
   const handlePromoteCancel = useCallback(() => {
     setShowConfirmModal(false)
@@ -1074,33 +916,31 @@ export default function Promote({ visible, onClose }) {
     onClose()
   }, [])
 
-  const selectedCount = getSelectedCount()
-  const selectedByClassSection = getSelectedByClassSection()
+  const totalStudents = getTotalStudentCount()
   const isYearCompleted = isAcademicYearCompleted(academicYear)
 
-  // Render section header
+  // Render section header with dropdown toggle
   const renderSectionHeader = useCallback(({ section: { title, class: className, section: sectionName, nextClass } }) => {
-    const isSectionSelected = sectionSelection[title] || false
-    const sectionStudents = studentsByClassSection.find(s => s.title === title)?.data || []
-    const sectionSelectedCount = sectionStudents.filter(s => selectedStudents[s.id]).length
+    const isCollapsed = collapsedSections[title] || false
+    const sectionData = studentsByClassSection.find(s => s.title === title)
+    const studentCount = sectionData?.data.length || 0
     
     return (
       <TouchableOpacity 
         style={[styles.sectionHeader, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
-        onPress={() => handleSelectSection(title)}
+        onPress={() => toggleSection(title)}
         activeOpacity={0.7}
       >
         <View style={styles.sectionHeaderLeft}>
           <View style={[
-            styles.sectionCheckbox,
-            { 
-              borderColor: isSectionSelected ? colors.primary : colors.border,
-              backgroundColor: isSectionSelected ? colors.primary + '20' : 'transparent',
-            }
+            styles.sectionToggleIcon,
+            { backgroundColor: colors.primary + '20' }
           ]}>
-            {isSectionSelected && (
-              <Feather name="check" size={16} color={colors.primary} />
-            )}
+            <Feather 
+              name={isCollapsed ? 'chevron-right' : 'chevron-down'} 
+              size={18} 
+              color={colors.primary} 
+            />
           </View>
           <View>
             <ThemedText style={[styles.sectionHeaderTitle, { color: colors.text, fontFamily: 'Poppins-SemiBold' }]}>
@@ -1125,36 +965,25 @@ export default function Promote({ visible, onClose }) {
           </View>
         </View>
         <View style={styles.sectionHeaderRight}>
-          <ThemedText style={[styles.sectionSelectedCount, { color: colors.primary, fontFamily: 'Poppins-Medium' }]}>
-            {sectionSelectedCount}/{sectionStudents.length}
-          </ThemedText>
+          <View style={[styles.studentCountBadge, { backgroundColor: colors.primary + '20' }]}>
+            <ThemedText style={[styles.studentCountText, { color: colors.primary, fontFamily: 'Poppins-Medium' }]}>
+              {studentCount} {studentCount === 1 ? 'student' : 'students'}
+            </ThemedText>
+          </View>
         </View>
       </TouchableOpacity>
     )
-  }, [sectionSelection, selectedStudents, studentsByClassSection, handleSelectSection])
+  }, [collapsedSections, studentsByClassSection, toggleSection])
 
-  // Render student item - SIMPLIFIED: Only checkbox, avatar, and name
+  // Render student item - SIMPLIFIED: Only avatar and name (no checkbox)
   const renderStudent = useCallback(({ item, section }) => {
-    const isSelected = selectedStudents[item.id] || false
+    // Don't render if section is collapsed
+    if (collapsedSections[section.title]) {
+      return null
+    }
     
     return (
-      <TouchableOpacity 
-        style={[styles.studentCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
-        onPress={() => handleSelectStudent(item.id, section.title)}
-        activeOpacity={0.7}
-      >
-        <View style={[
-          styles.studentCheckbox,
-          { 
-            borderColor: isSelected ? colors.primary : colors.border,
-            backgroundColor: isSelected ? colors.primary + '20' : 'transparent',
-          }
-        ]}>
-          {isSelected && (
-            <Feather name="check" size={16} color={colors.primary} />
-          )}
-        </View>
-        
+      <View style={[styles.studentCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
         <View style={styles.studentAvatar}>
           {item.profilePicUrl ? (
             <Image source={{ uri: item.profilePicUrl }} style={styles.studentAvatarImage} />
@@ -1168,13 +997,18 @@ export default function Promote({ visible, onClose }) {
         </View>
         
         <View style={styles.studentInfo}>
-          <ThemedText style={[styles.studentName, { color: colors.text, fontFamily: 'Poppins-Medium' }]} numberOfLines={1}>
+          <ThemedText type='subtitle' style={[styles.studentName, { color: colors.text }]} numberOfLines={1}>
             {item.firstName} {item.lastName}
           </ThemedText>
+          {item.rollNo && (
+            <ThemedText  style={[styles.studentRollNo, { color: colors.textSecondary }]}>
+              Roll No: {item.rollNo}
+            </ThemedText>
+          )}
         </View>
-      </TouchableOpacity>
+      </View>
     )
-  }, [selectedStudents, handleSelectStudent])
+  }, [collapsedSections])
 
   return (
     <Modal 
@@ -1205,9 +1039,9 @@ export default function Promote({ visible, onClose }) {
                   Promote Students
                 </ThemedText>
                 <ThemedText style={[styles.subtitle, { fontFamily: 'Poppins-Medium' }]}>
-                  {selectedCount > 0 
-                    ? `${selectedCount} student${selectedCount !== 1 ? 's' : ''} selected` 
-                    : 'Select students to promote'
+                  {totalStudents > 0 
+                    ? `${totalStudents} total student${totalStudents !== 1 ? 's' : ''}` 
+                    : 'No students available'
                   }
                 </ThemedText>
               </View>
@@ -1298,15 +1132,13 @@ export default function Promote({ visible, onClose }) {
                     <Ionicons name="people" size={20} color={colors.primary} />
                   </View>
                   <ThemedText style={[styles.sectionTitle, { color: colors.text, fontFamily: 'Poppins-SemiBold' }]}>
-                    Students by Class & Section
+                    All Students
                   </ThemedText>
-                  {selectedCount > 0 && (
-                    <View style={[styles.sectionBadge, { backgroundColor: colors.primary + '20' }]}>
-                      <ThemedText style={[styles.sectionBadgeText, { color: colors.primary, fontFamily: 'Poppins-Medium' }]}>
-                        {selectedCount} Selected
-                      </ThemedText>
-                    </View>
-                  )}
+                  <View style={[styles.sectionBadge, { backgroundColor: colors.primary + '20' }]}>
+                    <ThemedText style={[styles.sectionBadgeText, { color: colors.primary, fontFamily: 'Poppins-Medium' }]}>
+                      {totalStudents} Total
+                    </ThemedText>
+                  </View>
                 </View>
 
                 <SectionList
@@ -1317,6 +1149,7 @@ export default function Promote({ visible, onClose }) {
                   scrollEnabled={false}
                   SectionSeparatorComponent={() => <View style={{ height: 16 }} />}
                   ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+                  extraData={collapsedSections}
                 />
               </View>
             ) : !isLoading && (
@@ -1354,7 +1187,7 @@ export default function Promote({ visible, onClose }) {
         {studentsByClassSection.length > 0 && (
           <View style={styles.footer}>
             <LinearGradient
-              colors={selectedCount === 0 ? ['#D1D5DB', '#9CA3AF'] : [colors.gradientStart, colors.gradientEnd]}
+              colors={totalStudents === 0 ? ['#D1D5DB', '#9CA3AF'] : [colors.gradientStart, colors.gradientEnd]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.footerGradient}
@@ -1363,11 +1196,11 @@ export default function Promote({ visible, onClose }) {
                 style={styles.footerButton}
                 onPress={handlePromotePress}
                 activeOpacity={0.9}
-                disabled={isLoading || isProcessing || selectedCount === 0}
+                disabled={isLoading || isProcessing || totalStudents === 0}
               >
                 <MaterialCommunityIcons name="school" size={22} color="#FFFFFF" />
                 <ThemedText style={[styles.footerButtonText, { fontFamily: 'Poppins-SemiBold' }]}>
-                  Promote {selectedCount > 0 ? `(${selectedCount})` : ''}
+                  Promote All ({totalStudents})
                 </ThemedText>
               </TouchableOpacity>
             </LinearGradient>
@@ -1387,8 +1220,7 @@ export default function Promote({ visible, onClose }) {
         visible={showConfirmModal}
         onConfirm={handlePromoteConfirm}
         onCancel={handlePromoteCancel}
-        selectedCount={selectedCount}
-        selectedClasses={selectedByClassSection}
+        studentCount={totalStudents}
         academicYear={academicYear}
         isProcessing={isProcessing}
       />
@@ -1549,11 +1381,10 @@ const styles = StyleSheet.create({
     gap: 12,
     flex: 1,
   },
-  sectionCheckbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 8,
-    borderWidth: 2,
+  sectionToggleIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1585,8 +1416,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  sectionSelectedCount: {
-    fontSize: 14,
+  studentCountBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 16,
+  },
+  studentCountText: {
+    fontSize: 12,
   },
   studentCard: {
     flexDirection: 'row',
@@ -1594,16 +1430,6 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 14,
     borderWidth: 1,
-    marginLeft: 36,
-  },
-  studentCheckbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 7,
-    borderWidth: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
   },
   studentAvatar: {
     width: 44,
@@ -1631,6 +1457,10 @@ const styles = StyleSheet.create({
   },
   studentName: {
     fontSize: 15,
+  },
+  studentRollNo: {
+    fontSize: 12,
+    marginTop: -2,
   },
   emptyStateCard: {
     alignItems: 'center',

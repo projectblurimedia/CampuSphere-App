@@ -581,6 +581,7 @@ const styles = StyleSheet.create({
   },
   itemTitle: {
     fontSize: 14,
+    fontFamily: 'Poppins-SemiBold',
     marginBottom: -5,
   },
   itemValue: {

@@ -21,6 +21,22 @@ const generateReceiptNo = () => {
 }
 
 /**
+ * Generate student details snapshot for payment history
+ */
+const getStudentDetailsSnapshot = (student) => {
+  return {
+    firstName: student.firstName || '',
+    lastName: student.lastName || '',
+    parentName: student.parentName || '',
+    parentPhone: student.parentPhone || '',
+    class: student.class,
+    classLabel: mapEnumToDisplayName(student.class),
+    section: student.section || '',
+    admissionNo: student.admissionNo || ''
+  }
+}
+
+/**
  * Calculate discounted fees based on student-level discounts
  */
 const calculateDiscountedFees = (originalAmount, discountPercent) => {
@@ -1014,6 +1030,43 @@ export const getStudentPaymentHistory = async (req, res) => {
       }
     }
 
+    // Format payments with snapshot data if available
+    const formattedPayments = payments.map(payment => {
+      const snapshot = payment.studentDetails || {}
+      
+      return {
+        id: payment.id,
+        paymentId: payment.id,
+        date: payment.date,
+        receiptNo: payment.receiptNo,
+        paymentMode: payment.paymentMode,
+        termNumber: payment.termNumber,
+        studentSnapshot: Object.keys(snapshot).length > 0 ? {
+          name: snapshot.firstName && snapshot.lastName 
+            ? `${snapshot.firstName} ${snapshot.lastName}`.trim()
+            : null,
+          class: snapshot.class,
+          classLabel: snapshot.classLabel,
+          section: snapshot.section,
+          parentName: snapshot.parentName,
+          parentPhone: snapshot.parentPhone
+        } : null,
+        breakdown: {
+          schoolFeePaid: payment.schoolFeePaid,
+          transportFeePaid: payment.transportFeePaid,
+          hostelFeePaid: payment.hostelFeePaid
+        },
+        totalAmount: payment.totalAmount,
+        description: payment.description,
+        receivedBy: payment.receivedBy,
+        chequeNo: payment.chequeNo,
+        bankName: payment.bankName,
+        transactionId: payment.transactionId,
+        referenceNo: payment.referenceNo,
+        receiptUrl: `/api/fee/receipt/${payment.id}`
+      }
+    })
+
     res.status(200).json({
       success: true,
       data: {
@@ -1026,10 +1079,7 @@ export const getStudentPaymentHistory = async (req, res) => {
           displayClass: mapEnumToDisplayName(student.class),
           section: student.section
         },
-        payments: payments.map(p => ({
-          ...p,
-          receiptUrl: `/api/fee/receipt/${p.id}`
-        })),
+        payments: formattedPayments,
         statistics: stats,
         pagination: {
           current: pageNum,
@@ -1925,40 +1975,51 @@ export const getAllPaymentHistory = async (req, res) => {
       prisma.paymentHistory.count({ where })
     ])
 
-    // Format payments with student details
-    const formattedPayments = payments.map(payment => ({
-      id: payment.id,
-      receiptNo: payment.receiptNo,
-      date: payment.date,
-      paymentMode: payment.paymentMode,
-      termNumber: payment.termNumber,
-      breakdown: {
-        schoolFeePaid: payment.schoolFeePaid,
-        transportFeePaid: payment.transportFeePaid,
-        hostelFeePaid: payment.hostelFeePaid
-      },
-      totalAmount: payment.totalAmount,
-      description: payment.description,
-      chequeNo: payment.chequeNo,
-      bankName: payment.bankName,
-      transactionId: payment.transactionId,
-      referenceNo: payment.referenceNo,
-      receivedBy: payment.receivedBy,
-      student: {
-        id: payment.student.id,
-        name: `${payment.student.firstName} ${payment.student.lastName}`.trim(),
-        admissionNo: payment.student.admissionNo,
-        rollNo: payment.student.rollNo,
-        class: payment.student.class,
-        displayClass: mapEnumToDisplayName(payment.student.class),
-        section: payment.student.section,
-        parentName: payment.student.parentName,
-        parentPhone: payment.student.parentPhone,
-        village: payment.student.village,
-        studentType: payment.student.studentType
-      },
-      receiptUrl: `/api/fee/receipt/${payment.id}`
-    }))
+    // Format payments with student details - prioritize snapshot data if available
+    const formattedPayments = payments.map(payment => {
+      // Use snapshot data if available, otherwise use current student data
+      const studentSnapshot = payment.studentDetails || {}
+      
+      return {
+        id: payment.id,
+        receiptNo: payment.receiptNo,
+        date: payment.date,
+        paymentMode: payment.paymentMode,
+        termNumber: payment.termNumber,
+        breakdown: {
+          schoolFeePaid: payment.schoolFeePaid,
+          transportFeePaid: payment.transportFeePaid,
+          hostelFeePaid: payment.hostelFeePaid
+        },
+        totalAmount: payment.totalAmount,
+        description: payment.description,
+        chequeNo: payment.chequeNo,
+        bankName: payment.bankName,
+        transactionId: payment.transactionId,
+        referenceNo: payment.referenceNo,
+        receivedBy: payment.receivedBy,
+        student: {
+          id: payment.student?.id,
+          name: studentSnapshot.firstName && studentSnapshot.lastName 
+            ? `${studentSnapshot.firstName} ${studentSnapshot.lastName}`.trim()
+            : payment.student 
+              ? `${payment.student.firstName} ${payment.student.lastName}`.trim()
+              : 'Unknown',
+          admissionNo: studentSnapshot.admissionNo || payment.student?.admissionNo || 'N/A',
+          rollNo: payment.student?.rollNo || 'N/A',
+          class: studentSnapshot.class || payment.student?.class,
+          displayClass: studentSnapshot.classLabel || mapEnumToDisplayName(payment.student?.class),
+          section: studentSnapshot.section || payment.student?.section || '',
+          parentName: studentSnapshot.parentName || payment.student?.parentName || '',
+          parentPhone: studentSnapshot.parentPhone || payment.student?.parentPhone || '',
+          village: payment.student?.village || '',
+          studentType: payment.student?.studentType || '',
+          // Indicate if this is historical data
+          isHistoricalData: !!studentSnapshot.firstName
+        },
+        receiptUrl: `/api/fee/receipt/${payment.id}`
+      }
+    })
 
     // Calculate summary statistics for the filtered payments
     const summary = {
@@ -2256,6 +2317,9 @@ export const processPayment = async (req, res) => {
       })
     }
 
+    // Create student details snapshot for payment history
+    const studentDetailsSnapshot = getStudentDetailsSnapshot(student)
+
     const feeRecord = student.feeDetails[0]
     if (!feeRecord) {
       return res.status(404).json({
@@ -2441,10 +2505,11 @@ export const processPayment = async (req, res) => {
 
       // Use transaction to ensure data consistency
       const result = await prisma.$transaction(async (tx) => {
-        // Create payment record
+        // Create payment record with student details snapshot
         const payment = await tx.paymentHistory.create({
           data: {
             studentId,
+            studentDetails: studentDetailsSnapshot, // Add snapshot
             date: new Date(),
             schoolFeePaid: totalAmount, // For previous years, all goes to school fee in summary
             transportFeePaid: 0,
@@ -2498,6 +2563,7 @@ export const processPayment = async (req, res) => {
           receiptNo: result.payment.receiptNo,
           date: result.payment.date,
           totalAmount: result.payment.totalAmount,
+          studentDetails: result.payment.studentDetails,
           breakdown: {
             schoolFeePaid: result.payment.schoolFeePaid,
             transportFeePaid: result.payment.transportFeePaid,
@@ -2677,10 +2743,11 @@ export const processPayment = async (req, res) => {
 
       // Use transaction to ensure data consistency
       const result = await prisma.$transaction(async (tx) => {
-        // Create payment record
+        // Create payment record with student details snapshot
         const payment = await tx.paymentHistory.create({
           data: {
             studentId,
+            studentDetails: studentDetailsSnapshot, // Add snapshot
             date: new Date(),
             schoolFeePaid: totalAmount,
             transportFeePaid: 0,
@@ -2727,6 +2794,7 @@ export const processPayment = async (req, res) => {
           receiptNo: result.payment.receiptNo,
           date: result.payment.date,
           totalAmount: result.payment.totalAmount,
+          studentDetails: result.payment.studentDetails,
           breakdown: {
             schoolFeePaid: result.payment.schoolFeePaid,
             transportFeePaid: result.payment.transportFeePaid,
@@ -2902,10 +2970,11 @@ export const processPayment = async (req, res) => {
 
     // Use transaction to ensure data consistency
     const result = await prisma.$transaction(async (tx) => {
-      // Create payment record
+      // Create payment record with student details snapshot
       const payment = await tx.paymentHistory.create({
         data: {
           studentId,
+          studentDetails: studentDetailsSnapshot, // Add snapshot
           date: new Date(),
           schoolFeePaid,
           transportFeePaid,
@@ -2993,6 +3062,7 @@ export const processPayment = async (req, res) => {
         receiptNo: result.payment.receiptNo,
         date: result.payment.date,
         totalAmount: result.payment.totalAmount,
+        studentDetails: result.payment.studentDetails,
         breakdown: {
           schoolFeePaid: result.payment.schoolFeePaid,
           transportFeePaid: result.payment.transportFeePaid,
@@ -3066,18 +3136,26 @@ export const getPaymentReceipt = async (req, res) => {
       }
     }
 
+    // Use student snapshot if available, otherwise use current student data
+    const studentSnapshot = payment.studentDetails || {}
+    const studentData = {
+      name: studentSnapshot.firstName && studentSnapshot.lastName 
+        ? `${studentSnapshot.firstName} ${studentSnapshot.lastName}`.trim()
+        : `${payment.student.firstName} ${payment.student.lastName}`.trim(),
+      admissionNo: studentSnapshot.admissionNo || payment.student.admissionNo,
+      rollNo: payment.student.rollNo,
+      class: studentSnapshot.class || payment.student.class,
+      displayClass: studentSnapshot.classLabel || mapEnumToDisplayName(payment.student.class),
+      section: studentSnapshot.section || payment.student.section,
+      parentName: studentSnapshot.parentName || payment.student.parentName,
+      parentPhone: studentSnapshot.parentPhone || payment.student.parentPhone,
+      isHistoricalData: !!studentSnapshot.firstName // Flag to indicate if this is historical data
+    }
+
     const receiptData = {
       receiptNo: payment.receiptNo,
       date: payment.date,
-      student: {
-        name: `${payment.student.firstName} ${payment.student.lastName}`.trim(),
-        admissionNo: payment.student.admissionNo,
-        rollNo: payment.student.rollNo,
-        class: mapEnumToDisplayName(payment.student.class),
-        section: payment.student.section,
-        parentName: payment.student.parentName,
-        parentPhone: payment.student.parentPhone
-      },
+      student: studentData,
       payment: {
         id: payment.id,
         mode: payment.paymentMode,

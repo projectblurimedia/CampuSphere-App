@@ -32,29 +32,36 @@ export const generateClassWisePDFHTML = (data) => {
   }
 
   // Check if any fee category has non-zero values across all sections
-  const hasTransportFees = sections.some(section => section.totalTransportPending > 0)
-  const hasHostelFees = sections.some(section => section.totalHostelPending > 0)
-
-  // Determine which fee columns to show
-  const showTransport = hasTransportFees
-  const showHostel = hasHostelFees
-
-  // Calculate column widths based on visible columns
-  const getColumnWidths = () => {
-    const baseColumns = 3 // Roll No, Name, Tuition, Total
-    const totalColumns = baseColumns + (showTransport ? 1 : 0) + (showHostel ? 1 : 0)
-    
-    return {
-      rollNo: '10%',
-      name: showTransport && showHostel ? '35%' : showTransport || showHostel ? '40%' : '45%',
-      tuition: '15%',
-      transport: showTransport ? '15%' : '0%',
-      hostel: showHostel ? '15%' : '0%',
-      total: '15%'
+  const hasPreviousYearFees = sections.some(section => section.totalPreviousYearPending > 0)
+  
+  // Determine which columns to show based on selected term
+  const getColumns = () => {
+    switch(selectedTerm) {
+      case 'First Term':
+        return ['Roll No', 'Student Name', 'Term 1', 'Previous Year', 'Total']
+      case 'Second Term':
+        return ['Roll No', 'Student Name', 'Term 2', 'Previous Year', 'Total']
+      case 'Third Term':
+        return ['Roll No', 'Student Name', 'Term 3', 'Previous Year', 'Total']
+      case 'Previous Year':
+        return ['Roll No', 'Student Name', 'Previous Year', 'Total']
+      case 'All':
+        return ['Roll No', 'Student Name', 'Term 1', 'Term 2', 'Term 3', 'Previous Year', 'Total']
+      default:
+        return ['Roll No', 'Student Name', 'Term 1', 'Previous Year', 'Total']
     }
   }
 
-  const colWidths = getColumnWidths()
+  const columns = getColumns()
+  
+  // Calculate column widths based on selected term
+  const getColumnWidth = (col) => {
+    if (col === 'Roll No') return '8%'
+    if (col === 'Student Name') return '25%'
+    if (col === 'Total') return '12%'
+    if (col === 'Previous Year') return '12%'
+    return '11%'
+  }
 
   // Generate each section's table with proper alignment
   const generateSectionTables = () => {
@@ -62,10 +69,11 @@ export const generateClassWisePDFHTML = (data) => {
       const students = section.students
       const hasStudents = students.length > 0
 
-      // Calculate section totals (only for visible fee types)
-      const sectionTermTotal = students.reduce((sum, s) => sum + (s.termFee || 0), 0)
-      const sectionTransportTotal = showTransport ? students.reduce((sum, s) => sum + (s.transportFee || 0), 0) : 0
-      const sectionHostelTotal = showHostel ? students.reduce((sum, s) => sum + (s.hostelFee || 0), 0) : 0
+      // Calculate section totals based on visible columns
+      const sectionTerm1Total = students.reduce((sum, s) => sum + (s.term1Pending || 0), 0)
+      const sectionTerm2Total = students.reduce((sum, s) => sum + (s.term2Pending || 0), 0)
+      const sectionTerm3Total = students.reduce((sum, s) => sum + (s.term3Pending || 0), 0)
+      const sectionPreviousYearTotal = students.reduce((sum, s) => sum + (s.previousYearFee || 0), 0)
       const sectionGrandTotal = students.reduce((sum, s) => sum + (s.totalPending || 0), 0)
 
       return `
@@ -91,9 +99,21 @@ export const generateClassWisePDFHTML = (data) => {
             <h2>${section.className} - Section ${section.section}</h2>
             <div class="section-summary">
               <span class="summary-item"><strong>Pending Students:</strong> ${section.pendingCount}</span>
-              <span class="summary-item"><strong>Tuition Fee:</strong> ${formatCurrency(sectionTermTotal)}</span>
-              ${showTransport ? `<span class="summary-item"><strong>Transport:</strong> ${formatCurrency(sectionTransportTotal)}</span>` : ''}
-              ${showHostel ? `<span class="summary-item"><strong>Hostel:</strong> ${formatCurrency(sectionHostelTotal)}</span>` : ''}
+              ${selectedTerm !== 'Previous Year' && selectedTerm !== 'All' ? `
+                <span class="summary-item"><strong>${selectedTerm === 'First Term' ? 'Term 1' : selectedTerm === 'Second Term' ? 'Term 2' : 'Term 3'}:</strong> ${
+                  formatCurrency(selectedTerm === 'First Term' ? sectionTerm1Total : 
+                                selectedTerm === 'Second Term' ? sectionTerm2Total : 
+                                sectionTerm3Total)
+                }</span>
+              ` : ''}
+              ${selectedTerm === 'All' ? `
+                <span class="summary-item"><strong>Term 1:</strong> ${formatCurrency(sectionTerm1Total)}</span>
+                <span class="summary-item"><strong>Term 2:</strong> ${formatCurrency(sectionTerm2Total)}</span>
+                <span class="summary-item"><strong>Term 3:</strong> ${formatCurrency(sectionTerm3Total)}</span>
+              ` : ''}
+              ${hasPreviousYearFees ? `
+                <span class="summary-item" style="background: #FEF3C7;"><strong>Previous Year:</strong> ${formatCurrency(sectionPreviousYearTotal)}</span>
+              ` : ''}
               <span class="summary-item total"><strong>Total:</strong> ${formatCurrency(sectionGrandTotal)}</span>
             </div>
           </div>
@@ -102,33 +122,85 @@ export const generateClassWisePDFHTML = (data) => {
             <table class="students-table">
               <thead>
                 <tr>
-                  <th style="width: ${colWidths.rollNo}">Roll No</th>
-                  <th style="text-align: left; width: ${colWidths.name}">Student Name</th>
-                  <th style="width: ${colWidths.tuition}">Tuition (₹)</th>
-                  ${showTransport ? `<th style="width: ${colWidths.transport}">Transport (₹)</th>` : ''}
-                  ${showHostel ? `<th style="width: ${colWidths.hostel}">Hostel (₹)</th>` : ''}
-                  <th style="width: ${colWidths.total}">Total (₹)</th>
+                  ${columns.map(col => `
+                    <th style="width: ${getColumnWidth(col)}; ${col === 'Previous Year' ? 'background: #F59E0B;' : ''} ${col === 'Total' ? 'background: #EF4444;' : ''}">
+                      ${col}
+                    </th>
+                  `).join('')}
                 </tr>
               </thead>
               <tbody>
-                ${students.map((student, idx) => `
-                  <tr>
-                    <td style="text-align: center;">${student.rollNo || 'N/A'}</td>
-                    <td style="text-align: left;">${student.name || 'Unknown'}</td>
-                    <td style="text-align: center;">${formatCurrency(student.termFee || 0)}</td>
-                    ${showTransport ? `<td style="text-align: center;">${formatCurrency(student.transportFee || 0)}</td>` : ''}
-                    ${showHostel ? `<td style="text-align: center;">${formatCurrency(student.hostelFee || 0)}</td>` : ''}
-                    <td style="text-align: center; font-weight: bold; color: #EF4444;">${formatCurrency(student.totalPending || 0)}</td>
-                  </tr>
-                `).join('')}
+                ${students.map((student) => {
+                  const row = `
+                    <tr>
+                      <td style="text-align: center;">${student.rollNo || 'N/A'}</td>
+                      <td style="text-align: left;">${student.name || 'Unknown'}</td>
+                  `
+                  
+                  if (selectedTerm === 'First Term') {
+                    return row + `
+                      <td style="text-align: center;">${formatCurrency(student.term1Pending || 0)}</td>
+                      <td style="text-align: center; ${student.previousYearFee > 0 ? 'background: #FEF3C7; font-weight: bold; color: #F59E0B;' : ''}">${formatCurrency(student.previousYearFee || 0)}</td>
+                      <td style="text-align: center; font-weight: bold; color: #EF4444;">${formatCurrency(student.totalPending || 0)}</td>
+                    </tr>
+                    `
+                  } else if (selectedTerm === 'Second Term') {
+                    return row + `
+                      <td style="text-align: center;">${formatCurrency(student.term2Pending || 0)}</td>
+                      <td style="text-align: center; ${student.previousYearFee > 0 ? 'background: #FEF3C7; font-weight: bold; color: #F59E0B;' : ''}">${formatCurrency(student.previousYearFee || 0)}</td>
+                      <td style="text-align: center; font-weight: bold; color: #EF4444;">${formatCurrency(student.totalPending || 0)}</td>
+                    </tr>
+                    `
+                  } else if (selectedTerm === 'Third Term') {
+                    return row + `
+                      <td style="text-align: center;">${formatCurrency(student.term3Pending || 0)}</td>
+                      <td style="text-align: center; ${student.previousYearFee > 0 ? 'background: #FEF3C7; font-weight: bold; color: #F59E0B;' : ''}">${formatCurrency(student.previousYearFee || 0)}</td>
+                      <td style="text-align: center; font-weight: bold; color: #EF4444;">${formatCurrency(student.totalPending || 0)}</td>
+                    </tr>
+                    `
+                  } else if (selectedTerm === 'Previous Year') {
+                    return row + `
+                      <td style="text-align: center; ${student.previousYearFee > 0 ? 'background: #FEF3C7; font-weight: bold; color: #F59E0B;' : ''}">${formatCurrency(student.previousYearFee || 0)}</td>
+                      <td style="text-align: center; font-weight: bold; color: #EF4444;">${formatCurrency(student.totalPending || 0)}</td>
+                    </tr>
+                    `
+                  } else { // All
+                    return row + `
+                      <td style="text-align: center;">${formatCurrency(student.term1Pending || 0)}</td>
+                      <td style="text-align: center;">${formatCurrency(student.term2Pending || 0)}</td>
+                      <td style="text-align: center;">${formatCurrency(student.term3Pending || 0)}</td>
+                      <td style="text-align: center; ${student.previousYearFee > 0 ? 'background: #FEF3C7; font-weight: bold; color: #F59E0B;' : ''}">${formatCurrency(student.previousYearFee || 0)}</td>
+                      <td style="text-align: center; font-weight: bold; color: #EF4444;">${formatCurrency(student.totalPending || 0)}</td>
+                    </tr>
+                    `
+                  }
+                }).join('')}
               </tbody>
               <tfoot>
                 <tr>
-                  <td colspan="${1}" class="total-label">Total</td>
+                  <td colspan="1" class="total-label">Total</td>
                   <td class="total-label"></td>
-                  <td class="total-label" style="text-align: center;"><strong>${formatCurrency(sectionTermTotal)}</strong></td>
-                  ${showTransport ? `<td class="total-label" style="text-align: center;"><strong>${formatCurrency(sectionTransportTotal)}</strong></td>` : ''}
-                  ${showHostel ? `<td class="total-label" style="text-align: center;"><strong>${formatCurrency(sectionHostelTotal)}</strong></td>` : ''}
+                  ${selectedTerm === 'First Term' ? `
+                    <td class="total-label" style="text-align: center;"><strong>${formatCurrency(sectionTerm1Total)}</strong></td>
+                    <td class="total-label" style="text-align: center; background: #FEF3C7;"><strong>${formatCurrency(sectionPreviousYearTotal)}</strong></td>
+                  ` : ''}
+                  ${selectedTerm === 'Second Term' ? `
+                    <td class="total-label" style="text-align: center;"><strong>${formatCurrency(sectionTerm2Total)}</strong></td>
+                    <td class="total-label" style="text-align: center; background: #FEF3C7;"><strong>${formatCurrency(sectionPreviousYearTotal)}</strong></td>
+                  ` : ''}
+                  ${selectedTerm === 'Third Term' ? `
+                    <td class="total-label" style="text-align: center;"><strong>${formatCurrency(sectionTerm3Total)}</strong></td>
+                    <td class="total-label" style="text-align: center; background: #FEF3C7;"><strong>${formatCurrency(sectionPreviousYearTotal)}</strong></td>
+                  ` : ''}
+                  ${selectedTerm === 'Previous Year' ? `
+                    <td class="total-label" style="text-align: center; background: #FEF3C7;"><strong>${formatCurrency(sectionPreviousYearTotal)}</strong></td>
+                  ` : ''}
+                  ${selectedTerm === 'All' ? `
+                    <td class="total-label" style="text-align: center;"><strong>${formatCurrency(sectionTerm1Total)}</strong></td>
+                    <td class="total-label" style="text-align: center;"><strong>${formatCurrency(sectionTerm2Total)}</strong></td>
+                    <td class="total-label" style="text-align: center;"><strong>${formatCurrency(sectionTerm3Total)}</strong></td>
+                    <td class="total-label" style="text-align: center; background: #FEF3C7;"><strong>${formatCurrency(sectionPreviousYearTotal)}</strong></td>
+                  ` : ''}
                   <td class="total-label" style="text-align: center; color: #EF4444;"><strong>${formatCurrency(sectionGrandTotal)}</strong></td>
                 </tr>
               </tfoot>
@@ -267,18 +339,6 @@ export const generateClassWisePDFHTML = (data) => {
             background: #f3f4f6;
           }
           
-          /* Text Alignment */
-          .students-table td:nth-child(1) { text-align: left; } /* Roll No */
-          .students-table td:nth-child(2) { text-align: left; } /* Name */
-          .students-table td:nth-child(3) { text-align: center; } /* Tuition */
-          .students-table td:nth-child(4) { text-align: center; } /* Transport (if exists) */
-          .students-table td:nth-child(5) { text-align: center; } /* Hostel (if exists) */
-          .students-table td:last-child { 
-            text-align: center; 
-            font-weight: bold; 
-            color: #EF4444;
-          }
-          
           /* Footer row alignment */
           .students-table tfoot td.total-label {
             text-align: center;
@@ -289,16 +349,6 @@ export const generateClassWisePDFHTML = (data) => {
           }
           .students-table tfoot td:nth-child(2) {
             text-align: left;
-          }
-          
-          /* Amount styling */
-          .amount-right {
-            text-align: center;
-            font-family: 'Courier New', monospace;
-          }
-          .total-amount {
-            color: #EF4444;
-            font-weight: bold;
           }
           
           /* No Data */
@@ -375,8 +425,6 @@ export const generateClassWisePDFHTML = (data) => {
             .students-table th { 
               -webkit-print-color-adjust: exact; 
               print-color-adjust: exact; 
-              background: #4F46E5 !important;
-              color: white !important;
             }
             .students-table td {
               border: 1px solid #000 !important;
@@ -389,24 +437,6 @@ export const generateClassWisePDFHTML = (data) => {
             }
             .grand-total-footer {
               page-break-inside: avoid;
-            }
-            .summary-item.total {
-              background: #4F46E5 !important;
-              color: white !important;
-            }
-          }
-
-          /* Responsive adjustments */
-          @media screen and (max-width: 768px) {
-            .students-table {
-              font-size: 11px;
-            }
-            .students-table th,
-            .students-table td {
-              padding: 8px 4px;
-            }
-            .grand-total-grid {
-              grid-template-columns: repeat(2, 1fr);
             }
           }
         </style>
@@ -428,20 +458,34 @@ export const generateClassWisePDFHTML = (data) => {
                 <span class="grand-total-label">Students with Pending</span>
                 <span class="grand-total-value">${grandTotals.totalStudents}</span>
               </div>
-              <div class="grand-total-item">
-                <span class="grand-total-label">Total Tuition Fee</span>
-                <span class="grand-total-value">${formatCurrency(grandTotals.totalTermFee)}</span>
-              </div>
-              ${showTransport ? `
+              ${selectedTerm !== 'Previous Year' && selectedTerm !== 'All' ? `
                 <div class="grand-total-item">
-                  <span class="grand-total-label">Total Transport Fee</span>
-                  <span class="grand-total-value">${formatCurrency(grandTotals.totalTransportFee)}</span>
+                  <span class="grand-total-label">${selectedTerm === 'First Term' ? 'Term 1' : selectedTerm === 'Second Term' ? 'Term 2' : 'Term 3'} Total</span>
+                  <span class="grand-total-value">${formatCurrency(
+                    selectedTerm === 'First Term' ? grandTotals.totalTerm1Pending :
+                    selectedTerm === 'Second Term' ? grandTotals.totalTerm2Pending :
+                    grandTotals.totalTerm3Pending
+                  )}</span>
                 </div>
               ` : ''}
-              ${showHostel ? `
+              ${selectedTerm === 'All' ? `
                 <div class="grand-total-item">
-                  <span class="grand-total-label">Total Hostel Fee</span>
-                  <span class="grand-total-value">${formatCurrency(grandTotals.totalHostelFee)}</span>
+                  <span class="grand-total-label">Term 1 Total</span>
+                  <span class="grand-total-value">${formatCurrency(grandTotals.totalTerm1Pending)}</span>
+                </div>
+                <div class="grand-total-item">
+                  <span class="grand-total-label">Term 2 Total</span>
+                  <span class="grand-total-value">${formatCurrency(grandTotals.totalTerm2Pending)}</span>
+                </div>
+                <div class="grand-total-item">
+                  <span class="grand-total-label">Term 3 Total</span>
+                  <span class="grand-total-value">${formatCurrency(grandTotals.totalTerm3Pending)}</span>
+                </div>
+              ` : ''}
+              ${grandTotals.totalPreviousYearFee > 0 ? `
+                <div class="grand-total-item" style="border-left: 4px solid #F59E0B;">
+                  <span class="grand-total-label">Previous Year Total</span>
+                  <span class="grand-total-value" style="color: #F59E0B;">${formatCurrency(grandTotals.totalPreviousYearFee)}</span>
                 </div>
               ` : ''}
               <div class="grand-total-item">

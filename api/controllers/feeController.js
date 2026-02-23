@@ -2072,7 +2072,7 @@ export const getAllPaymentHistory = async (req, res) => {
 }
 
 /**
- * @desc    Get class-wise fee pending report for a specific term
+ * @desc    Get class-wise fee pending report for a specific term including previous year fees
  * @route   GET /api/fees/class-wise-pending
  */
 export const getClassWiseFeePending = async (req, res) => {
@@ -2080,7 +2080,8 @@ export const getClassWiseFeePending = async (req, res) => {
     const {
       class: classFilter,
       section,
-      termNumber = 1
+      termNumber = 1,
+      includePreviousYear = 'true'
     } = req.query
 
     // Validate term number
@@ -2091,6 +2092,8 @@ export const getClassWiseFeePending = async (req, res) => {
         message: 'Term number must be between 1 and 3'
       })
     }
+
+    const includePreviousYearBool = includePreviousYear === 'true'
 
     // Build where clause for students
     const studentWhere = { isActive: true }
@@ -2104,7 +2107,7 @@ export const getClassWiseFeePending = async (req, res) => {
       studentWhere.section = section
     }
 
-    // Get all active students with their latest fee details in a single optimized query
+    // Get all active students with their latest fee details
     const students = await prisma.student.findMany({
       where: studentWhere,
       include: {
@@ -2120,14 +2123,15 @@ export const getClassWiseFeePending = async (req, res) => {
       ]
     })
 
-    // Process students to extract term-specific pending fees
+    // Process students to extract term-specific pending fees and previous year fees
     const classWiseData = []
     const summary = {
       totalStudents: 0,
       totalWithFees: 0,
-      totalTermPending: 0,
-      totalTransportPending: 0,
-      totalHostelPending: 0,
+      totalTerm1Pending: 0,
+      totalTerm2Pending: 0,
+      totalTerm3Pending: 0,
+      totalPreviousYearPending: 0,
       totalPending: 0
     }
 
@@ -2135,17 +2139,22 @@ export const getClassWiseFeePending = async (req, res) => {
       const feeRecord = student.feeDetails[0]
       if (!feeRecord) return // Skip if no fee record
 
+      // Parse previous year details
+      const previousYearDetails = getFormattedPreviousYearDetails(feeRecord.previousYearDetails)
+      const previousYearFee = calculateTotalPreviousYearPending(previousYearDetails)
+
       // Parse term distribution
       const termDistribution = feeRecord.termDistribution || {}
-      const termData = termDistribution[termNum] || {}
+      
+      // Calculate pending amounts for each term (combined total of school + transport + hostel)
+      const term1Pending = Math.max(0, (termDistribution[1]?.total || 0) - (termDistribution[1]?.totalPaid || 0))
+      const term2Pending = Math.max(0, (termDistribution[2]?.total || 0) - (termDistribution[2]?.totalPaid || 0))
+      const term3Pending = Math.max(0, (termDistribution[3]?.total || 0) - (termDistribution[3]?.totalPaid || 0))
+      
+      // Calculate total pending including previous year
+      const totalPending = term1Pending + term2Pending + term3Pending + previousYearFee
 
-      // Calculate pending amounts for the specified term
-      const termFeePending = Math.max(0, (termData.schoolFee || 0) - (termData.schoolFeePaid || 0))
-      const transportPending = Math.max(0, (termData.transportFee || 0) - (termData.transportFeePaid || 0))
-      const hostelPending = Math.max(0, (termData.hostelFee || 0) - (termData.hostelFeePaid || 0))
-      const totalPending = termFeePending + transportPending + hostelPending
-
-      // Create student object with only non-zero fees
+      // Create student object with all fee components
       const studentData = {
         rollNo: student.rollNo || 'N/A',
         name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
@@ -2153,35 +2162,23 @@ export const getClassWiseFeePending = async (req, res) => {
         class: student.class,
         classLabel: mapEnumToDisplayName(student.class),
         section: student.section,
-        term: termNum
+        term1Pending,
+        term2Pending,
+        term3Pending,
+        previousYearFee,
+        totalPending
       }
 
-      // Add fee details only if they have pending amount > 0
-      if (termFeePending > 0) {
-        studentData.schoolFeePending = termFeePending
-      }
-      
-      if (transportPending > 0) {
-        studentData.transportFeePending = transportPending
-      }
-      
-      if (hostelPending > 0) {
-        studentData.hostelFeePending = hostelPending
-      }
-
-      // Always include total pending
-      studentData.totalPending = totalPending
-
-      // Add to class-wise data
       classWiseData.push(studentData)
 
       // Update summary counts
       summary.totalStudents++
       if (totalPending > 0) {
         summary.totalWithFees++
-        summary.totalTermPending += termFeePending
-        summary.totalTransportPending += transportPending
-        summary.totalHostelPending += hostelPending
+        summary.totalTerm1Pending += term1Pending
+        summary.totalTerm2Pending += term2Pending
+        summary.totalTerm3Pending += term3Pending
+        summary.totalPreviousYearPending += previousYearFee
         summary.totalPending += totalPending
       }
     })
@@ -2199,9 +2196,10 @@ export const getClassWiseFeePending = async (req, res) => {
           summary: {
             totalStudents: 0,
             totalWithPending: 0,
-            totalTermPending: 0,
-            totalTransportPending: 0,
-            totalHostelPending: 0,
+            totalTerm1Pending: 0,
+            totalTerm2Pending: 0,
+            totalTerm3Pending: 0,
+            totalPreviousYearPending: 0,
             totalPending: 0
           }
         }
@@ -2212,9 +2210,10 @@ export const getClassWiseFeePending = async (req, res) => {
 
       if (student.totalPending > 0) {
         groupedByClassSection[key].summary.totalWithPending++
-        groupedByClassSection[key].summary.totalTermPending += student.schoolFeePending || 0
-        groupedByClassSection[key].summary.totalTransportPending += student.transportFeePending || 0
-        groupedByClassSection[key].summary.totalHostelPending += student.hostelFeePending || 0
+        groupedByClassSection[key].summary.totalTerm1Pending += student.term1Pending || 0
+        groupedByClassSection[key].summary.totalTerm2Pending += student.term2Pending || 0
+        groupedByClassSection[key].summary.totalTerm3Pending += student.term3Pending || 0
+        groupedByClassSection[key].summary.totalPreviousYearPending += student.previousYearFee || 0
         groupedByClassSection[key].summary.totalPending += student.totalPending
       }
     })
@@ -2233,16 +2232,22 @@ export const getClassWiseFeePending = async (req, res) => {
         term: termNum,
         filters: {
           class: classFilter || 'ALL',
-          section: section || 'ALL'
+          section: section || 'ALL',
+          includePreviousYear: includePreviousYearBool
         },
         summary: {
           totalStudents: summary.totalStudents,
           studentsWithPendingFees: summary.totalWithFees,
+          totalTerm1Pending: summary.totalTerm1Pending,
+          totalTerm2Pending: summary.totalTerm2Pending,
+          totalTerm3Pending: summary.totalTerm3Pending,
+          totalPreviousYearPending: summary.totalPreviousYearPending,
           totalPendingAmount: summary.totalPending,
           breakdown: {
-            termFee: summary.totalTermPending,
-            transportFee: summary.totalTransportPending,
-            hostelFee: summary.totalHostelPending
+            term1: summary.totalTerm1Pending,
+            term2: summary.totalTerm2Pending,
+            term3: summary.totalTerm3Pending,
+            previousYear: summary.totalPreviousYearPending
           }
         },
         classWiseBreakdown: groupedResult,

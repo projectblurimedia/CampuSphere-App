@@ -20,15 +20,17 @@ import { ToastNotification } from '@/components/ui/ToastNotification'
 import axiosApi from '@/utils/axiosApi'
 import * as Sharing from 'expo-sharing'
 import * as Print from 'expo-print'
-import { schoolInfo ,generateClassWisePDFHTML } from './generateClassWisePDFHTML'
+import { schoolInfo, generateClassWisePDFHTML } from './generateClassWisePDFHTML'
 
 const { width, height } = Dimensions.get('window')
 
-// Term options (static)
+// Term options with separate Previous Year option
 const TERM_OPTIONS = [
   { label: 'First Term', value: 'First Term' },
   { label: 'Second Term', value: 'Second Term' },
   { label: 'Third Term', value: 'Third Term' },
+  { label: 'Previous Year Only', value: 'Previous Year' },
+  { label: 'All Terms + Previous Year', value: 'All' },
 ]
 
 export default function ClassWiseFeePending({ visible, onClose }) {
@@ -263,13 +265,23 @@ export default function ClassWiseFeePending({ visible, onClose }) {
     return `₹${Number(value).toLocaleString()}`
   }, [])
 
-  // Fetch class-wise fee pending data using the new optimized endpoint
+  // Fetch class-wise fee pending data
   const fetchClassWiseData = useCallback(async () => {
     try {
       setLoading(true)
       
-      const params = {
-        termNumber: TERM_OPTIONS.findIndex(t => t.value === selectedTerm) + 1
+      const params = {}
+      
+      // Determine term number and whether to include previous year
+      if (selectedTerm === 'Previous Year') {
+        params.termNumber = 1 // Default to first term
+        params.includePreviousYear = 'true'
+      } else if (selectedTerm === 'All') {
+        params.termNumber = 1
+        params.includePreviousYear = 'true'
+      } else {
+        params.termNumber = TERM_OPTIONS.findIndex(t => t.value === selectedTerm) + 1
+        params.includePreviousYear = 'true'
       }
       
       // Add class filter if not 'ALL'
@@ -291,7 +303,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
         // Process class-wise breakdown for the list view
         const sections = data.classWiseBreakdown || []
         
-        // Add additional computed fields for display with safe values
+        // Add additional computed fields for display
         const processedSections = sections.map(section => ({
           id: `${section.class}-${section.section}`,
           className: section.classLabel || 'Unknown',
@@ -301,14 +313,16 @@ export default function ClassWiseFeePending({ visible, onClose }) {
             id: student.id || `temp-${Math.random()}`,
             rollNo: student.rollNo || 'N/A',
             name: student.name || 'Unknown',
-            schoolFeePending: student.schoolFeePending || 0,
-            transportFeePending: student.transportFeePending || 0,
-            hostelFeePending: student.hostelFeePending || 0,
+            term1Pending: student.term1Pending || 0,
+            term2Pending: student.term2Pending || 0,
+            term3Pending: student.term3Pending || 0,
+            previousYearFee: student.previousYearFee || 0,
             totalPending: student.totalPending || 0
           })),
-          totalTermPending: section.summary?.totalTermPending || 0,
-          totalTransportPending: section.summary?.totalTransportPending || 0,
-          totalHostelPending: section.summary?.totalHostelPending || 0,
+          totalTerm1Pending: section.summary?.totalTerm1Pending || 0,
+          totalTerm2Pending: section.summary?.totalTerm2Pending || 0,
+          totalTerm3Pending: section.summary?.totalTerm3Pending || 0,
+          totalPreviousYearPending: section.summary?.totalPreviousYearPending || 0,
           totalPendingAmount: section.summary?.totalPending || 0,
           pendingStudentsCount: section.summary?.totalWithPending || 0,
           totalStudents: section.summary?.totalStudents || 0
@@ -379,14 +393,15 @@ export default function ClassWiseFeePending({ visible, onClose }) {
   const handleSectionPress = useCallback((section) => {
     if (!section) return
     
-    // Ensure all student data has default values to prevent undefined errors
+    // Ensure all student data has default values
     const processedStudents = (section.students || []).map(student => ({
       id: student.id || `temp-${Math.random()}`,
       rollNo: student.rollNo || 'N/A',
       name: student.name || 'Unknown',
-      schoolFeePending: student.schoolFeePending || 0,
-      transportFeePending: student.transportFeePending || 0,
-      hostelFeePending: student.hostelFeePending || 0,
+      term1Pending: student.term1Pending || 0,
+      term2Pending: student.term2Pending || 0,
+      term3Pending: student.term3Pending || 0,
+      previousYearFee: student.previousYearFee || 0,
       totalPending: student.totalPending || 0
     }))
     
@@ -401,18 +416,20 @@ export default function ClassWiseFeePending({ visible, onClose }) {
       const sectionsData = filteredSections.map(section => ({
         className: section.className || 'Unknown',
         section: section.section || 'Unknown',
-        totalTermPending: section.totalTermPending || 0,
-        totalTransportPending: section.totalTransportPending || 0,
-        totalHostelPending: section.totalHostelPending || 0,
+        totalTerm1Pending: section.totalTerm1Pending || 0,
+        totalTerm2Pending: section.totalTerm2Pending || 0,
+        totalTerm3Pending: section.totalTerm3Pending || 0,
+        totalPreviousYearPending: section.totalPreviousYearPending || 0,
         totalPendingAmount: section.totalPendingAmount || 0,
         pendingCount: section.pendingStudentsCount || 0,
         totalStudents: section.totalStudents || 0,
         students: (section.students || []).map(s => ({
           rollNo: s.rollNo || 'N/A',
           name: s.name || 'Unknown',
-          termFee: s.schoolFeePending || 0,
-          transportFee: s.transportFeePending || 0,
-          hostelFee: s.hostelFeePending || 0,
+          term1Pending: s.term1Pending || 0,
+          term2Pending: s.term2Pending || 0,
+          term3Pending: s.term3Pending || 0,
+          previousYearFee: s.previousYearFee || 0,
           totalPending: s.totalPending || 0
         }))
       }))
@@ -425,9 +442,10 @@ export default function ClassWiseFeePending({ visible, onClose }) {
         grandTotals: {
           totalSections: filteredSections.length,
           totalStudents: grandTotals.totalStudents,
-          totalTermFee: grandTotals.totalTermFee,
-          totalTransportFee: grandTotals.totalTransportFee,
-          totalHostelFee: grandTotals.totalHostelFee,
+          totalTerm1Pending: grandTotals.totalTerm1Pending,
+          totalTerm2Pending: grandTotals.totalTerm2Pending,
+          totalTerm3Pending: grandTotals.totalTerm3Pending,
+          totalPreviousYearFee: grandTotals.totalPreviousYearFee,
           totalAmount: grandTotals.totalAmount
         },
         schoolInfo: {
@@ -450,7 +468,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
     try {
       if (!section) return ''
 
-      // Sort students by roll number and ensure safe values
+      // Sort students by roll number
       const sortedStudents = [...(section.students || [])]
         .sort((a, b) => {
           const rollA = parseInt(a.rollNo) || 0
@@ -460,18 +478,20 @@ export default function ClassWiseFeePending({ visible, onClose }) {
         .map(s => ({
           rollNo: s.rollNo || 'N/A',
           name: s.name || 'Unknown',
-          termFee: s.schoolFeePending || 0,
-          transportFee: s.transportFeePending || 0,
-          hostelFee: s.hostelFeePending || 0,
+          term1Pending: s.term1Pending || 0,
+          term2Pending: s.term2Pending || 0,
+          term3Pending: s.term3Pending || 0,
+          previousYearFee: s.previousYearFee || 0,
           totalPending: s.totalPending || 0
         }))
 
       const sectionsData = [{
         className: section.className || 'Unknown',
         section: section.section || 'Unknown',
-        totalTermPending: section.totalTermPending || 0,
-        totalTransportPending: section.totalTransportPending || 0,
-        totalHostelPending: section.totalHostelPending || 0,
+        totalTerm1Pending: section.totalTerm1Pending || 0,
+        totalTerm2Pending: section.totalTerm2Pending || 0,
+        totalTerm3Pending: section.totalTerm3Pending || 0,
+        totalPreviousYearPending: section.totalPreviousYearPending || 0,
         totalPendingAmount: section.totalPendingAmount || 0,
         pendingCount: section.pendingStudentsCount || 0,
         totalStudents: section.totalStudents || 0,
@@ -486,16 +506,17 @@ export default function ClassWiseFeePending({ visible, onClose }) {
         grandTotals: {
           totalSections: 1,
           totalStudents: section.pendingStudentsCount || 0,
-          totalTermFee: section.totalTermPending || 0,
-          totalTransportFee: section.totalTransportPending || 0,
-          totalHostelFee: section.totalHostelPending || 0,
+          totalTerm1Pending: section.totalTerm1Pending || 0,
+          totalTerm2Pending: section.totalTerm2Pending || 0,
+          totalTerm3Pending: section.totalTerm3Pending || 0,
+          totalPreviousYearFee: section.totalPreviousYearPending || 0,
           totalAmount: section.totalPendingAmount || 0
         },
         schoolInfo: {
-          name: 'Your School Name',
-          address: 'School Address',
-          phone: 'School Phone',
-          email: 'school@email.com'
+          name: schoolInfo.name,
+          address: schoolInfo.address,
+          phone: schoolInfo.phone,
+          email: schoolInfo.email
         },
         generatedAt: new Date(),
         isOverallReport: false
@@ -688,139 +709,357 @@ export default function ClassWiseFeePending({ visible, onClose }) {
     </Modal>
   )
 
-  // Render section students modal
-  const renderSectionStudentsModal = () => (
-    <Modal
-      visible={showSectionStudentsModal}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setShowSectionStudentsModal(false)}
-      statusBarTranslucent
-    >
-      <View style={styles.modalOverlay}>
-        <View style={[styles.studentsModalContent, { backgroundColor: colors.cardBackground }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
-            <View style={{ flex: 1 }}>
-              <ThemedText style={styles.modalTitle}>
-                {selectedSectionData?.className || 'Unknown'} - Section {selectedSectionData?.section || 'Unknown'}
-              </ThemedText>
-              <ThemedText style={styles.modalSubtitle}>
-                Total Students: {selectedSectionData?.totalStudents || 0} | Pending: {selectedSectionData?.pendingStudentsCount || 0}
-              </ThemedText>
-            </View>
-            <TouchableOpacity 
-              onPress={() => setShowSectionStudentsModal(false)} 
-              style={styles.modalCloseButton}
-            >
-              <Feather name="x" size={22} color={colors.text} />
-            </TouchableOpacity>
-          </View>
+  // IMPROVED: Render section students modal with table layout like PDF
+  const renderSectionStudentsModal = () => {
+    // Determine which columns to show based on selected term
+    const getColumns = () => {
+      switch(selectedTerm) {
+        case 'First Term':
+          return ['Roll No', 'Student Name', 'Term 1', 'Previous Year', 'Total']
+        case 'Second Term':
+          return ['Roll No', 'Student Name', 'Term 2', 'Previous Year', 'Total']
+        case 'Third Term':
+          return ['Roll No', 'Student Name', 'Term 3', 'Previous Year', 'Total']
+        case 'Previous Year':
+          return ['Roll No', 'Student Name', 'Previous Year', 'Total']
+        case 'All':
+          return ['Roll No', 'Student Name', 'Term 1', 'Term 2', 'Term 3', 'Previous Year', 'Total']
+        default:
+          return ['Roll No', 'Student Name', 'Term 1', 'Previous Year', 'Total']
+      }
+    }
 
-          {/* Section Action Buttons */}
-          <View style={styles.sectionActionButtons}>
-            <TouchableOpacity 
-              style={[styles.sectionDownloadButton, { backgroundColor: colors.success }]}
-              onPress={handleSectionDownload}
-              disabled={downloadingSection || printingSection}
-            >
-              {downloadingSection ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <Feather name="download" size={16} color="#FFFFFF" />
-                  <ThemedText style={styles.sectionActionButtonText}>Download</ThemedText>
-                </>
-              )}
-            </TouchableOpacity>
+    const columns = getColumns()
+    
+    // Calculate column widths based on number of columns - like PDF
+    const getColumnWidth = (index) => {
+      const totalColumns = columns.length
+      if (totalColumns === 4) { // Roll, Name, Previous Year, Total
+        if (index === 0) return 60  // Roll No
+        if (index === 1) return 150 // Name
+        if (index === 2) return 100 // Previous Year
+        return 90                    // Total
+      } else if (totalColumns === 5) { // Roll, Name, Term, Previous Year, Total
+        if (index === 0) return 60  // Roll No
+        if (index === 1) return 140 // Name
+        if (index === 2) return 90  // Term
+        if (index === 3) return 100 // Previous Year
+        return 90                    // Total
+      } else { // All 7 columns
+        if (index === 0) return 50   // Roll No
+        if (index === 1) return 130  // Name
+        if (index === 2) return 75   // Term 1
+        if (index === 3) return 75   // Term 2
+        if (index === 4) return 75   // Term 3
+        if (index === 5) return 90   // Previous Year
+        return 80                     // Total
+      }
+    }
 
-            <TouchableOpacity 
-              style={[styles.sectionPrintButton, { backgroundColor: colors.primary }]}
-              onPress={handleSectionPrint}
-              disabled={downloadingSection || printingSection}
-            >
-              {printingSection ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  <Feather name="printer" size={16} color="#FFFFFF" />
-                  <ThemedText style={styles.sectionActionButtonText}>Print</ThemedText>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Students List */}
-          <ScrollView 
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.studentsListContent}
-          >
-            {sectionStudents.length > 0 ? (
-              sectionStudents.map((student) => (
-                <View key={student.id} style={[styles.studentCard, { borderBottomColor: colors.border }]}>
-                  <View style={styles.studentHeader}>
-                    <View style={[styles.rollBadge, { backgroundColor: colors.primary + '20' }]}>
-                      <ThemedText style={[styles.rollText, { color: colors.primary }]}>
-                        #{student.rollNo}
-                      </ThemedText>
-                    </View>
-                    <ThemedText style={styles.studentName}>{student.name}</ThemedText>
-                  </View>
-                  
-                  <View style={styles.studentFees}>
-                    {student.schoolFeePending > 0 && (
-                      <View style={styles.feeRow}>
-                        <FontAwesome5 name="money-check" size={12} color={colors.warning} />
-                        <ThemedText style={styles.feeLabel}>School Fee:</ThemedText>
-                        <ThemedText style={[styles.feeAmount, { color: colors.warning }]}>
-                          {formatCurrency(student.schoolFeePending)}
-                        </ThemedText>
-                      </View>
-                    )}
-                    
-                    {student.transportFeePending > 0 && (
-                      <View style={styles.feeRow}>
-                        <FontAwesome5 name="bus" size={12} color={colors.info} />
-                        <ThemedText style={styles.feeLabel}>Transport:</ThemedText>
-                        <ThemedText style={[styles.feeAmount, { color: colors.info }]}>
-                          {formatCurrency(student.transportFeePending)}
-                        </ThemedText>
-                      </View>
-                    )}
-                    
-                    {student.hostelFeePending > 0 && (
-                      <View style={styles.feeRow}>
-                        <MaterialIcons name="account-balance" size={12} color={colors.danger} />
-                        <ThemedText style={styles.feeLabel}>Hostel:</ThemedText>
-                        <ThemedText style={[styles.feeAmount, { color: colors.danger }]}>
-                          {formatCurrency(student.hostelFeePending)}
-                        </ThemedText>
-                      </View>
-                    )}
-                    
-                    <View style={[styles.feeRow, styles.totalRow]}>
-                      <ThemedText style={styles.totalLabel}>Total Pending:</ThemedText>
-                      <ThemedText style={[styles.totalAmount, { color: colors.danger }]}>
-                        {formatCurrency(student.totalPending)}
-                      </ThemedText>
-                    </View>
-                  </View>
-                </View>
-              ))
-            ) : (
-              <View style={styles.noStudentsContainer}>
-                <MaterialIcons name="school" size={48} color={colors.textSecondary} />
-                <ThemedText style={styles.noStudentsText}>No students found</ThemedText>
+    return (
+      <Modal
+        visible={showSectionStudentsModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSectionStudentsModal(false)}
+        statusBarTranslucent
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.studentsModalContent, { backgroundColor: colors.cardBackground }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={styles.modalTitle}>
+                  {selectedSectionData?.className || 'Unknown'} - Section {selectedSectionData?.section || 'Unknown'}
+                </ThemedText>
+                <ThemedText style={styles.modalSubtitle}>
+                  Total Students: {selectedSectionData?.totalStudents || 0} | Pending: {selectedSectionData?.pendingStudentsCount || 0}
+                </ThemedText>
               </View>
-            )}
-          </ScrollView>
+              <TouchableOpacity 
+                onPress={() => setShowSectionStudentsModal(false)} 
+                style={styles.modalCloseButton}
+              >
+                <Feather name="x" size={22} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Section Action Buttons */}
+            <View style={styles.sectionActionButtons}>
+              <TouchableOpacity 
+                style={[styles.sectionDownloadButton, { backgroundColor: colors.success }]}
+                onPress={handleSectionDownload}
+                disabled={downloadingSection || printingSection}
+              >
+                {downloadingSection ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Feather name="download" size={16} color="#FFFFFF" />
+                    <ThemedText style={styles.sectionActionButtonText}>Download</ThemedText>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.sectionPrintButton, { backgroundColor: colors.primary }]}
+                onPress={handleSectionPrint}
+                disabled={downloadingSection || printingSection}
+              >
+                {printingSection ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Feather name="printer" size={16} color="#FFFFFF" />
+                    <ThemedText style={styles.sectionActionButtonText}>Print</ThemedText>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Table Header - Like PDF */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={true} contentContainerStyle={{ padding: 20 }}>
+              <View>
+                <View style={[styles.tableHeader, { backgroundColor: colors.primary }]}>
+                  {columns.map((col, index) => {
+                    const isPreviousYear = col === 'Previous Year'
+                    const isTotal = col === 'Total'
+                    
+                    return (
+                      <ThemedText 
+                        key={col}
+                        style={[
+                          styles.headerCell, 
+                          { 
+                            width: getColumnWidth(index),
+                            backgroundColor: colors.primary,
+                            color: '#FFFFFF',
+                          }
+                        ]}
+                      >
+                        {col}
+                      </ThemedText>
+                    )
+                  })}
+                </View>
+
+                {/* Table Rows */}
+                <ScrollView 
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={styles.tableRowsContainer}
+                >
+                  {sectionStudents.length > 0 ? (
+                    sectionStudents.map((student, rowIndex) => {
+                      // Alternate row background for better readability
+                      const rowBackgroundColor = rowIndex % 2 === 0 ? colors.inputBackground : colors.cardBackground
+                      
+                      return (
+                        <View key={student.id} style={[styles.tableRow, { backgroundColor: rowBackgroundColor }]}>
+                          {/* Roll No */}
+                          <ThemedText style={[styles.tableCell, { width: getColumnWidth(0) }]}>
+                            {student.rollNo}
+                          </ThemedText>
+                          
+                          {/* Name */}
+                          <ThemedText style={[styles.tableCell, { width: getColumnWidth(1), textAlign: 'left' }]} numberOfLines={1}>
+                            {student.name}
+                          </ThemedText>
+                          
+                          {/* Dynamic columns based on selected term */}
+                          {selectedTerm === 'First Term' && (
+                            <>
+                              <ThemedText style={[styles.tableCell, { width: getColumnWidth(2) }]}>
+                                {formatCurrency(student.term1Pending)}
+                              </ThemedText>
+                              <ThemedText style={[styles.tableCell, { width: getColumnWidth(3), backgroundColor: colors.warning + '20', fontWeight: 'bold', color: colors.warning }]}>
+                                {formatCurrency(student.previousYearFee)}
+                              </ThemedText>
+                              <ThemedText style={[styles.tableCell, { width: getColumnWidth(4), backgroundColor: colors.danger + '20', fontWeight: 'bold', color: colors.danger }]}>
+                                {formatCurrency(student.totalPending)}
+                              </ThemedText>
+                            </>
+                          )}
+                          
+                          {selectedTerm === 'Second Term' && (
+                            <>
+                              <ThemedText style={[styles.tableCell, { width: getColumnWidth(2) }]}>
+                                {formatCurrency(student.term2Pending)}
+                              </ThemedText>
+                              <ThemedText style={[styles.tableCell, { width: getColumnWidth(3), backgroundColor: colors.warning + '20', fontWeight: 'bold', color: colors.warning }]}>
+                                {formatCurrency(student.previousYearFee)}
+                              </ThemedText>
+                              <ThemedText style={[styles.tableCell, { width: getColumnWidth(4), backgroundColor: colors.danger + '20', fontWeight: 'bold', color: colors.danger }]}>
+                                {formatCurrency(student.totalPending)}
+                              </ThemedText>
+                            </>
+                          )}
+                          
+                          {selectedTerm === 'Third Term' && (
+                            <>
+                              <ThemedText style={[styles.tableCell, { width: getColumnWidth(2) }]}>
+                                {formatCurrency(student.term3Pending)}
+                              </ThemedText>
+                              <ThemedText style={[styles.tableCell, { width: getColumnWidth(3), backgroundColor: colors.warning + '20', fontWeight: 'bold', color: colors.warning }]}>
+                                {formatCurrency(student.previousYearFee)}
+                              </ThemedText>
+                              <ThemedText style={[styles.tableCell, { width: getColumnWidth(4), backgroundColor: colors.danger + '20', fontWeight: 'bold', color: colors.danger }]}>
+                                {formatCurrency(student.totalPending)}
+                              </ThemedText>
+                            </>
+                          )}
+                          
+                          {selectedTerm === 'Previous Year' && (
+                            <>
+                              <ThemedText style={[styles.tableCell, { width: getColumnWidth(2), backgroundColor: colors.warning + '20', fontWeight: 'bold', color: colors.warning }]}>
+                                {formatCurrency(student.previousYearFee)}
+                              </ThemedText>
+                              <ThemedText style={[styles.tableCell, { width: getColumnWidth(3), backgroundColor: colors.danger + '20', fontWeight: 'bold', color: colors.danger }]}>
+                                {formatCurrency(student.totalPending)}
+                              </ThemedText>
+                            </>
+                          )}
+                          
+                          {selectedTerm === 'All' && (
+                            <>
+                              <ThemedText style={[styles.tableCell, { width: getColumnWidth(2) }]}>
+                                {formatCurrency(student.term1Pending)}
+                              </ThemedText>
+                              <ThemedText style={[styles.tableCell, { width: getColumnWidth(3) }]}>
+                                {formatCurrency(student.term2Pending)}
+                              </ThemedText>
+                              <ThemedText style={[styles.tableCell, { width: getColumnWidth(4) }]}>
+                                {formatCurrency(student.term3Pending)}
+                              </ThemedText>
+                              <ThemedText style={[styles.tableCell, { width: getColumnWidth(5), backgroundColor: colors.warning + '20', fontWeight: 'bold', color: colors.warning }]}>
+                                {formatCurrency(student.previousYearFee)}
+                              </ThemedText>
+                              <ThemedText style={[styles.tableCell, { width: getColumnWidth(6), backgroundColor: colors.danger + '20', fontWeight: 'bold', color: colors.danger }]}>
+                                {formatCurrency(student.totalPending)}
+                              </ThemedText>
+                            </>
+                          )}
+                        </View>
+                      )
+                    })
+                  ) : (
+                    <View style={styles.noStudentsContainer}>
+                      <MaterialIcons name="school" size={48} color={colors.textSecondary} />
+                      <ThemedText style={styles.noStudentsText}>No students found</ThemedText>
+                    </View>
+                  )}
+                </ScrollView>
+
+                {/* Table Footer with Totals - Like PDF */}
+                {sectionStudents.length > 0 && (
+                  <View style={[styles.tableFooter, { backgroundColor: colors.primary + '20' }]}>
+                    {/* Roll No - empty */}
+                    <ThemedText style={[styles.footerCell, { width: getColumnWidth(0) }]}>Total</ThemedText>
+                    
+                    {/* Name - empty */}
+                    <ThemedText style={[styles.footerCell, { width: getColumnWidth(1) }]}></ThemedText>
+                    
+                    {/* Dynamic footer columns */}
+                    {selectedTerm === 'First Term' && (
+                      <>
+                        <ThemedText style={[styles.footerCell, { width: getColumnWidth(2), fontWeight: 'bold' }]}>
+                          {formatCurrency(selectedSectionData?.totalTerm1Pending || 0)}
+                        </ThemedText>
+                        <ThemedText style={[styles.footerCell, { width: getColumnWidth(3), backgroundColor: colors.warning + '30', fontWeight: 'bold', color: colors.warning }]}>
+                          {formatCurrency(selectedSectionData?.totalPreviousYearPending || 0)}
+                        </ThemedText>
+                        <ThemedText style={[styles.footerCell, { width: getColumnWidth(4), backgroundColor: colors.danger + '30', fontWeight: 'bold', color: colors.danger }]}>
+                          {formatCurrency(selectedSectionData?.totalPendingAmount || 0)}
+                        </ThemedText>
+                      </>
+                    )}
+                    
+                    {selectedTerm === 'Second Term' && (
+                      <>
+                        <ThemedText style={[styles.footerCell, { width: getColumnWidth(2), fontWeight: 'bold' }]}>
+                          {formatCurrency(selectedSectionData?.totalTerm2Pending || 0)}
+                        </ThemedText>
+                        <ThemedText style={[styles.footerCell, { width: getColumnWidth(3), backgroundColor: colors.warning + '30', fontWeight: 'bold', color: colors.warning }]}>
+                          {formatCurrency(selectedSectionData?.totalPreviousYearPending || 0)}
+                        </ThemedText>
+                        <ThemedText style={[styles.footerCell, { width: getColumnWidth(4), backgroundColor: colors.danger + '30', fontWeight: 'bold', color: colors.danger }]}>
+                          {formatCurrency(selectedSectionData?.totalPendingAmount || 0)}
+                        </ThemedText>
+                      </>
+                    )}
+                    
+                    {selectedTerm === 'Third Term' && (
+                      <>
+                        <ThemedText style={[styles.footerCell, { width: getColumnWidth(2), fontWeight: 'bold' }]}>
+                          {formatCurrency(selectedSectionData?.totalTerm3Pending || 0)}
+                        </ThemedText>
+                        <ThemedText style={[styles.footerCell, { width: getColumnWidth(3), backgroundColor: colors.warning + '30', fontWeight: 'bold', color: colors.warning }]}>
+                          {formatCurrency(selectedSectionData?.totalPreviousYearPending || 0)}
+                        </ThemedText>
+                        <ThemedText style={[styles.footerCell, { width: getColumnWidth(4), backgroundColor: colors.danger + '30', fontWeight: 'bold', color: colors.danger }]}>
+                          {formatCurrency(selectedSectionData?.totalPendingAmount || 0)}
+                        </ThemedText>
+                      </>
+                    )}
+                    
+                    {selectedTerm === 'Previous Year' && (
+                      <>
+                        <ThemedText style={[styles.footerCell, { width: getColumnWidth(2), backgroundColor: colors.warning + '30', fontWeight: 'bold', color: colors.warning }]}>
+                          {formatCurrency(selectedSectionData?.totalPreviousYearPending || 0)}
+                        </ThemedText>
+                        <ThemedText style={[styles.footerCell, { width: getColumnWidth(3), backgroundColor: colors.danger + '30', fontWeight: 'bold', color: colors.danger }]}>
+                          {formatCurrency(selectedSectionData?.totalPendingAmount || 0)}
+                        </ThemedText>
+                      </>
+                    )}
+                    
+                    {selectedTerm === 'All' && (
+                      <>
+                        <ThemedText style={[styles.footerCell, { width: getColumnWidth(2), fontWeight: 'bold' }]}>
+                          {formatCurrency(selectedSectionData?.totalTerm1Pending || 0)}
+                        </ThemedText>
+                        <ThemedText style={[styles.footerCell, { width: getColumnWidth(3), fontWeight: 'bold' }]}>
+                          {formatCurrency(selectedSectionData?.totalTerm2Pending || 0)}
+                        </ThemedText>
+                        <ThemedText style={[styles.footerCell, { width: getColumnWidth(4), fontWeight: 'bold' }]}>
+                          {formatCurrency(selectedSectionData?.totalTerm3Pending || 0)}
+                        </ThemedText>
+                        <ThemedText style={[styles.footerCell, { width: getColumnWidth(5), backgroundColor: colors.warning + '30', fontWeight: 'bold', color: colors.warning }]}>
+                          {formatCurrency(selectedSectionData?.totalPreviousYearPending || 0)}
+                        </ThemedText>
+                        <ThemedText style={[styles.footerCell, { width: getColumnWidth(6), backgroundColor: colors.danger + '30', fontWeight: 'bold', color: colors.danger }]}>
+                          {formatCurrency(selectedSectionData?.totalPendingAmount || 0)}
+                        </ThemedText>
+                      </>
+                    )}
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+          </View>
         </View>
-      </View>
-    </Modal>
-  )
+      </Modal>
+    )
+  }
 
   // Render section card for list
   const renderSectionCard = ({ item }) => {
     const hasPending = item.pendingStudentsCount > 0
+    const hasPreviousYearPending = item.totalPreviousYearPending > 0
+    
+    // Determine which term amount to show based on selected term
+    const getTermAmount = () => {
+      switch(selectedTerm) {
+        case 'First Term': return item.totalTerm1Pending
+        case 'Second Term': return item.totalTerm2Pending
+        case 'Third Term': return item.totalTerm3Pending
+        case 'Previous Year': return 0 // Don't show term amount for Previous Year only
+        default: return 0
+      }
+    }
+    
+    const termAmount = getTermAmount()
+    const termLabel = selectedTerm === 'First Term' ? 'Term 1' : 
+                      selectedTerm === 'Second Term' ? 'Term 2' : 
+                      selectedTerm === 'Third Term' ? 'Term 3' : ''
     
     return (
       <TouchableOpacity
@@ -828,7 +1067,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
         style={[styles.sectionCard, { 
           backgroundColor: colors.cardBackground, 
           borderColor: colors.border,
-          borderLeftColor: hasPending ? colors.warning : colors.success,
+          borderLeftColor: hasPreviousYearPending ? colors.warning : (hasPending ? colors.warning : colors.success),
           borderLeftWidth: 4,
         }]}
         onPress={() => handleSectionPress(item)}
@@ -836,9 +1075,9 @@ export default function ClassWiseFeePending({ visible, onClose }) {
         <View style={styles.sectionHeader}>
           <View style={styles.sectionTitleContainer}>
             <MaterialIcons 
-              name={hasPending ? "warning" : "check-circle"} 
+              name={hasPreviousYearPending ? "history" : (hasPending ? "warning" : "check-circle")} 
               size={20} 
-              color={hasPending ? colors.warning : colors.success} 
+              color={hasPreviousYearPending ? colors.warning : (hasPending ? colors.warning : colors.success)} 
             />
             <ThemedText style={styles.sectionTitle}>
               {item.className} - {item.section}
@@ -856,32 +1095,68 @@ export default function ClassWiseFeePending({ visible, onClose }) {
         </View>
 
         <View style={styles.feeSummary}>
-          {item.totalTermPending > 0 && (
+          {/* Show term amount based on selection (not for Previous Year only) */}
+          {selectedTerm !== 'Previous Year' && selectedTerm !== 'All' && termAmount > 0 && (
             <View style={styles.feeItem}>
               <FontAwesome5 name="money-check" size={12} color={colors.warning} />
-              <ThemedText style={styles.feeLabel}>Term Fee:</ThemedText>
+              <ThemedText style={styles.feeLabel}>{termLabel}:</ThemedText>
               <ThemedText style={[styles.feeValue, { color: colors.warning }]}>
-                {formatCurrency(item.totalTermPending)}
+                {formatCurrency(termAmount)}
               </ThemedText>
             </View>
           )}
           
-          {item.totalTransportPending > 0 && (
-            <View style={styles.feeItem}>
-              <FontAwesome5 name="bus" size={12} color={colors.info} />
-              <ThemedText style={styles.feeLabel}>Transport:</ThemedText>
-              <ThemedText style={[styles.feeValue, { color: colors.info }]}>
-                {formatCurrency(item.totalTransportPending)}
+          {/* Show all terms when "All" is selected */}
+          {selectedTerm === 'All' && (
+            <>
+              {item.totalTerm1Pending > 0 && (
+                <View style={styles.feeItem}>
+                  <FontAwesome5 name="money-check" size={12} color={colors.warning} />
+                  <ThemedText style={styles.feeLabel}>Term 1:</ThemedText>
+                  <ThemedText style={[styles.feeValue, { color: colors.warning }]}>
+                    {formatCurrency(item.totalTerm1Pending)}
+                  </ThemedText>
+                </View>
+              )}
+              
+              {item.totalTerm2Pending > 0 && (
+                <View style={styles.feeItem}>
+                  <FontAwesome5 name="money-check" size={12} color={colors.info} />
+                  <ThemedText style={styles.feeLabel}>Term 2:</ThemedText>
+                  <ThemedText style={[styles.feeValue, { color: colors.info }]}>
+                    {formatCurrency(item.totalTerm2Pending)}
+                  </ThemedText>
+                </View>
+              )}
+              
+              {item.totalTerm3Pending > 0 && (
+                <View style={styles.feeItem}>
+                  <FontAwesome5 name="money-check" size={12} color={colors.danger} />
+                  <ThemedText style={styles.feeLabel}>Term 3:</ThemedText>
+                  <ThemedText style={[styles.feeValue, { color: colors.danger }]}>
+                    {formatCurrency(item.totalTerm3Pending)}
+                  </ThemedText>
+                </View>
+              )}
+            </>
+          )}
+          
+          {/* Previous Year Fee Row - Always show if exists */}
+          {hasPreviousYearPending && (
+            <View style={[styles.feeItem, { backgroundColor: colors.warning + '10' }]}>
+              <MaterialIcons name="history" size={12} color={colors.warning} />
+              <ThemedText style={styles.feeLabel}>Previous Year:</ThemedText>
+              <ThemedText style={[styles.feeValue, { color: colors.warning }]}>
+                {formatCurrency(item.totalPreviousYearPending)}
               </ThemedText>
             </View>
           )}
-          
-          {item.totalHostelPending > 0 && (
+
+          {/* If no fees at all, show message */}
+          {!hasPending && !hasPreviousYearPending && (
             <View style={styles.feeItem}>
-              <MaterialIcons name="account-balance" size={12} color={colors.danger} />
-              <ThemedText style={styles.feeLabel}>Hostel:</ThemedText>
-              <ThemedText style={[styles.feeValue, { color: colors.danger }]}>
-                {formatCurrency(item.totalHostelPending)}
+              <ThemedText style={[styles.feeLabel, { color: colors.textSecondary }]}>
+                No pending fees
               </ThemedText>
             </View>
           )}
@@ -892,6 +1167,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
           <View style={styles.studentsPreview}>
             <ThemedText style={styles.previewTitle}>
               Tap to view {item.pendingStudentsCount} student{item.pendingStudentsCount > 1 ? 's' : ''} with pending fees
+              {hasPreviousYearPending && ' (includes previous year)'}
             </ThemedText>
           </View>
         )}
@@ -899,28 +1175,31 @@ export default function ClassWiseFeePending({ visible, onClose }) {
     )
   }
 
-  // Calculate grand totals
+  // Calculate grand totals including previous year
   const grandTotals = useMemo(() => {
     let totalStudents = 0
-    let totalTermFee = 0
-    let totalTransportFee = 0
-    let totalHostelFee = 0
+    let totalTerm1Pending = 0
+    let totalTerm2Pending = 0
+    let totalTerm3Pending = 0
+    let totalPreviousYearFee = 0
     let totalAmount = 0
 
     filteredSections.forEach(section => {
       totalStudents += section.pendingStudentsCount || 0
-      totalTermFee += section.totalTermPending || 0
-      totalTransportFee += section.totalTransportPending || 0
-      totalHostelFee += section.totalHostelPending || 0
+      totalTerm1Pending += section.totalTerm1Pending || 0
+      totalTerm2Pending += section.totalTerm2Pending || 0
+      totalTerm3Pending += section.totalTerm3Pending || 0
+      totalPreviousYearFee += section.totalPreviousYearPending || 0
       totalAmount += section.totalPendingAmount || 0
     })
 
     return {
       totalSections: filteredSections.length,
       totalStudents,
-      totalTermFee,
-      totalTransportFee,
-      totalHostelFee,
+      totalTerm1Pending,
+      totalTerm2Pending,
+      totalTerm3Pending,
+      totalPreviousYearFee,
       totalAmount
     }
   }, [filteredSections])
@@ -1153,7 +1432,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
       fontFamily: 'Poppins-Medium',
     },
     
-    // Students Modal
+    // IMPROVED: Students Modal with Table Layout like PDF
     studentsModalContent: {
       width: width * 0.95,
       maxHeight: height * 0.85,
@@ -1165,91 +1444,56 @@ export default function ClassWiseFeePending({ visible, onClose }) {
       shadowOpacity: 0.3,
       shadowRadius: 20,
     },
-    studentsListContent: {
-      padding: 16,
-    },
-    studentCard: {
-      backgroundColor: colors.inputBackground,
-      borderRadius: 12,
-      padding: 12,
-      marginBottom: 8,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    studentHeader: {
+    tableHeader: {
       flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 8,
+      paddingVertical: 12,
+      paddingHorizontal: 0,
+      borderTopLeftRadius: 8,
+      borderTopRightRadius: 8,
     },
-    rollBadge: {
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      borderRadius: 16,
-      marginRight: 10,
-    },
-    rollText: {
-      fontSize: 13,
+    headerCell: {
+      fontSize: 12,
       fontFamily: 'Poppins-SemiBold',
+      color: '#FFFFFF',
+      textAlign: 'center',
+      paddingVertical: 8,
+      paddingHorizontal: 4,
+      borderRightWidth: 1,
+      borderRightColor: 'rgba(255,255,255,0.2)',
     },
-    studentName: {
-      fontSize: 15,
-      fontFamily: 'Poppins-SemiBold',
-      color: colors.text,
-      flex: 1,
+    tableRowsContainer: {
+      paddingBottom: 0,
     },
-    studentFees: {
-      marginLeft: 4,
-    },
-    feeRow: {
+    tableRow: {
       flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingVertical: 4,
-      flexWrap: 'wrap',
+      paddingVertical: 8,
+      paddingHorizontal: 0,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
     },
-    feeLabel: {
+    tableCell: {
       fontSize: 12,
       fontFamily: 'Poppins-Medium',
-      color: colors.textSecondary,
-      marginLeft: 8,
-    },
-    feeAmount: {
-      flex: 1,
-      textAlign: 'right',
-      fontSize: 13,
-      fontFamily: 'Poppins-Bold',
-    },
-    totalRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginTop: 4,
-      paddingTop: 4,
-      borderTopWidth: 1,
-      borderTopColor: colors.border + '50',
-    },
-    totalLabel: {
-      fontSize: 13,
-      fontFamily: 'Poppins-SemiBold',
       color: colors.text,
-      marginLeft: 8,
+      textAlign: 'center',
+      paddingVertical: 6,
+      paddingHorizontal: 4,
     },
-    totalAmount: {
-      flex: 1,
-      textAlign: 'right',
-      fontSize: 14,
+    tableFooter: {
+      flexDirection: 'row',
+      paddingVertical: 12,
+      paddingHorizontal: 0,
+      borderBottomWidth: 2,
+      borderBottomColor: colors.primary,
+      marginTop: 4,
+    },
+    footerCell: {
+      fontSize: 12,
       fontFamily: 'Poppins-Bold',
-    },
-    noStudentsContainer: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 40,
-    },
-    noStudentsText: {
-      marginTop: 12,
-      fontSize: 14,
-      fontFamily: 'Poppins-Medium',
-      color: colors.textSecondary,
+      color: colors.text,
+      textAlign: 'center',
+      paddingVertical: 8,
+      paddingHorizontal: 4,
     },
     sectionActionButtons: {
       flexDirection: 'row',
@@ -1349,7 +1593,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
       fontFamily: 'Poppins-SemiBold',
     },
     
-    // Fee Summary - Each fee type in its own row
+    // Fee Summary
     feeSummary: {
       marginBottom: 12,
     },
@@ -1366,12 +1610,13 @@ export default function ClassWiseFeePending({ visible, onClose }) {
       fontFamily: 'Poppins-SemiBold',
       color: colors.textSecondary,
       marginLeft: 8,
-      width: 80,
+      width: 100,
     },
     feeValue: {
       fontSize: 13,
       fontFamily: 'Poppins-Bold',
       flex: 1,
+      textAlign: 'right',
     },
     
     // Students Preview

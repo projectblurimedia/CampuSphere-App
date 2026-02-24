@@ -284,6 +284,31 @@ export const getNextClass = (currentClass) => {
   return classOrder[currentIndex + 1]
 }
 
+export const getPreviousClass = (currentClass) => {
+  const classOrder = [
+    'Pre-Nursery',
+    'Nursery',
+    'LKG',
+    'UKG',
+    'Class 1',
+    'Class 2',
+    'Class 3',
+    'Class 4',
+    'Class 5',
+    'Class 6',
+    'Class 7',
+    'Class 8',
+    'Class 9',
+    'Class 10'
+  ]
+
+  const currentIndex = classOrder.indexOf(currentClass)
+  if (currentIndex === -1) return null
+  if (currentIndex === 0) return null // Cannot demote from Pre-Nursery
+  
+  return classOrder[currentIndex - 1]
+}
+
 /**
  * Get academic year string based on current date
  * @returns {string} - Academic year in format "2025-2026"

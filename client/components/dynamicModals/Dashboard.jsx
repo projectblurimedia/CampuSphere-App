@@ -9,13 +9,16 @@ const componentMap = {
   'createStudent': () => import('@/pages/menu/createStudent/CreateStudent'),
   'createEmployee': () => import('@/pages/menu/createEmployee/CreateEmployee'),
   'attendance': () => import('@/pages/menu/attendance/Attendance'),
-  'promote': () => import('@/pages/menu/promote/Promote'), // NEW: Promote component
+  'promote': () => import('@/pages/menu/promote/Promote'),
   'bulkImportStudents': () => import('@/pages/menu/bulkImportStudents/BulkImportStudents'),
   'bulkImportEmployees': () => import('@/pages/menu/bulkImportEmployees/BulkImportEmployees'),
   'uploadMarks': () => import('@/pages/menu/uploadMarks/UploadMarks'),
   'feeManagement': () => import('@/pages/menu/feeManagement/FeeManagement'),
   'feeDetails': () => import('@/pages/menu/feeDetails/FeeDetails'),
   'timeTables': () => import('@/pages/menu/timeTables/TimeTables'),
+  
+  // New Student Management component
+  'studentManagement': () => import('@/pages/menu/studentManagement/StudentManagement'),
   
   // Cashflow components
   'AddIncome': () => import('@/pages/cashflow/CashflowForm'),
@@ -69,6 +72,11 @@ export default function Dashboard({
             setComponentProps({})
           } else if (componentName === 'Reports') {
             setComponentProps({})
+          } else if (componentName === 'studentManagement') {
+            setComponentProps({
+              title: 'Student Management',
+              subtitle: 'Manage all students'
+            })
           }
           
           setLoading(false)

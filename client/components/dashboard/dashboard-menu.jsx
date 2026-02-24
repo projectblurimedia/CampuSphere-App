@@ -98,11 +98,11 @@ export default function DashboardMenu({ visible, onClose }) {
     },
     { 
       id: 4, 
-      title: 'New Student', 
-      icon: 'user-plus', 
-      iconType: 'Feather', 
+      title: 'Student Management', 
+      icon: 'users', 
+      iconType: 'FontAwesome5', 
       gradient: ['#06b6d4', '#0891b2'], 
-      componentName: 'createStudent'
+      componentName: 'studentManagement'
     },
     { 
       id: 5,
@@ -184,15 +184,19 @@ export default function DashboardMenu({ visible, onClose }) {
       data: menuItems.filter(item => [1,2,3].includes(item.id)),
     },
     {
+      title: 'Student Management',
+      data: menuItems.filter(item => [4].includes(item.id)),
+    },
+    {
       title: 'Add New',
-      data: menuItems.filter(item => [4,6].includes(item.id)),
+      data: menuItems.filter(item => [6].includes(item.id)),
     },
     {
       title: 'Bulk Imports',
       data: menuItems.filter(item => [5,7].includes(item.id)),
     },
     {
-      title: 'Student Management',
+      title: 'Student Progress',
       data: menuItems.filter(item => [8,9].includes(item.id)),
     },
     {

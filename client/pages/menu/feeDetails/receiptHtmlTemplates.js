@@ -7,14 +7,29 @@ export const schoolInfo = {
 }
 
 export const generateReceiptHTML = (receiptData) => {
-  // Calculate totals
-  const discountedTotal = receiptData.feeSummary?.discountedTotalFee || 0
-  const previousYearFee = receiptData.feeSummary?.previousYearFee || 0
-  const grandTotal = discountedTotal + previousYearFee
-  const totalPaid = receiptData.feeSummary?.totalPaid || receiptData.payment?.totalAmount || 0
-  const totalDue = receiptData.feeSummary?.totalDue || (grandTotal - totalPaid) || 0
+  // Calculate totals correctly
+  const discountedTotal = receiptData.feeSummary?.discountedTotalFee || 0 // Current year total fee: 32500
+  const currentYearPaid = receiptData.feeSummary?.currentYearTotalPaid || 0 // Current year paid: 2000
+  const previousYearFee = receiptData.feeSummary?.previousYearFee || 0 // Previous year total fee: 55000
+  const previousYearPaid = receiptData.feeSummary?.previousYearPaid || 0 // Previous year paid: 55000
+  
+  const grandTotal = discountedTotal + previousYearFee // 32500 + 55000 = 87500
+  const totalPaid = currentYearPaid + previousYearPaid // 2000 + 55000 = 57000
+  const totalDue = grandTotal - totalPaid // 87500 - 57000 = 30500 ✅
   
   const paymentStatus = totalDue === 0 ? 'PAID' : totalDue === grandTotal ? 'UNPAID' : 'PARTIAL'
+
+  // Get payment breakdown
+  const previousYearBreakdown = receiptData.payment?.previousYearBreakdown || { schoolFee: 0, transportFee: 0, hostelFee: 0, total: 0 }
+  const currentYearBreakdown = receiptData.payment?.currentYearBreakdown || { schoolFee: 0, transportFee: 0, hostelFee: 0, total: 0 }
+  
+  // Check if transport or hostel fees exist
+  const hasTransportFee = receiptData.feeSummary?.discountedTransportFee > 0 || 
+                         currentYearBreakdown.transportFee > 0 || 
+                         previousYearBreakdown.transportFee > 0
+  const hasHostelFee = receiptData.feeSummary?.discountedHostelFee > 0 || 
+                      currentYearBreakdown.hostelFee > 0 || 
+                      previousYearBreakdown.hostelFee > 0
 
   return `
     <!DOCTYPE html>
@@ -115,73 +130,125 @@ export const generateReceiptHTML = (receiptData) => {
           color: #333;
           font-size: 12px;
         }
-        .fee-component-section {
-          background: #f9f9f9;
-          padding: 15px;
+        .transaction-header {
+          background: #1d9bf0;
+          padding: 12px 15px;
           border-radius: 8px;
           margin-bottom: 15px;
-        }
-        .fee-component-header {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
+          display: flex;
+          justify-content: space-between;
           align-items: center;
-          margin-bottom: 12px;
         }
-        .fee-component-title {
+        .transaction-header-title {
+          color: white;
           font-size: 16px;
           font-weight: bold;
-          color: #1d9bf0;
-          text-align: left;
         }
         .payment-mode-badge {
-          background: #1d9bf0;
-          color: white;
+          background: white;
+          color: #1d9bf0;
           padding: 4px 15px;
           border-radius: 20px;
           font-size: 12px;
           font-weight: bold;
-          text-align: center;
-          justify-self: center;
         }
-        .previous-year-header-badge {
-          background-color: #fff3cd;
-          color: #856404;
-          padding: 4px 12px;
-          border-radius: 20px;
-          font-size: 11px;
-          font-weight: bold;
-          display: inline-flex;
+        .breakdown-section {
+          margin-bottom: 20px;
+          padding: 0 15px;
+        }
+        .breakdown-header {
+          display: flex;
+          justify-content: space-between;
           align-items: center;
-          gap: 4px;
-          justify-self: end;
-        }
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 13px;
-        }
-        th {
-          background: #1d9bf0;
-          color: white;
-          padding: 8px 10px;
-          text-align: left;
-        }
-        td {
-          padding: 8px 10px;
-          border-bottom: 1px solid #ddd;
-        }
-        .amount-col {
-          text-align: right;
-        }
-        .total-row {
-          font-weight: bold;
+          margin-bottom: 10px;
+          padding: 8px 12px;
           background: #f0f0f0;
+          border-radius: 6px;
+        }
+        .breakdown-title {
+          font-size: 14px;
+          font-weight: bold;
+        }
+        .previous-year-title {
+          color: #ff9800;
+        }
+        .current-year-title {
+          color: #1d9bf0;
+        }
+        .breakdown-total {
+          font-size: 14px;
+          font-weight: bold;
+        }
+        .previous-year-total {
+          color: #ff9800;
+        }
+        .current-year-total {
+          color: #1d9bf0;
+        }
+        .fee-items-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin-bottom: 10px;
+        }
+        .fee-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          background: #f9f9f9;
+          padding: 10px 12px;
+          border-radius: 6px;
+        }
+        .fee-label {
+          font-size: 13px;
+          color: #555;
+          font-weight: 500;
+        }
+        .fee-amount {
+          font-size: 14px;
+          font-weight: bold;
+        }
+        .totals-row {
+          display: flex;
+          flex-direction: row;
+          justify-content: space-between;
+          align-items: center;
+          gap: 15px;
+          margin: 15px 15px 15px 15px;
+        }
+        .total-paid-box {
+          flex: 1;
+          background: #1d9bf0;
+          padding: 12px 15px;
+          border-radius: 8px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .total-due-box {
+          flex: 1;
+          background: #dc3545;
+          padding: 12px 15px;
+          border-radius: 8px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .total-label {
+          color: white;
+          font-size: 14px;
+          font-weight: bold;
+        }
+        .total-amount {
+          color: white;
+          font-size: 18px;
+          font-weight: bold;
         }
         .transaction-info {
           background: #f9f9f9;
           padding: 8px 15px;
           border-radius: 6px;
-          margin: 10px 0 15px 0;
+          margin: 10px 15px 15px 15px;
           display: flex;
           gap: 20px;
           font-size: 12px;
@@ -251,26 +318,6 @@ export const generateReceiptHTML = (receiptData) => {
         .summary-value {
           font-weight: bold;
         }
-        .total-due-row {
-          background: white;
-          padding: 12px 15px;
-          border-radius: 6px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          border-top: 2px solid #dc3545;
-          margin-top: 5px;
-        }
-        .total-due-label {
-          font-size: 15px;
-          font-weight: bold;
-          color: #333;
-        }
-        .total-due-value {
-          font-size: 18px;
-          font-weight: bold;
-          color: ${totalDue > 0 ? '#dc3545' : '#28a745'};
-        }
         .progress-bar {
           margin-top: 15px;
           height: 6px;
@@ -281,7 +328,7 @@ export const generateReceiptHTML = (receiptData) => {
         .progress-fill {
           height: 100%;
           background: #1d9bf0;
-          width: ${grandTotal > 0 ? (totalPaid / grandTotal * 100) : 0}%;
+          width: ${grandTotal > 0 ? ((totalPaid / grandTotal) * 100) : 0}%;
         }
         .progress-text {
           text-align: right;
@@ -351,21 +398,18 @@ export const generateReceiptHTML = (receiptData) => {
           <div class="receipt-no">Receipt No: ${receiptData.receiptNo}</div>
         </div>
 
-        <!-- Student Info - 2x2 Grid with Student Name Full Row -->
+        <!-- Student Info -->
         <div class="student-info">
-          <!-- Student Name - Full Row -->
           <div class="student-name-row">
             <span class="student-name-label">Student Name:</span>
             <span class="student-name-value">${receiptData.student.name}</span>
           </div>
           
-          <!-- Class & Section -->
           <div class="info-item">
             <span class="info-label">Class & Section:</span>
             <span class="info-value">${receiptData.student.displayClass} - ${receiptData.student.section}</span>
           </div>
           
-          <!-- Payment Date with Time -->
           <div class="info-item">
             <span class="info-label">Payment Date:</span>
             <span class="info-value">${new Date(receiptData.date).toLocaleDateString('en-IN', {
@@ -377,58 +421,93 @@ export const generateReceiptHTML = (receiptData) => {
             })}</span>
           </div>
           
-          <!-- Parent Name -->
           <div class="info-item">
             <span class="info-label">Parent Name:</span>
             <span class="info-value">${receiptData.student.parentName}</span>
           </div>
           
-          <!-- Parent Phone -->
           <div class="info-item">
             <span class="info-label">Parent Phone:</span>
             <span class="info-value">${receiptData.student.parentPhone}</span>
           </div>
         </div>
 
-        <!-- 1. Fee Component Section with Left, Center, Right Layout -->
-        <div class="fee-component-section">
-          <div class="fee-component-header">
-            <span class="fee-component-title">Fee Components</span>
-            <span class="payment-mode-badge">${receiptData.payment.mode.replace('_', ' ')}</span>
-            ${receiptData.payment?.isPreviousYear ? `
-            <span class="previous-year-header-badge">
-              Previous Year Fee ${receiptData.payment.previousYearInfo?.academicYear ? `(${receiptData.payment.previousYearInfo.academicYear})` : ''}
-            </span>` : '<span></span>'}
+        <!-- THIS TRANSACTION BREAKDOWN - Blue Header -->
+        <div class="transaction-header">
+          <span class="transaction-header-title">THIS TRANSACTION BREAKDOWN</span>
+          <span class="payment-mode-badge">${receiptData.payment.mode.replace('_', ' ')}</span>
+        </div>
+        
+        <!-- Previous Year Payment (if any) -->
+        ${previousYearBreakdown.total > 0 ? `
+        <div class="breakdown-section">
+          <div class="breakdown-header">
+            <div class="breakdown-title previous-year-title">
+              PREVIOUS YEAR PAYMENT
+            </div>
+            <div class="breakdown-total previous-year-total">
+              Total: ₹${previousYearBreakdown.total.toLocaleString()}
+            </div>
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Component</th>
-                <th class="amount-col">Amount Paid (₹)</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${receiptData.payment.breakdown.schoolFee > 0 ? `
-              <tr>
-                <td>School Fee</td>
-                <td class="amount-col">${receiptData.payment.breakdown.schoolFee.toLocaleString()}</td>
-              </tr>` : ''}
-              ${receiptData.payment.breakdown.transportFee > 0 ? `
-              <tr>
-                <td>Transport Fee</td>
-                <td class="amount-col">${receiptData.payment.breakdown.transportFee.toLocaleString()}</td>
-              </tr>` : ''}
-              ${receiptData.payment.breakdown.hostelFee > 0 ? `
-              <tr>
-                <td>Hostel Fee</td>
-                <td class="amount-col">${receiptData.payment.breakdown.hostelFee.toLocaleString()}</td>
-              </tr>` : ''}
-              <tr class="total-row">
-                <td><strong>TOTAL PAID</strong></td>
-                <td class="amount-col"><strong>₹${receiptData.payment.totalAmount.toLocaleString()}</strong></td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="fee-items-grid">
+            ${previousYearBreakdown.schoolFee > 0 ? `
+            <div class="fee-item">
+              <span class="fee-label">School Fee</span>
+              <span class="fee-amount" style="color: #ff9800;">₹${previousYearBreakdown.schoolFee.toLocaleString()}</span>
+            </div>` : ''}
+            ${hasTransportFee && previousYearBreakdown.transportFee > 0 ? `
+            <div class="fee-item">
+              <span class="fee-label">Transport Fee</span>
+              <span class="fee-amount" style="color: #ff9800;">₹${previousYearBreakdown.transportFee.toLocaleString()}</span>
+            </div>` : ''}
+            ${hasHostelFee && previousYearBreakdown.hostelFee > 0 ? `
+            <div class="fee-item">
+              <span class="fee-label">Hostel Fee</span>
+              <span class="fee-amount" style="color: #ff9800;">₹${previousYearBreakdown.hostelFee.toLocaleString()}</span>
+            </div>` : ''}
+          </div>
+        </div>` : ''}
+        
+        <!-- Current Year Payment -->
+        ${currentYearBreakdown.total > 0 ? `
+        <div class="breakdown-section">
+          <div class="breakdown-header">
+            <div class="breakdown-title current-year-title">
+              CURRENT YEAR PAYMENT
+            </div>
+            <div class="breakdown-total current-year-total">
+              Total: ₹${currentYearPaid.toLocaleString()}
+            </div>
+          </div>
+          <div class="fee-items-grid">
+            ${currentYearBreakdown.schoolFee > 0 ? `
+            <div class="fee-item">
+              <span class="fee-label">School Fee</span>
+              <span class="fee-amount" style="color: #1d9bf0;">₹${currentYearBreakdown.schoolFee.toLocaleString()}</span>
+            </div>` : ''}
+            ${hasTransportFee && currentYearBreakdown.transportFee > 0 ? `
+            <div class="fee-item">
+              <span class="fee-label">Transport Fee</span>
+              <span class="fee-amount" style="color: #1d9bf0;">₹${currentYearBreakdown.transportFee.toLocaleString()}</span>
+            </div>` : ''}
+            ${hasHostelFee && currentYearBreakdown.hostelFee > 0 ? `
+            <div class="fee-item">
+              <span class="fee-label">Hostel Fee</span>
+              <span class="fee-amount" style="color: #1d9bf0;">₹${currentYearBreakdown.hostelFee.toLocaleString()}</span>
+            </div>` : ''}
+          </div>
+        </div>` : ''}
+        
+        <!-- Totals Row - Paid and Due Side by Side -->
+        <div class="totals-row">
+          <div class="total-paid-box">
+            <span class="total-label">TOTAL PAID</span>
+            <span class="total-amount">₹${receiptData.payment.totalAmount.toLocaleString()}</span>
+          </div>
+          <div class="total-due-box">
+            <span class="total-label">TOTAL DUE</span>
+            <span class="total-amount">₹${totalDue.toLocaleString()}</span>
+          </div>
         </div>
 
         <!-- Transaction Details -->
@@ -440,44 +519,38 @@ export const generateReceiptHTML = (receiptData) => {
           ${receiptData.payment.referenceNo ? `<span class="transaction-item">Ref: ${receiptData.payment.referenceNo}</span>` : ''}
         </div>` : ''}
 
-        <!-- 3. Fee Summary Section with Status on Right -->
+        <!-- Fee Summary Section -->
         <div class="summary-section">
           <div class="summary-header">
-            <span class="summary-title">Fee Summary</span>
+            <span class="summary-title">FEE SUMMARY</span>
             <span class="summary-status status-${paymentStatus.toLowerCase()}">${paymentStatus}</span>
           </div>
           
-          <!-- 2x2 Grid for Current Year, Previous Year, Grand Total, Total Paid -->
+          <!-- 2x2 Grid -->
           <div class="summary-grid">
             <!-- Current Year Fee -->
             <div class="summary-item">
-              <span class="summary-label">Current Year:</span>
+              <span class="summary-label">Current Year Fee:</span>
               <span class="summary-value" style="color: #1d9bf0;">₹${discountedTotal.toLocaleString()}</span>
             </div>
             
-            <!-- Previous Year Fee (if applicable) -->
+            <!-- Current Year Paid -->
             <div class="summary-item">
-              <span class="summary-label">Previous Year:</span>
-              <span class="summary-value" style="color: ${previousYearFee > 0 ? '#ff9800' : '#666'};">${previousYearFee > 0 ? '₹' + previousYearFee.toLocaleString() : '₹0'}</span>
+              <span class="summary-label">Current Year Paid:</span>
+              <span class="summary-value" style="color: #28a745;">₹${currentYearPaid.toLocaleString()}</span>
             </div>
             
-            <!-- Grand Total -->
+            <!-- Previous Year Fee -->
             <div class="summary-item">
-              <span class="summary-label">Grand Total:</span>
-              <span class="summary-value" style="color: #333;">₹${grandTotal.toLocaleString()}</span>
+              <span class="summary-label">Previous Year Fee:</span>
+              <span class="summary-value" style="color: #ff9800;">₹${previousYearFee.toLocaleString()}</span>
             </div>
             
-            <!-- Total Paid -->
+            <!-- Previous Year Paid -->
             <div class="summary-item">
-              <span class="summary-label">Total Paid:</span>
-              <span class="summary-value" style="color: #28a745;">₹${totalPaid.toLocaleString()}</span>
+              <span class="summary-label">Previous Year Paid:</span>
+              <span class="summary-value" style="color: #28a745;">₹${previousYearPaid.toLocaleString()}</span>
             </div>
-          </div>
-
-          <!-- Total Due (Full Width) -->
-          <div class="total-due-row">
-            <span class="total-due-label">Total Due:</span>
-            <span class="total-due-value">₹${totalDue.toLocaleString()}</span>
           </div>
 
           <!-- Progress Bar -->
@@ -494,9 +567,8 @@ export const generateReceiptHTML = (receiptData) => {
           <strong>Note:</strong> ${receiptData.payment.description}
         </div>` : ''}
 
-        <!-- 4. Footer with Dashed Line -->
+        <!-- Footer -->
         <div class="footer-section">
-          <!-- Received By (Left) and Signature (Right) -->
           <div class="received-signature-row">
             <div class="received-by">
               Received by: <strong>${receiptData.payment.receivedBy}</strong>
@@ -507,7 +579,6 @@ export const generateReceiptHTML = (receiptData) => {
             </div>
           </div>
 
-          <!-- Centered Footer Note -->
           <div class="footer-note">
             This is a computer generated receipt and does not require a physical signature.
           </div>
@@ -520,14 +591,29 @@ export const generateReceiptHTML = (receiptData) => {
 }
 
 export const generatePrintHTML = (receiptData) => {
-  // Calculate totals
-  const discountedTotal = receiptData.feeSummary?.discountedTotalFee || 0
-  const previousYearFee = receiptData.feeSummary?.previousYearFee || 0
-  const grandTotal = discountedTotal + previousYearFee
-  const totalPaid = receiptData.feeSummary?.totalPaid || receiptData.payment?.totalAmount || 0
-  const totalDue = receiptData.feeSummary?.totalDue || (grandTotal - totalPaid) || 0
+  // Calculate totals correctly
+  const discountedTotal = receiptData.feeSummary?.discountedTotalFee || 0 // Current year total fee: 32500
+  const currentYearPaid = receiptData.feeSummary?.currentYearTotalPaid || 0 // Current year paid: 2000
+  const previousYearFee = receiptData.feeSummary?.previousYearFee || 0 // Previous year total fee: 55000
+  const previousYearPaid = receiptData.feeSummary?.previousYearPaid || 0 // Previous year paid: 55000
+  
+  const grandTotal = discountedTotal + previousYearFee // 32500 + 55000 = 87500
+  const totalPaid = currentYearPaid + previousYearPaid // 2000 + 55000 = 57000
+  const totalDue = grandTotal - totalPaid // 87500 - 57000 = 30500 ✅
   
   const paymentStatus = totalDue === 0 ? 'PAID' : totalDue === grandTotal ? 'UNPAID' : 'PARTIAL'
+
+  // Get payment breakdown
+  const previousYearBreakdown = receiptData.payment?.previousYearBreakdown || { schoolFee: 0, transportFee: 0, hostelFee: 0, total: 0 }
+  const currentYearBreakdown = receiptData.payment?.currentYearBreakdown || { schoolFee: 0, transportFee: 0, hostelFee: 0, total: 0 }
+  
+  // Check if transport or hostel fees exist
+  const hasTransportFee = receiptData.feeSummary?.discountedTransportFee > 0 || 
+                         currentYearBreakdown.transportFee > 0 || 
+                         previousYearBreakdown.transportFee > 0
+  const hasHostelFee = receiptData.feeSummary?.discountedHostelFee > 0 || 
+                      currentYearBreakdown.hostelFee > 0 || 
+                      previousYearBreakdown.hostelFee > 0
 
   return `
     <!DOCTYPE html>
@@ -621,69 +707,125 @@ export const generatePrintHTML = (receiptData) => {
           color: #333;
           font-size: 12px;
         }
-        .fee-component-section {
-          margin-bottom: 15px;
-          padding: 15px;
-          background: #f9f9f9;
+        .transaction-header {
+          background: #000;
+          padding: 12px 15px;
           border-radius: 8px;
-        }
-        .fee-component-header {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
+          margin-bottom: 15px;
+          display: flex;
+          justify-content: space-between;
           align-items: center;
-          margin-bottom: 12px;
         }
-        .fee-component-title {
+        .transaction-header-title {
+          color: white;
           font-size: 16px;
           font-weight: bold;
-          text-align: left;
         }
         .payment-mode-badge {
-          background: #000;
-          color: white;
+          background: white;
+          color: #000;
           padding: 4px 15px;
           border-radius: 20px;
           font-size: 12px;
           font-weight: bold;
-          text-align: center;
-          justify-self: center;
         }
-        .previous-year-header-badge {
-          background-color: #fff3cd;
-          color: #856404;
-          padding: 4px 12px;
-          border-radius: 20px;
-          font-size: 11px;
-          font-weight: bold;
-          display: inline-flex;
+        .breakdown-section {
+          margin-bottom: 20px;
+          padding: 0 15px;
+        }
+        .breakdown-header {
+          display: flex;
+          justify-content: space-between;
           align-items: center;
-          gap: 4px;
-          justify-self: end;
+          margin-bottom: 10px;
+          padding: 8px 12px;
+          background: #f0f0f0;
+          border-radius: 6px;
         }
-        table {
-          width: 100%;
-          border-collapse: collapse;
+        .breakdown-title {
+          font-size: 14px;
+          font-weight: bold;
+        }
+        .previous-year-title {
+          color: #ff9800;
+        }
+        .current-year-title {
+          color: #1d9bf0;
+        }
+        .breakdown-total {
+          font-size: 14px;
+          font-weight: bold;
+        }
+        .previous-year-total {
+          color: #ff9800;
+        }
+        .current-year-total {
+          color: #1d9bf0;
+        }
+        .fee-items-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin-bottom: 10px;
+        }
+        .fee-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          background: #f9f9f9;
+          padding: 10px 12px;
+          border-radius: 6px;
+        }
+        .fee-label {
           font-size: 13px;
+          color: #555;
+          font-weight: 500;
         }
-        th, td {
-          border: 1px solid #000;
-          padding: 8px 10px;
-          text-align: left;
+        .fee-amount {
+          font-size: 14px;
+          font-weight: bold;
         }
-        th {
-          background-color: #f0f0f0;
+        .totals-row {
+          display: flex;
+          flex-direction: row;
+          justify-content: space-between;
+          align-items: center;
+          gap: 15px;
+          margin: 15px 15px 15px 15px;
         }
-        .amount-col {
-          text-align: right;
+        .total-paid-box {
+          flex: 1;
+          background: #000;
+          padding: 12px 15px;
+          border-radius: 8px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
         }
-        .total-row {
+        .total-due-box {
+          flex: 1;
+          background: #333;
+          padding: 12px 15px;
+          border-radius: 8px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .total-label {
+          color: white;
+          font-size: 14px;
+          font-weight: bold;
+        }
+        .total-amount {
+          color: white;
+          font-size: 18px;
           font-weight: bold;
         }
         .transaction-info {
           background: #f9f9f9;
           padding: 8px 15px;
           border-radius: 6px;
-          margin: 10px 0 15px 0;
+          margin: 10px 15px 15px 15px;
           display: flex;
           gap: 20px;
           font-size: 12px;
@@ -740,24 +882,6 @@ export const generatePrintHTML = (receiptData) => {
         .summary-value {
           font-weight: bold;
         }
-        .total-due-row {
-          background: white;
-          padding: 12px 15px;
-          border-radius: 6px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          border-top: 2px solid #000;
-          margin-top: 5px;
-        }
-        .total-due-label {
-          font-size: 15px;
-          font-weight: bold;
-        }
-        .total-due-value {
-          font-size: 18px;
-          font-weight: bold;
-        }
         .progress-bar {
           margin-top: 15px;
           height: 6px;
@@ -768,7 +892,7 @@ export const generatePrintHTML = (receiptData) => {
         .progress-fill {
           height: 100%;
           background: #000;
-          width: ${grandTotal > 0 ? (totalPaid / grandTotal * 100) : 0}%;
+          width: ${grandTotal > 0 ? ((totalPaid / grandTotal) * 100) : 0}%;
         }
         .progress-text {
           text-align: right;
@@ -845,21 +969,18 @@ export const generatePrintHTML = (receiptData) => {
           <div class="receipt-no">Receipt No: ${receiptData.receiptNo}</div>
         </div>
 
-        <!-- Student Info - 2x2 Grid with Student Name Full Row -->
+        <!-- Student Info -->
         <div class="student-info">
-          <!-- Student Name - Full Row -->
           <div class="student-name-row">
             <span class="student-name-label">Student Name:</span>
             <span class="student-name-value">${receiptData.student.name}</span>
           </div>
           
-          <!-- Class & Section -->
           <div class="info-item">
             <span class="info-label">Class & Section:</span>
             <span class="info-value">${receiptData.student.displayClass} - ${receiptData.student.section}</span>
           </div>
           
-          <!-- Payment Date with Time -->
           <div class="info-item">
             <span class="info-label">Payment Date:</span>
             <span class="info-value">${new Date(receiptData.date).toLocaleDateString('en-IN', {
@@ -871,58 +992,93 @@ export const generatePrintHTML = (receiptData) => {
             })}</span>
           </div>
           
-          <!-- Parent Name -->
           <div class="info-item">
             <span class="info-label">Parent Name:</span>
             <span class="info-value">${receiptData.student.parentName}</span>
           </div>
           
-          <!-- Parent Phone -->
           <div class="info-item">
             <span class="info-label">Parent Phone:</span>
             <span class="info-value">${receiptData.student.parentPhone}</span>
           </div>
         </div>
 
-        <!-- 1. Fee Component Section with Left, Center, Right Layout -->
-        <div class="fee-component-section">
-          <div class="fee-component-header">
-            <span class="fee-component-title">Fee Components</span>
-            <span class="payment-mode-badge">${receiptData.payment.mode.replace('_', ' ')}</span>
-            ${receiptData.payment?.isPreviousYear ? `
-            <span class="previous-year-header-badge">
-              Previous Year Fee${receiptData.payment.previousYearInfo?.academicYear ? `(${receiptData.payment.previousYearInfo.academicYear})` : ''}
-            </span>` : '<span></span>'}
+        <!-- THIS TRANSACTION BREAKDOWN - Black Header for Print -->
+        <div class="transaction-header">
+          <span class="transaction-header-title">THIS TRANSACTION BREAKDOWN</span>
+          <span class="payment-mode-badge">${receiptData.payment.mode.replace('_', ' ')}</span>
+        </div>
+        
+        <!-- Previous Year Payment (if any) -->
+        ${previousYearBreakdown.total > 0 ? `
+        <div class="breakdown-section">
+          <div class="breakdown-header">
+            <div class="breakdown-title previous-year-title">
+              PREVIOUS YEAR PAYMENT
+            </div>
+            <div class="breakdown-total previous-year-total">
+              Total: ₹${previousYearBreakdown.total.toLocaleString()}
+            </div>
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Component</th>
-                <th class="amount-col">Amount Paid (₹)</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${receiptData.payment.breakdown.schoolFee > 0 ? `
-              <tr>
-                <td>School Fee</td>
-                <td class="amount-col">${receiptData.payment.breakdown.schoolFee.toLocaleString()}</td>
-              </tr>` : ''}
-              ${receiptData.payment.breakdown.transportFee > 0 ? `
-              <tr>
-                <td>Transport Fee</td>
-                <td class="amount-col">${receiptData.payment.breakdown.transportFee.toLocaleString()}</td>
-              </tr>` : ''}
-              ${receiptData.payment.breakdown.hostelFee > 0 ? `
-              <tr>
-                <td>Hostel Fee</td>
-                <td class="amount-col">${receiptData.payment.breakdown.hostelFee.toLocaleString()}</td>
-              </tr>` : ''}
-              <tr class="total-row">
-                <td><strong>TOTAL PAID</strong></td>
-                <td class="amount-col"><strong>₹${receiptData.payment.totalAmount.toLocaleString()}</strong></td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="fee-items-grid">
+            ${previousYearBreakdown.schoolFee > 0 ? `
+            <div class="fee-item">
+              <span class="fee-label">School Fee</span>
+              <span class="fee-amount" style="color: #ff9800;">₹${previousYearBreakdown.schoolFee.toLocaleString()}</span>
+            </div>` : ''}
+            ${hasTransportFee && previousYearBreakdown.transportFee > 0 ? `
+            <div class="fee-item">
+              <span class="fee-label">Transport Fee</span>
+              <span class="fee-amount" style="color: #ff9800;">₹${previousYearBreakdown.transportFee.toLocaleString()}</span>
+            </div>` : ''}
+            ${hasHostelFee && previousYearBreakdown.hostelFee > 0 ? `
+            <div class="fee-item">
+              <span class="fee-label">Hostel Fee</span>
+              <span class="fee-amount" style="color: #ff9800;">₹${previousYearBreakdown.hostelFee.toLocaleString()}</span>
+            </div>` : ''}
+          </div>
+        </div>` : ''}
+        
+        <!-- Current Year Payment -->
+        ${currentYearBreakdown.total > 0 ? `
+        <div class="breakdown-section">
+          <div class="breakdown-header">
+            <div class="breakdown-title current-year-title">
+              CURRENT YEAR PAYMENT
+            </div>
+            <div class="breakdown-total current-year-total">
+              Total: ₹${currentYearPaid.toLocaleString()}
+            </div>
+          </div>
+          <div class="fee-items-grid">
+            ${currentYearBreakdown.schoolFee > 0 ? `
+            <div class="fee-item">
+              <span class="fee-label">School Fee</span>
+              <span class="fee-amount" style="color: #1d9bf0;">₹${currentYearBreakdown.schoolFee.toLocaleString()}</span>
+            </div>` : ''}
+            ${hasTransportFee && currentYearBreakdown.transportFee > 0 ? `
+            <div class="fee-item">
+              <span class="fee-label">Transport Fee</span>
+              <span class="fee-amount" style="color: #1d9bf0;">₹${currentYearBreakdown.transportFee.toLocaleString()}</span>
+            </div>` : ''}
+            ${hasHostelFee && currentYearBreakdown.hostelFee > 0 ? `
+            <div class="fee-item">
+              <span class="fee-label">Hostel Fee</span>
+              <span class="fee-amount" style="color: #1d9bf0;">₹${currentYearBreakdown.hostelFee.toLocaleString()}</span>
+            </div>` : ''}
+          </div>
+        </div>` : ''}
+        
+        <!-- Totals Row - Paid and Due Side by Side -->
+        <div class="totals-row">
+          <div class="total-paid-box">
+            <span class="total-label">TOTAL PAID</span>
+            <span class="total-amount">₹${receiptData.payment.totalAmount.toLocaleString()}</span>
+          </div>
+          <div class="total-due-box">
+            <span class="total-label">TOTAL DUE</span>
+            <span class="total-amount">₹${totalDue.toLocaleString()}</span>
+          </div>
         </div>
 
         <!-- Transaction Details -->
@@ -931,48 +1087,43 @@ export const generatePrintHTML = (receiptData) => {
           ${receiptData.payment.transactionId ? `<span class="transaction-item">ID: ${receiptData.payment.transactionId}</span>` : ''}
           ${receiptData.payment.chequeNo ? `<span class="transaction-item">Chq: ${receiptData.payment.chequeNo}</span>` : ''}
           ${receiptData.payment.bankName ? `<span class="transaction-item">Bank: ${receiptData.payment.bankName}</span>` : ''}
+          ${receiptData.payment.referenceNo ? `<span class="transaction-item">Ref: ${receiptData.payment.referenceNo}</span>` : ''}
         </div>` : ''}
 
-        <!-- 3. Fee Summary Section with Status on Right -->
+        <!-- Fee Summary Section -->
         <div class="summary-section">
           <div class="summary-header">
-            <span class="summary-title">Fee Summary</span>
+            <span class="summary-title">FEE SUMMARY</span>
             <span class="summary-status" style="background: ${paymentStatus === 'PAID' ? '#d4edda' : paymentStatus === 'PARTIAL' ? '#fff3cd' : '#f8d7da'}; color: ${paymentStatus === 'PAID' ? '#155724' : paymentStatus === 'PARTIAL' ? '#856404' : '#721c24'};">
               ${paymentStatus}
             </span>
           </div>
           
-          <!-- 2x2 Grid for Current Year, Previous Year, Grand Total, Total Paid -->
+          <!-- 2x2 Grid -->
           <div class="summary-grid">
             <!-- Current Year Fee -->
             <div class="summary-item">
-              <span class="summary-label">Current Year:</span>
+              <span class="summary-label">Current Year Fee:</span>
               <span class="summary-value">₹${discountedTotal.toLocaleString()}</span>
             </div>
             
-            <!-- Previous Year Fee (if applicable) -->
+            <!-- Current Year Paid -->
             <div class="summary-item">
-              <span class="summary-label">Previous Year:</span>
-              <span class="summary-value">${previousYearFee > 0 ? '₹' + previousYearFee.toLocaleString() : '₹0'}</span>
+              <span class="summary-label">Current Year Paid:</span>
+              <span class="summary-value">₹${currentYearPaid.toLocaleString()}</span>
             </div>
             
-            <!-- Grand Total -->
+            <!-- Previous Year Fee -->
             <div class="summary-item">
-              <span class="summary-label">Grand Total:</span>
-              <span class="summary-value">₹${grandTotal.toLocaleString()}</span>
+              <span class="summary-label">Previous Year Fee:</span>
+              <span class="summary-value">₹${previousYearFee.toLocaleString()}</span>
             </div>
             
-            <!-- Total Paid -->
+            <!-- Previous Year Paid -->
             <div class="summary-item">
-              <span class="summary-label">Total Paid:</span>
-              <span class="summary-value">₹${totalPaid.toLocaleString()}</span>
+              <span class="summary-label">Previous Year Paid:</span>
+              <span class="summary-value">₹${previousYearPaid.toLocaleString()}</span>
             </div>
-          </div>
-
-          <!-- Total Due (Full Width) -->
-          <div class="total-due-row">
-            <span class="total-due-label">Total Due:</span>
-            <span class="total-due-value">₹${totalDue.toLocaleString()}</span>
           </div>
 
           <!-- Progress Bar -->
@@ -989,9 +1140,8 @@ export const generatePrintHTML = (receiptData) => {
           <strong>Note:</strong> ${receiptData.payment.description}
         </div>` : ''}
 
-        <!-- 4. Footer with Dashed Line -->
+        <!-- Footer -->
         <div class="footer-section">
-          <!-- Received By (Left) and Signature (Right) -->
           <div class="received-signature-row">
             <div class="received-by">
               Received by: <strong>${receiptData.payment.receivedBy}</strong>
@@ -1002,7 +1152,6 @@ export const generatePrintHTML = (receiptData) => {
             </div>
           </div>
 
-          <!-- Centered Footer Note -->
           <div class="footer-note">
             This is a computer generated receipt and does not require a physical signature.
           </div>

@@ -50,18 +50,6 @@ export default function FeeReceipt({
     return `₹${amount.toLocaleString('en-IN')}`
   }
 
-  // Get current academic year
-  const getCurrentAcademicYear = () => {
-    const now = new Date()
-    const currentYear = now.getFullYear()
-    const currentMonth = now.getMonth() + 1
-    if (currentMonth >= 6) {
-      return `${currentYear}-${currentYear + 1}`
-    } else {
-      return `${currentYear - 1}-${currentYear}`
-    }
-  }
-
   // Calculate totals
   const calculateTotals = () => {
     if (!receiptData?.feeSummary) return {}
@@ -114,7 +102,6 @@ export default function FeeReceipt({
   const hasPreviousYearPayment = paymentBreakdown.previousYear.total > 0
   const hasCurrentYearPayment = paymentBreakdown.currentYear.total > 0
   const paymentType = receiptData?.payment?.type || ''
-  const currentAcademicYear = getCurrentAcademicYear()
 
   // Check if transport or hostel fees exist
   const hasTransportFee = receiptData?.feeSummary?.discountedTransportFee > 0 || 
@@ -123,15 +110,6 @@ export default function FeeReceipt({
   const hasHostelFee = receiptData?.feeSummary?.discountedHostelFee > 0 || 
                       paymentBreakdown.currentYear.hostelFee > 0 || 
                       paymentBreakdown.previousYear.hostelFee > 0
-
-  // Log the breakdown for debugging
-  console.log('Receipt Breakdown:', {
-    previousYear: paymentBreakdown.previousYear,
-    currentYear: paymentBreakdown.currentYear,
-    totalPayment: receiptData?.payment?.totalAmount,
-    hasTransportFee,
-    hasHostelFee
-  })
 
   // Loading overlay component
   const LoadingOverlay = () => (
@@ -167,7 +145,7 @@ export default function FeeReceipt({
                   style={styles.backButton} 
                   onPress={onClose}
                 >
-                  <FontAwesome5 name="chevron-left" size={20} color="#FFFFFF" />
+                  <FontAwesome5 name="chevron-left" size={20} color="#FFFFFF" style={{ marginLeft: -2 }} />
                 </TouchableOpacity>
                 
                 <View style={{ flex: 1, alignItems: 'center' }}>
@@ -197,11 +175,6 @@ export default function FeeReceipt({
     )
   }
 
-  // If no receiptData, don't render anything
-  if (!receiptData) {
-    return null
-  }
-
   return (
     <Modal
       visible={visible}
@@ -229,7 +202,7 @@ export default function FeeReceipt({
               <View style={{ flex: 1, alignItems: 'center' }}>
                 <ThemedText style={styles.headerTitle}>Payment Receipt</ThemedText>
                 <ThemedText style={styles.headerSubtitle}>
-                  {receiptData.receiptNo || ''}
+                  {receiptData?.receiptNo || ''}
                 </ThemedText>
               </View>
               
@@ -237,7 +210,7 @@ export default function FeeReceipt({
                 activeOpacity={0.9} 
                 style={styles.downloadButton}
                 onPress={onDownload}
-                disabled={downloading}
+                disabled={downloading || loading}
               >
                 {downloading ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
@@ -251,7 +224,7 @@ export default function FeeReceipt({
 
         {loading ? (
           <LoadingOverlay />
-        ) : (
+        ) : receiptData ? (
           <ScrollView 
             style={styles.content}
             showsVerticalScrollIndicator={true}
@@ -363,14 +336,14 @@ export default function FeeReceipt({
               </View>
             </View>
 
-            {/* ===== THIS TRANSACTION BREAKDOWN ===== */}
+            {/* THIS TRANSACTION BREAKDOWN */}
             <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
               <ThemedText style={styles.sectionTitle}>THIS TRANSACTION BREAKDOWN</ThemedText>
               <ThemedText style={styles.totalPaymentHighlight}>
                 Total Paid: {formatCurrency(receiptData.payment?.totalAmount)}
               </ThemedText>
               
-              {/* Previous Year Payment Section - Show exact amounts paid to previous years */}
+              {/* Previous Year Payment Section */}
               {hasPreviousYearPayment && (
                 <View style={styles.transactionSection}>
                   <View style={[styles.sectionHeader, { borderBottomColor: colors.warning + '40' }]}>
@@ -427,7 +400,7 @@ export default function FeeReceipt({
                 </View>
               )}
 
-              {/* Current Year Payment Section - Show exact amounts paid to current year */}
+              {/* Current Year Payment Section */}
               {hasCurrentYearPayment && (
                 <View style={[styles.transactionSection, hasPreviousYearPayment && { marginTop: 16 }]}>
                   <View style={[styles.sectionHeader, { borderBottomColor: colors.primary + '40' }]}>
@@ -698,21 +671,23 @@ export default function FeeReceipt({
 
             <View style={styles.bottomSpacer} />
           </ScrollView>
-        )}
+        ) : null}
 
         {/* Print FAB */}
-        <TouchableOpacity
-          activeOpacity={0.8}
-          style={[styles.printFab, { backgroundColor: colors.primary }]}
-          onPress={onPrint}
-          disabled={printing}
-        >
-          {printing ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Feather name="printer" size={24} color="#FFFFFF" />
-          )}
-        </TouchableOpacity>
+        {receiptData && !loading && (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[styles.printFab, { backgroundColor: colors.primary }]}
+            onPress={onPrint}
+            disabled={printing}
+          >
+            {printing ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Feather name="printer" size={24} color="#FFFFFF" />
+            )}
+          </TouchableOpacity>
+        )}
       </View>
     </Modal>
   )

@@ -81,28 +81,6 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
     }
   }
 
-  const getPaymentMethodIcon = (method) => {
-    switch (method) {
-      case 'CASH': return 'money-bill-wave'
-      case 'CARD': return 'credit-card'
-      case 'ONLINE_PAYMENT': return 'mobile-alt'
-      case 'BANK_TRANSFER': return 'university'
-      case 'CHEQUE': return 'file-invoice'
-      default: return 'money-bill-wave'
-    }
-  }
-
-  const getPaymentMethodColor = (method) => {
-    switch(method) {
-      case 'CASH': return '#4CAF50'
-      case 'CARD': return '#2196F3'
-      case 'ONLINE_PAYMENT': return '#9C27B0'
-      case 'BANK_TRANSFER': return '#FF9800'
-      case 'CHEQUE': return '#F44336'
-      default: return colors.primary
-    }
-  }
-
   const formatDateOnly = (dateString) => {
     const date = new Date(dateString)
     return date.toLocaleDateString('en-IN', {
@@ -178,21 +156,12 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
   }
 
   const renderPaymentItem = ({ item }) => {
-    const hasTerm = item.termNumber !== null && item.termNumber !== undefined
-    
-    // Get payment breakdown - check different possible structures
+    // Get total amount
     const breakdown = item.breakdown || {}
     const schoolFeePaid = breakdown.schoolFeePaid || item.schoolFeePaid || 0
     const transportFeePaid = breakdown.transportFeePaid || item.transportFeePaid || 0
     const hostelFeePaid = breakdown.hostelFeePaid || item.hostelFeePaid || 0
     const totalAmount = item.totalAmount || schoolFeePaid + transportFeePaid + hostelFeePaid
-    
-    // Check if any fees are paid
-    const hasAnyFee = schoolFeePaid > 0 || transportFeePaid > 0 || hostelFeePaid > 0
-    
-    // Get student snapshot if available
-    const studentSnapshot = item.studentSnapshot || item.studentDetails || {}
-    const hasSnapshot = studentSnapshot.firstName || studentSnapshot.name
     
     return (
       <TouchableOpacity
@@ -200,160 +169,22 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
         style={[styles.paymentCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
         onPress={() => handleViewReceipt(item)}
       >
-        {/* Header with Receipt No and Payment Mode */}
-        <View style={styles.paymentHeader}>
+        <View style={styles.paymentRow}>
+          {/* Left side - Receipt Number */}
           <View style={styles.receiptContainer}>
             <MaterialIcons name="receipt" size={16} color={colors.primary} />
             <ThemedText style={styles.receiptNo} numberOfLines={1}>
               {item.receiptNo || 'N/A'}
             </ThemedText>
           </View>
-          <View style={[styles.paymentModeBadge, { backgroundColor: getPaymentMethodColor(item.paymentMode) + '15' }]}>
-            <FontAwesome5 
-              name={getPaymentMethodIcon(item.paymentMode)} 
-              size={10} 
-              color={getPaymentMethodColor(item.paymentMode)} 
-            />
-            <ThemedText style={[styles.paymentModeText, { color: getPaymentMethodColor(item.paymentMode) }]}>
-              {item.paymentMode?.replace('_', ' ') || 'CASH'}
-            </ThemedText>
-          </View>
-        </View>
 
-        {/* Term Badge (if exists) */}
-        {hasTerm && (
-          <View style={styles.termBadgeContainer}>
-            <View style={[styles.termBadge, { backgroundColor: colors.primary + '15' }]}>
-              <MaterialIcons name="looks-one" size={12} color={colors.primary} />
-              <ThemedText style={[styles.termBadgeText, { color: colors.primary }]}>
-                Term {item.termNumber}
-              </ThemedText>
-            </View>
-          </View>
-        )}
-
-        {/* Historical Student Info - Show if snapshot exists */}
-        {hasSnapshot && (
-          <View style={[styles.historicalInfo, { 
-            backgroundColor: colors.warning + '10', 
-            borderColor: colors.warning + '30',
-            marginBottom: 12,
-            padding: 8,
-            borderRadius: 8,
-            borderWidth: 1,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8
-          }]}>
-            <MaterialIcons name="history" size={14} color={colors.warning} />
-            <ThemedText style={[styles.historicalText, { 
-              flex: 1,
-              fontSize: 11,
-              color: colors.text,
-              fontFamily: 'Poppins-Medium',
-              fontStyle: 'italic'
-            }]}>
-              At payment: {studentSnapshot.classLabel || studentSnapshot.class || 'N/A'} - {studentSnapshot.section || 'N/A'}
-            </ThemedText>
-          </View>
-        )}
-
-        {/* Fee Breakdown - Only show if there are fees paid */}
-        {hasAnyFee && (
-          <View style={[styles.paymentBreakdown, { 
-            marginBottom: 16, 
-            paddingVertical: 12,
-            borderTopWidth: 1,
-            borderBottomWidth: 1,
-            borderColor: colors.border + '30',
-            gap: 8
-          }]}>
-            {schoolFeePaid > 0 && (
-              <View style={styles.breakdownRow}>
-                <View style={styles.breakdownLabelContainer}>
-                  <Ionicons name="book-outline" size={12} color={colors.primary} />
-                  <ThemedText style={styles.breakdownLabel}>School Fee</ThemedText>
-                </View>
-                <ThemedText style={[styles.breakdownAmount, { color: colors.primary }]}>
-                  ₹{schoolFeePaid.toLocaleString()}
-                </ThemedText>
-              </View>
-            )}
-            {transportFeePaid > 0 && (
-              <View style={styles.breakdownRow}>
-                <View style={styles.breakdownLabelContainer}>
-                  <Ionicons name="bus-outline" size={12} color={colors.info} />
-                  <ThemedText style={styles.breakdownLabel}>Transport Fee</ThemedText>
-                </View>
-                <ThemedText style={[styles.breakdownAmount, { color: colors.info }]}>
-                  ₹{transportFeePaid.toLocaleString()}
-                </ThemedText>
-              </View>
-            )}
-            {hostelFeePaid > 0 && (
-              <View style={styles.breakdownRow}>
-                <View style={styles.breakdownLabelContainer}>
-                  <Ionicons name="home-outline" size={12} color={colors.warning} />
-                  <ThemedText style={styles.breakdownLabel}>Hostel Fee</ThemedText>
-                </View>
-                <ThemedText style={[styles.breakdownAmount, { color: colors.warning }]}>
-                  ₹{hostelFeePaid.toLocaleString()}
-                </ThemedText>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* If no fees breakdown, show a simple message */}
-        {!hasAnyFee && (
-          <View style={[styles.paymentBreakdown, { 
-            marginBottom: 16, 
-            paddingVertical: 12,
-            alignItems: 'center'
-          }]}>
-            <ThemedText style={{ color: colors.textSecondary, fontSize: 12 }}>
-              Payment details not available
-            </ThemedText>
-          </View>
-        )}
-
-        {/* Footer with Date and Total Amount */}
-        <View style={styles.paymentFooter}>
-          <View style={styles.dateContainer}>
-            <Feather name="calendar" size={12} color={colors.textSecondary} />
-            <ThemedText style={styles.dateText}>
-              {item.date ? formatDateOnly(item.date) : 'N/A'}
-            </ThemedText>
-          </View>
+          {/* Right side - Total Amount */}
           <View style={styles.totalContainer}>
-            <ThemedText style={styles.totalLabel}>Total:</ThemedText>
             <ThemedText style={[styles.totalAmount, { color: colors.success }]}>
               ₹{totalAmount.toLocaleString()}
             </ThemedText>
           </View>
         </View>
-
-        {/* Received By */}
-        {item.receivedBy && (
-          <View style={[styles.receivedBy, { 
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 6,
-            paddingTop: 8,
-            marginTop: 8,
-            borderTopWidth: 1,
-            borderTopColor: colors.border + '30'
-          }]}>
-            <Feather name="user-check" size={12} color={colors.textSecondary} />
-            <ThemedText style={[styles.receivedByText, { 
-              fontSize: 11,
-              color: colors.textSecondary,
-              fontFamily: 'Poppins-Medium'
-            }]}>
-              Received by: {item.receivedBy}
-            </ThemedText>
-          </View>
-        )}
       </TouchableOpacity>
     )
   }
@@ -407,7 +238,7 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
       fontFamily: 'Poppins-Medium',
     },
     
-    // Student Info Card - Exactly like in StudentFeeDetails
+    // Student Info Card
     studentInfoCard: {
       marginHorizontal: 16,
       marginTop: 16,
@@ -485,23 +316,17 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
       paddingBottom: 20,
     },
     
-    // Payment Card
+    // Simplified Payment Card - Only Receipt No and Total Amount
     paymentCard: {
-      borderRadius: 16,
+      borderRadius: 12,
       padding: 16,
       borderWidth: 1,
-      marginBottom: 12,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 2,
-      elevation: 2,
+      marginBottom: 8,
     },
-    paymentHeader: {
+    paymentRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 8,
     },
     receiptContainer: {
       flexDirection: 'row',
@@ -510,90 +335,14 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
       flex: 1,
     },
     receiptNo: {
-      fontSize: 15,
-      fontFamily: 'Poppins-SemiBold',
+      fontSize: 14,
+      fontFamily: 'Poppins-Medium',
       color: colors.text,
       flex: 1,
-    },
-    paymentModeBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 12,
-      gap: 6,
-    },
-    paymentModeText: {
-      fontSize: 11,
-      fontFamily: 'Poppins-SemiBold',
-    },
-    termBadgeContainer: {
-      marginBottom: 12,
-    },
-    termBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 12,
-      gap: 4,
-      alignSelf: 'flex-start',
-    },
-    termBadgeText: {
-      fontSize: 11,
-      fontFamily: 'Poppins-SemiBold',
-    },
-    paymentBreakdown: {
-      marginBottom: 16,
-      paddingVertical: 12,
-      borderTopWidth: 1,
-      borderBottomWidth: 1,
-      borderColor: colors.border + '30',
-      gap: 8,
-    },
-    breakdownRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    breakdownLabelContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
-    breakdownLabel: {
-      fontSize: 13,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
-    },
-    breakdownAmount: {
-      fontSize: 14,
-      fontFamily: 'Poppins-SemiBold',
-    },
-    paymentFooter: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    dateContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-    },
-    dateText: {
-      fontSize: 12,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
     },
     totalContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
-    },
-    totalLabel: {
-      fontSize: 13,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
     },
     totalAmount: {
       fontSize: 16,
@@ -661,7 +410,7 @@ export default function StudentPaymentHistory({ visible, onClose, student, payme
             </SafeAreaView>
           </LinearGradient>
 
-          {/* Student Info Card - Exactly like in StudentFeeDetails */}
+          {/* Student Info Card */}
           <View style={styles.studentInfoCard}>
             <View style={styles.studentHeader}>
               <View style={styles.studentAvatar}>

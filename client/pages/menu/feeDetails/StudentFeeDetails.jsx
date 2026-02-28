@@ -138,7 +138,6 @@ export default function StudentFeeDetails({ visible, onClose, student, onPayment
     
     switch(paymentType) {
       case 'total':
-        // Calculate total due across ALL components (current year + previous years)
         let totalSchoolFeeDue = 0
         let totalTransportFeeDue = 0
         let totalHostelFeeDue = 0
@@ -153,34 +152,10 @@ export default function StudentFeeDetails({ visible, onClose, student, onPayment
         // Add previous years dues by component
         if (previousYearDetails && previousYearDetails.length > 0) {
           previousYearDetails.forEach(year => {
-            // Check termPayments structure
-            if (year.termPayments) {
-              Object.values(year.termPayments).forEach(term => {
-                if (term.components) {
-                  // Only add if remaining > 0
-                  if (term.components.schoolFee?.remaining > 0) {
-                    totalSchoolFeeDue += term.components.schoolFee.remaining
-                  }
-                  if (term.components.transportFee?.remaining > 0) {
-                    totalTransportFeeDue += term.components.transportFee.remaining
-                  }
-                  if (term.components.hostelFee?.remaining > 0) {
-                    totalHostelFeeDue += term.components.hostelFee.remaining
-                  }
-                }
-              })
-            }
-            // Fallback to termDistribution
-            else if (year.termDistribution) {
-              Object.values(year.termDistribution).forEach(term => {
-                const schoolRemaining = Math.max(0, (term.schoolFee || 0) - (term.schoolFeePaid || 0))
-                const transportRemaining = Math.max(0, (term.transportFee || 0) - (term.transportFeePaid || 0))
-                const hostelRemaining = Math.max(0, (term.hostelFee || 0) - (term.hostelFeePaid || 0))
-                
-                totalSchoolFeeDue += schoolRemaining
-                totalTransportFeeDue += transportRemaining
-                totalHostelFeeDue += hostelRemaining
-              })
+            if (year.remainingBreakdown) {
+              totalSchoolFeeDue += year.remainingBreakdown.school || 0
+              totalTransportFeeDue += year.remainingBreakdown.transport || 0
+              totalHostelFeeDue += year.remainingBreakdown.hostel || 0
             }
           })
         }
@@ -193,35 +168,21 @@ export default function StudentFeeDetails({ visible, onClose, student, onPayment
             transportFee: totalTransportFeeDue,
             hostelFee: totalHostelFeeDue
           },
-          paymentType: 'full',
+          paymentType: 'total',
           totalDue: summary?.totalDue || 0
         }
-        
-        // Log for debugging
-        console.log('Total Payment Setup:', {
-          schoolFeeDue: totalSchoolFeeDue,
-          transportFeeDue: totalTransportFeeDue,
-          hostelFeeDue: totalHostelFeeDue,
-          totalDue: summary?.totalDue,
-          matches: (totalSchoolFeeDue + totalTransportFeeDue + totalHostelFeeDue) === summary?.totalDue
-        })
         break
         
       case 'currentYear':
-        const currentYearDue = summary?.currentYearDue || 0
         const feeComp = feeBreakdown || {}
-        
-        const schoolFeeDue = feeComp.schoolFee?.due || 0
-        const transportFeeDue = feeComp.transportFee?.due || 0
-        const hostelFeeDue = feeComp.hostelFee?.due || 0
         
         paymentDetails = {
           ...paymentDetails,
           description: 'Current Year Full Payment',
           defaultAmounts: {
-            schoolFee: schoolFeeDue,
-            transportFee: transportFeeDue,
-            hostelFee: hostelFeeDue
+            schoolFee: feeComp.schoolFee?.due || 0,
+            transportFee: feeComp.transportFee?.due || 0,
+            hostelFee: feeComp.hostelFee?.due || 0
           },
           paymentType: 'currentYear'
         }
@@ -229,122 +190,76 @@ export default function StudentFeeDetails({ visible, onClose, student, onPayment
         
       case 'term':
         const termNum = data.termNumber
-        const termData = termDistribution[termNum] || {}
+        const termData = termWiseBreakdown?.[`term${termNum}`] || {}
+        
         paymentDetails = {
           ...paymentDetails,
           term: termNum,
           description: `Term ${termNum} Payment`,
           defaultAmounts: {
-            schoolFee: Math.max(0, (termData.schoolFee || 0) - (termData.schoolFeePaid || 0)),
-            transportFee: Math.max(0, (termData.transportFee || 0) - (termData.transportFeePaid || 0)),
-            hostelFee: Math.max(0, (termData.hostelFee || 0) - (termData.hostelFeePaid || 0))
+            schoolFee: termData.components?.schoolFee?.remaining || 0,
+            transportFee: termData.components?.transportFee?.remaining || 0,
+            hostelFee: termData.components?.hostelFee?.remaining || 0
           },
           paymentType: 'term'
         }
         break
         
-      case 'previousYear':
-        const yearData = data.yearData
-        
-        // Calculate component-wise dues ONLY for components with remaining balance
-        let totalSchoolFeeDuePY = 0
-        let totalTransportFeeDuePY = 0
-        let totalHostelFeeDuePY = 0
-        
-        // Check termPayments structure first (more detailed)
-        if (yearData.termPayments) {
-          Object.values(yearData.termPayments).forEach(term => {
-            if (term.components) {
-              // Only add if remaining > 0
-              if (term.components.schoolFee?.remaining > 0) {
-                totalSchoolFeeDuePY += term.components.schoolFee.remaining
-              }
-              if (term.components.transportFee?.remaining > 0) {
-                totalTransportFeeDuePY += term.components.transportFee.remaining
-              }
-              if (term.components.hostelFee?.remaining > 0) {
-                totalHostelFeeDuePY += term.components.hostelFee.remaining
-              }
-            }
+        case 'previousYear':
+          const yearData = data.yearData
+          
+          // Get the accurate remaining amounts from remainingBreakdown
+          const remainingBreakdown = yearData.remainingBreakdown || {
+            school: 0,
+            transport: 0,
+            hostel: 0,
+            total: yearData.totalDue || 0
+          }
+          
+          console.log('Previous Year Payment - Frontend Setup:', {
+            academicYear: yearData.academicYear,
+            remainingBreakdown,
+            totalDue: yearData.totalDue,
+            schoolRemaining: remainingBreakdown.school,
+            transportRemaining: remainingBreakdown.transport,
+            hostelRemaining: remainingBreakdown.hostel
           })
-        } 
-        // Fallback to termDistribution
-        else if (yearData.termDistribution) {
-          Object.values(yearData.termDistribution).forEach(term => {
-            // Only add if remaining > 0
-            const schoolRemaining = Math.max(0, (term.schoolFee || 0) - (term.schoolFeePaid || 0))
-            const transportRemaining = Math.max(0, (term.transportFee || 0) - (term.transportFeePaid || 0))
-            const hostelRemaining = Math.max(0, (term.hostelFee || 0) - (term.hostelFeePaid || 0))
-            
-            totalSchoolFeeDuePY += schoolRemaining
-            totalTransportFeeDuePY += transportRemaining
-            totalHostelFeeDuePY += hostelRemaining
+          
+          paymentDetails = {
+            ...paymentDetails,
+            previousYearIndex: data.yearIndex,
+            description: `Previous Year (${yearData.academicYear}) Payment`,
+            defaultAmounts: {
+              schoolFee: remainingBreakdown.school,
+              transportFee: remainingBreakdown.transport,
+              hostelFee: remainingBreakdown.hostel
+            },
+            paymentType: 'previousYear',
+            previousYearDetails: yearData,
+            previousYearFee: remainingBreakdown.total,
+            currentYearDue: 0,
+            totalDue: remainingBreakdown.total,
+            // Store the full remaining breakdown for reference
+            remainingBreakdown: remainingBreakdown
+          }
+          
+          console.log('Payment Details Set:', {
+            defaultAmounts: paymentDetails.defaultAmounts,
+            totalDue: paymentDetails.totalDue
           })
-        }
-        
-        paymentDetails = {
-          ...paymentDetails,
-          previousYearIndex: data.yearIndex,
-          description: `Previous Year (${yearData.academicYear}) Payment`,
-          defaultAmounts: {
-            schoolFee: totalSchoolFeeDuePY,
-            transportFee: totalTransportFeeDuePY,
-            hostelFee: totalHostelFeeDuePY
-          },
-          paymentType: 'previousYear',
-          previousYearDetails: yearData,
-          previousYearFee: yearData.totalDue,
-          currentYearDue: 0,
-          totalDue: yearData.totalDue
-        }
-        
-        // Log for debugging
-        console.log('Previous Year Payment Setup:', {
-          academicYear: yearData.academicYear,
-          schoolFeeDue: totalSchoolFeeDuePY,
-          transportFeeDue: totalTransportFeeDuePY,
-          hostelFeeDue: totalHostelFeeDuePY,
-          totalDue: yearData.totalDue,
-          matches: (totalSchoolFeeDuePY + totalTransportFeeDuePY + totalHostelFeeDuePY) === yearData.totalDue
-        })
-        break
+          break
         
       case 'allPreviousYears':
-        // Calculate total pending across ALL previous years by component
         let totalAllSchoolFeeDue = 0
         let totalAllTransportFeeDue = 0
         let totalAllHostelFeeDue = 0
         
         if (previousYearDetails && previousYearDetails.length > 0) {
           previousYearDetails.forEach(year => {
-            // Check termPayments structure
-            if (year.termPayments) {
-              Object.values(year.termPayments).forEach(term => {
-                if (term.components) {
-                  // Only add if remaining > 0
-                  if (term.components.schoolFee?.remaining > 0) {
-                    totalAllSchoolFeeDue += term.components.schoolFee.remaining
-                  }
-                  if (term.components.transportFee?.remaining > 0) {
-                    totalAllTransportFeeDue += term.components.transportFee.remaining
-                  }
-                  if (term.components.hostelFee?.remaining > 0) {
-                    totalAllHostelFeeDue += term.components.hostelFee.remaining
-                  }
-                }
-              })
-            }
-            // Fallback to termDistribution
-            else if (year.termDistribution) {
-              Object.values(year.termDistribution).forEach(term => {
-                const schoolRemaining = Math.max(0, (term.schoolFee || 0) - (term.schoolFeePaid || 0))
-                const transportRemaining = Math.max(0, (term.transportFee || 0) - (term.transportFeePaid || 0))
-                const hostelRemaining = Math.max(0, (term.hostelFee || 0) - (term.hostelFeePaid || 0))
-                
-                totalAllSchoolFeeDue += schoolRemaining
-                totalAllTransportFeeDue += transportRemaining
-                totalAllHostelFeeDue += hostelRemaining
-              })
+            if (year.remainingBreakdown) {
+              totalAllSchoolFeeDue += year.remainingBreakdown.school || 0
+              totalAllTransportFeeDue += year.remainingBreakdown.transport || 0
+              totalAllHostelFeeDue += year.remainingBreakdown.hostel || 0
             }
           })
         }
@@ -362,15 +277,6 @@ export default function StudentFeeDetails({ visible, onClose, student, onPayment
           currentYearDue: 0,
           totalDue: summary?.previousYearFee
         }
-        
-        // Log for debugging
-        console.log('All Previous Years Payment Setup:', {
-          schoolFeeDue: totalAllSchoolFeeDue,
-          transportFeeDue: totalAllTransportFeeDue,
-          hostelFeeDue: totalAllHostelFeeDue,
-          totalDue: summary?.previousYearFee,
-          matches: (totalAllSchoolFeeDue + totalAllTransportFeeDue + totalAllHostelFeeDue) === summary?.previousYearFee
-        })
         break
         
       case 'component':

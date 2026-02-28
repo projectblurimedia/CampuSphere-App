@@ -443,6 +443,48 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
     const yearData = paymentData.previousYearDetails
     const breakdown = []
 
+    // First, use the remainingBreakdown if available (most accurate)
+    if (yearData.remainingBreakdown) {
+      const { school, transport, hostel, total } = yearData.remainingBreakdown
+      
+      // Create a simplified breakdown
+      const simplifiedBreakdown = {
+        year: yearData.academicYear,
+        totalDue: total,
+        components: []
+      }
+      
+      if (school > 0) {
+        simplifiedBreakdown.components.push({
+          name: 'School Fee',
+          remaining: school,
+          icon: 'book',
+          color: colors.primary
+        })
+      }
+      
+      if (transport > 0) {
+        simplifiedBreakdown.components.push({
+          name: 'Transport Fee',
+          remaining: transport,
+          icon: 'truck',
+          color: colors.info
+        })
+      }
+      
+      if (hostel > 0) {
+        simplifiedBreakdown.components.push({
+          name: 'Hostel Fee',
+          remaining: hostel,
+          icon: 'home',
+          color: colors.warning
+        })
+      }
+      
+      return [simplifiedBreakdown]
+    }
+
+    // Fallback to termPayments if remainingBreakdown not available
     if (yearData.termPayments) {
       Object.entries(yearData.termPayments).forEach(([termKey, termData]) => {
         // Only process terms that have remaining balance
@@ -563,7 +605,7 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
         >
           <View style={styles.cardHeaderLeft}>
             <MaterialIcons name="pie-chart" size={18} color={colors.warning} />
-            <ThemedText style={styles.cardTitle}>Payment Breakdown</ThemedText>
+            <ThemedText style={styles.cardTitle}>Outstanding Breakdown</ThemedText>
           </View>
           <MaterialIcons 
             name={showDetailedBreakdown ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} 
@@ -574,78 +616,107 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
 
         {showDetailedBreakdown && (
           <View style={styles.breakdownContainer}>
-            {breakdown.map((term, index) => (
-              <View key={index} style={styles.termBreakdownContainer}>
-                <View style={styles.termBreakdownHeader}>
-                  <ThemedText style={styles.termBreakdownTitle}>Term {term.term}</ThemedText>
-                  <View style={[styles.termStatusBadge, { backgroundColor: colors.warning + '20' }]}>
-                    <ThemedText style={[styles.termStatusText, { color: colors.warning }]}>
-                      Due: ₹{term.remaining.toLocaleString()}
-                    </ThemedText>
-                  </View>
-                </View>
-
-                {term.components.map((comp, compIndex) => (
-                  <View key={compIndex} style={styles.componentBreakdownRow}>
-                    <View style={styles.componentBreakdownLeft}>
-                      <Feather name={comp.icon} size={12} color={comp.color} />
-                      <ThemedText style={styles.componentBreakdownName}>{comp.name}</ThemedText>
+            {breakdown.map((item, index) => {
+              // If it's a simplified breakdown (no term property)
+              if (!item.term) {
+                return (
+                  <View key={index} style={styles.termBreakdownContainer}>
+                    <View style={styles.termBreakdownHeader}>
+                      <ThemedText style={styles.termBreakdownTitle}>{item.year || 'Previous Year'}</ThemedText>
+                      <View style={[styles.termStatusBadge, { backgroundColor: colors.warning + '20' }]}>
+                        <ThemedText style={[styles.termStatusText, { color: colors.warning }]}>
+                          Due: ₹{item.totalDue.toLocaleString()}
+                        </ThemedText>
+                      </View>
                     </View>
-                    <View style={styles.componentBreakdownRight}>
-                      <ThemedText style={[styles.componentBreakdownAmount, { color: colors.danger }]}>
-                        ₹{comp.due.toLocaleString()}
-                      </ThemedText>
-                      <ThemedText style={styles.componentBreakdownArrow}>→</ThemedText>
-                      <ThemedText style={[styles.componentBreakdownAmount, { color: colors.success }]}>
-                        ₹{comp.paid.toLocaleString()}
-                      </ThemedText>
-                      {comp.remaining > 0 && (
-                        <>
-                          <ThemedText style={styles.componentBreakdownArrow}>→</ThemedText>
+
+                    {item.components.map((comp, compIndex) => (
+                      <View key={compIndex} style={styles.componentBreakdownRow}>
+                        <View style={styles.componentBreakdownLeft}>
+                          <Feather name={comp.icon} size={12} color={comp.color} />
+                          <ThemedText style={styles.componentBreakdownName}>{comp.name}</ThemedText>
+                        </View>
+                        <View style={styles.componentBreakdownRight}>
                           <ThemedText style={[styles.componentBreakdownAmount, { color: colors.warning }]}>
                             ₹{comp.remaining.toLocaleString()}
                           </ThemedText>
-                        </>
-                      )}
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )
+              }
+              
+              // Term-based breakdown
+              return (
+                <View key={index} style={styles.termBreakdownContainer}>
+                  <View style={styles.termBreakdownHeader}>
+                    <ThemedText style={styles.termBreakdownTitle}>Term {item.term}</ThemedText>
+                    <View style={[styles.termStatusBadge, { backgroundColor: colors.warning + '20' }]}>
+                      <ThemedText style={[styles.termStatusText, { color: colors.warning }]}>
+                        Due: ₹{item.remaining.toLocaleString()}
+                      </ThemedText>
                     </View>
                   </View>
-                ))}
 
-                <View style={styles.termTotalRow}>
-                  <ThemedText style={styles.termTotalLabel}>Term Total</ThemedText>
-                  <View style={styles.termTotalAmounts}>
-                    <ThemedText style={styles.termTotalDue}>
-                      ₹{term.totalDue.toLocaleString()}
-                    </ThemedText>
-                    <ThemedText style={styles.termTotalSeparator}>→</ThemedText>
-                    <ThemedText style={[styles.termTotalPaid, { color: colors.success }]}>
-                      ₹{term.totalPaid.toLocaleString()}
-                    </ThemedText>
-                    <ThemedText style={styles.termTotalSeparator}>→</ThemedText>
-                    <ThemedText style={[styles.termTotalRemaining, { color: colors.warning }]}>
-                      ₹{term.remaining.toLocaleString()}
+                  {item.components.map((comp, compIndex) => (
+                    <View key={compIndex} style={styles.componentBreakdownRow}>
+                      <View style={styles.componentBreakdownLeft}>
+                        <Feather name={comp.icon} size={12} color={comp.color} />
+                        <ThemedText style={styles.componentBreakdownName}>{comp.name}</ThemedText>
+                      </View>
+                      <View style={styles.componentBreakdownRight}>
+                        <ThemedText style={[styles.componentBreakdownAmount, { color: colors.danger }]}>
+                          ₹{comp.due.toLocaleString()}
+                        </ThemedText>
+                        <ThemedText style={styles.componentBreakdownArrow}>→</ThemedText>
+                        <ThemedText style={[styles.componentBreakdownAmount, { color: colors.success }]}>
+                          ₹{comp.paid.toLocaleString()}
+                        </ThemedText>
+                        <ThemedText style={styles.componentBreakdownArrow}>→</ThemedText>
+                        <ThemedText style={[styles.componentBreakdownAmount, { color: colors.warning }]}>
+                          ₹{comp.remaining.toLocaleString()}
+                        </ThemedText>
+                      </View>
+                    </View>
+                  ))}
+
+                  <View style={styles.termTotalRow}>
+                    <ThemedText style={styles.termTotalLabel}>Term Total</ThemedText>
+                    <View style={styles.termTotalAmounts}>
+                      <ThemedText style={styles.termTotalDue}>
+                        ₹{item.totalDue.toLocaleString()}
+                      </ThemedText>
+                      <ThemedText style={styles.termTotalSeparator}>→</ThemedText>
+                      <ThemedText style={[styles.termTotalPaid, { color: colors.success }]}>
+                        ₹{item.totalPaid.toLocaleString()}
+                      </ThemedText>
+                      <ThemedText style={styles.termTotalSeparator}>→</ThemedText>
+                      <ThemedText style={[styles.termTotalRemaining, { color: colors.warning }]}>
+                        ₹{item.remaining.toLocaleString()}
+                      </ThemedText>
+                    </View>
+                  </View>
+
+                  <View style={styles.termProgressContainer}>
+                    <View style={[styles.termProgressBar, { backgroundColor: colors.border }]}>
+                      <View 
+                        style={[
+                          styles.termProgressFill, 
+                          { 
+                            width: item.totalDue > 0 ? `${(item.totalPaid / item.totalDue * 100)}%` : '0%',
+                            backgroundColor: item.remaining === 0 ? colors.success : colors.warning
+                          }
+                        ]} 
+                      />
+                    </View>
+                    <ThemedText style={styles.termProgressText}>
+                      {item.totalDue > 0 ? `${((item.totalPaid / item.totalDue * 100)).toFixed(1)}% Paid` : '0% Paid'}
                     </ThemedText>
                   </View>
                 </View>
-
-                <View style={styles.termProgressContainer}>
-                  <View style={[styles.termProgressBar, { backgroundColor: colors.border }]}>
-                    <View 
-                      style={[
-                        styles.termProgressFill, 
-                        { 
-                          width: term.totalDue > 0 ? `${(term.totalPaid / term.totalDue * 100)}%` : '0%',
-                          backgroundColor: term.remaining === 0 ? colors.success : colors.warning
-                        }
-                      ]} 
-                    />
-                  </View>
-                  <ThemedText style={styles.termProgressText}>
-                    {term.totalDue > 0 ? `${((term.totalPaid / term.totalDue * 100)).toFixed(1)}% Paid` : '0% Paid'}
-                  </ThemedText>
-                </View>
-              </View>
-            ))}
+              )
+            })}
           </View>
         )}
       </View>

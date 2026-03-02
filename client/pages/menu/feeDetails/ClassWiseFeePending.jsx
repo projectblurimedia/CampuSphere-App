@@ -48,13 +48,11 @@ export default function ClassWiseFeePending({ visible, onClose }) {
   
   // State for classes and sections
   const [classesAndSections, setClassesAndSections] = useState({})
-  const [isLoadingClasses, setIsLoadingClasses] = useState(false)
   const [classes, setClasses] = useState([])
   const [sections, setSections] = useState([])
   
-  // State for data
-  const [loading, setLoading] = useState(false)
-  const [initialLoading, setInitialLoading] = useState(true)
+  // State for data loading - unified approach
+  const [loadingState, setLoadingState] = useState('initial') // 'initial', 'loadingClasses', 'loadingFeeData', 'loaded', 'error'
   const [refreshing, setRefreshing] = useState(false)
   const [classWiseData, setClassWiseData] = useState({ allStudents: [], classWiseBreakdown: [] })
   const [filteredSections, setFilteredSections] = useState([])
@@ -84,7 +82,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
   // Function to load classes and sections from API
   const loadClassesAndSections = useCallback(async () => {
     try {
-      setIsLoadingClasses(true)
+      setLoadingState('loadingClasses')
 
       const response = await axiosApi.get('/students/classes-sections')
       
@@ -136,6 +134,9 @@ export default function ClassWiseFeePending({ visible, onClose }) {
         
         setClasses(sortedClasses)
         
+        // After classes are loaded, fetch fee data
+        await fetchClassWiseData()
+        
       } else {
         throw new Error(response.data.message || 'Failed to load classes and sections')
       }
@@ -185,8 +186,9 @@ export default function ClassWiseFeePending({ visible, onClose }) {
       
       setClasses(fallbackClasses)
       setClassesAndSections(fallbackClassSections)
-    } finally {
-      setIsLoadingClasses(false)
+      
+      // Try to fetch fee data with fallback classes
+      await fetchClassWiseData()
     }
   }, [])
 
@@ -237,6 +239,10 @@ export default function ClassWiseFeePending({ visible, onClose }) {
   useEffect(() => {
     if (visible) {
       loadClassesAndSections()
+    } else {
+      // Reset state when modal closes
+      setLoadingState('initial')
+      setFilteredSections([])
     }
   }, [visible, loadClassesAndSections])
 
@@ -268,7 +274,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
   // Fetch class-wise fee pending data
   const fetchClassWiseData = useCallback(async () => {
     try {
-      setLoading(true)
+      setLoadingState('loadingFeeData')
       
       const params = {}
       
@@ -329,56 +335,36 @@ export default function ClassWiseFeePending({ visible, onClose }) {
         }))
         
         setFilteredSections(processedSections)
+        setLoadingState('loaded')
         return data
       } else {
-        showToast(response.data.message || 'Failed to fetch data', 'error')
-        return { allStudents: [], classWiseBreakdown: [] }
+        throw new Error(response.data.message || 'Failed to fetch data')
       }
     } catch (error) {
       console.error('Error fetching class-wise data:', error)
       showToast(error.response?.data?.message || 'Failed to load data', 'error')
+      setLoadingState('error')
       return { allStudents: [], classWiseBreakdown: [] }
-    } finally {
-      setLoading(false)
     }
   }, [selectedTerm, selectedClass, selectedSection, showToast])
-
-  // Load initial data
-  useEffect(() => {
-    if (visible && !isLoadingClasses) {
-      setInitialLoading(true)
-      fetchClassWiseData().then(() => {
-        setInitialLoading(false)
-      })
-    }
-  }, [visible, fetchClassWiseData, selectedClass, selectedSection, isLoadingClasses])
 
   // Handle filter changes
   const handleClassChange = useCallback(async (classValue) => {
     setSelectedClass(classValue)
     setShowClassModal(false)
-    setInitialLoading(true)
-    
     await fetchClassWiseData()
-    setInitialLoading(false)
   }, [fetchClassWiseData])
 
   const handleSectionChange = useCallback(async (sectionValue) => {
     setSelectedSection(sectionValue)
     setShowSectionModal(false)
-    setInitialLoading(true)
-    
     await fetchClassWiseData()
-    setInitialLoading(false)
   }, [fetchClassWiseData])
 
   const handleTermChange = useCallback(async (term) => {
     setSelectedTerm(term)
     setShowTermModal(false)
-    setInitialLoading(true)
-    
     await fetchClassWiseData()
-    setInitialLoading(false)
   }, [fetchClassWiseData])
 
   // Handle refresh
@@ -697,7 +683,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
     </Modal>
   )
 
-  // IMPROVED: Render section students modal with table layout like PDF
+  // Render section students modal with table layout like PDF
   const renderSectionStudentsModal = () => {
     // Determine which columns to show based on selected term
     const getColumns = () => {
@@ -1194,6 +1180,18 @@ export default function ClassWiseFeePending({ visible, onClose }) {
 
   const isActionDisabled = downloading || printing || filteredSections.length === 0
 
+  // Get loading message based on state
+  const getLoadingMessage = () => {
+    switch(loadingState) {
+      case 'loadingClasses':
+        return 'Loading classes and sections...'
+      case 'loadingFeeData':
+        return 'Loading fee data...'
+      default:
+        return 'Loading...'
+    }
+  }
+
   const styles = StyleSheet.create({
     container: { 
       flex: 1, 
@@ -1420,7 +1418,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
       fontFamily: 'Poppins-Medium',
     },
     
-    // IMPROVED: Students Modal with Table Layout like PDF
+    // Students Modal with Table Layout like PDF
     studentsModalContent: {
       width: width * 0.95,
       maxHeight: height * 0.85,
@@ -1513,6 +1511,17 @@ export default function ClassWiseFeePending({ visible, onClose }) {
       fontSize: 14,
       fontFamily: 'Poppins-SemiBold',
       color: '#FFFFFF',
+    },
+    noStudentsContainer: {
+      padding: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    noStudentsText: {
+      marginTop: 12,
+      fontSize: 14,
+      fontFamily: 'Poppins-Medium',
+      color: colors.textSecondary,
     },
     
     // List Header
@@ -1669,7 +1678,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
       lineHeight: 20,
     },
     
-    // Loading Overlay
+    // Unified Loading Overlay
     loadingContainer: { 
       position: 'absolute', 
       top: 0, 
@@ -1681,25 +1690,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
       backgroundColor: colors.background + 'CC',
       zIndex: 1000,
     },
-    loadingText: { 
-      marginTop: 12, 
-      color: colors.text, 
-      fontFamily: 'Poppins-Medium' 
-    },
-    
-    // Classes Loading Overlay
-    classesLoadingOverlay: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: colors.background + 'E6',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 2000,
-    },
-    classesLoadingCard: {
+    loadingCard: {
       backgroundColor: colors.cardBackground,
       borderRadius: 16,
       padding: 24,
@@ -1711,11 +1702,38 @@ export default function ClassWiseFeePending({ visible, onClose }) {
       shadowOpacity: 0.2,
       shadowRadius: 8,
     },
-    classesLoadingText: {
-      marginTop: 12,
-      fontSize: 14,
+    loadingText: { 
+      marginTop: 12, 
+      color: colors.text, 
       fontFamily: 'Poppins-Medium',
-      color: colors.text,
+      fontSize: 14,
+      textAlign: 'center',
+    },
+    
+    // Error State
+    errorContainer: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20,
+    },
+    errorText: {
+      fontSize: 16,
+      fontFamily: 'Poppins-Medium',
+      color: colors.danger,
+      textAlign: 'center',
+      marginBottom: 16,
+    },
+    retryButton: {
+      backgroundColor: colors.primary,
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+      borderRadius: 12,
+    },
+    retryButtonText: {
+      color: '#FFFFFF',
+      fontSize: 14,
+      fontFamily: 'Poppins-SemiBold',
     },
   })
 
@@ -1746,12 +1764,12 @@ export default function ClassWiseFeePending({ visible, onClose }) {
               style={styles.dropdownButton}
               onPress={() => setShowClassModal(true)}
               activeOpacity={0.8}
-              disabled={isLoadingClasses}
+              disabled={loadingState === 'loadingClasses'}
             >
               <View style={styles.dropdownButtonContent}>
                 <MaterialIcons name="class" size={18} color={colors.primary} />
                 <ThemedText style={styles.dropdownButtonText} numberOfLines={1}>
-                  {isLoadingClasses ? 'Loading classes...' : getSelectedClassLabel()}
+                  {loadingState === 'loadingClasses' ? 'Loading classes...' : getSelectedClassLabel()}
                 </ThemedText>
               </View>
               <Feather name="chevron-down" size={18} color={colors.textSecondary} />
@@ -1762,12 +1780,12 @@ export default function ClassWiseFeePending({ visible, onClose }) {
               style={styles.dropdownButton}
               onPress={() => setShowSectionModal(true)}
               activeOpacity={0.8}
-              disabled={isLoadingClasses || selectedClass === 'ALL'}
+              disabled={loadingState === 'loadingClasses' || selectedClass === 'ALL'}
             >
               <View style={styles.dropdownButtonContent}>
                 <MaterialIcons name="view-module" size={18} color={colors.primary} />
                 <ThemedText style={styles.dropdownButtonText} numberOfLines={1}>
-                  {isLoadingClasses ? 'Loading sections...' : getSelectedSectionLabel()}
+                  {loadingState === 'loadingClasses' ? 'Loading sections...' : getSelectedSectionLabel()}
                 </ThemedText>
               </View>
               <Feather name="chevron-down" size={18} color={colors.textSecondary} />
@@ -1781,6 +1799,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
               style={styles.termDropdownButton}
               onPress={() => setShowTermModal(true)}
               activeOpacity={0.8}
+              disabled={loadingState === 'loadingClasses' || loadingState === 'loadingFeeData'}
             >
               <View style={styles.dropdownButtonContent}>
                 <Feather name="book" size={18} color={colors.primary} />
@@ -1798,7 +1817,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
                 style={styles.downloadButton}
                 onPress={handleDownload}
                 activeOpacity={0.8}
-                disabled={isActionDisabled}
+                disabled={isActionDisabled || loadingState !== 'loaded'}
               >
                 {downloading ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
@@ -1817,7 +1836,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
                 style={styles.printButton}
                 onPress={handlePrint}
                 activeOpacity={0.8}
-                disabled={isActionDisabled}
+                disabled={isActionDisabled || loadingState !== 'loaded'}
               >
                 {printing ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
@@ -1829,24 +1848,42 @@ export default function ClassWiseFeePending({ visible, onClose }) {
           </View>
         </View>
         
-        {/* List Header */}
-        <View style={styles.listHeader}>
-          <ThemedText style={styles.listTitle}>
-            {getSelectedClassLabel()} {selectedSection !== 'ALL' ? `- ${getSelectedSectionLabel()}` : ''}
-          </ThemedText>
-          <View style={styles.listCountBadge}>
-            <ThemedText style={styles.listCountText}>
-              {filteredSections.length} {filteredSections.length === 1 ? 'Section' : 'Sections'}
+        {/* List Header - Only show when loaded */}
+        {loadingState === 'loaded' && filteredSections.length > 0 && (
+          <View style={styles.listHeader}>
+            <ThemedText style={styles.listTitle}>
+              {getSelectedClassLabel()} {selectedSection !== 'ALL' ? `- ${getSelectedSectionLabel()}` : ''}
             </ThemedText>
+            <View style={styles.listCountBadge}>
+              <ThemedText style={styles.listCountText}>
+                {filteredSections.length} {filteredSections.length === 1 ? 'Section' : 'Sections'}
+              </ThemedText>
+            </View>
           </View>
-        </View>
+        )}
         
-        {initialLoading ? (
+        {/* Content based on loading state */}
+        {loadingState === 'loadingClasses' || loadingState === 'loadingFeeData' ? (
           <View style={styles.emptyContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <ThemedText style={[styles.emptySubtitle, { marginTop: 16 }]}>
-              Loading fee data...
+            <View style={styles.loadingCard}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <ThemedText style={styles.loadingText}>
+                {getLoadingMessage()}
+              </ThemedText>
+            </View>
+          </View>
+        ) : loadingState === 'error' ? (
+          <View style={styles.errorContainer}>
+            <MaterialIcons name="error-outline" size={64} color={colors.danger} />
+            <ThemedText style={styles.errorText}>
+              Failed to load data. Please try again.
             </ThemedText>
+            <TouchableOpacity 
+              style={styles.retryButton}
+              onPress={loadClassesAndSections}
+            >
+              <ThemedText style={styles.retryButtonText}>Retry</ThemedText>
+            </TouchableOpacity>
           </View>
         ) : filteredSections.length > 0 ? (
           <FlatList
@@ -1856,7 +1893,12 @@ export default function ClassWiseFeePending({ visible, onClose }) {
             contentContainerStyle={styles.listContainer}
             showsVerticalScrollIndicator={false}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+              <RefreshControl 
+                refreshing={refreshing} 
+                onRefresh={handleRefresh}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
+              />
             }
           />
         ) : (
@@ -1877,7 +1919,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
           selectedClass,
           handleClassChange,
           'Select Class',
-          isLoadingClasses
+          false // We don't need isLoading here as we have the unified loading state
         )}
         
         {renderDropdownModal(
@@ -1887,7 +1929,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
           selectedSection,
           handleSectionChange,
           'Select Section',
-          isLoadingClasses
+          false
         )}
         
         {renderDropdownModal(
@@ -1902,28 +1944,6 @@ export default function ClassWiseFeePending({ visible, onClose }) {
         {/* Section Students Modal */}
         {renderSectionStudentsModal()}
         
-        {/* Classes Loading Overlay */}
-        {isLoadingClasses && (
-          <View style={styles.classesLoadingOverlay}>
-            <View style={styles.classesLoadingCard}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <ThemedText style={styles.classesLoadingText}>
-                Loading classes and sections...
-              </ThemedText>
-            </View>
-          </View>
-        )}
-        
-        {/* Loading Overlay */}
-        {(loading || refreshing) && !initialLoading && !isLoadingClasses && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <ThemedText style={styles.loadingText}>
-              {refreshing ? 'Refreshing...' : 'Loading...'}
-            </ThemedText>
-          </View>
-        )}
-        
         {/* Toast Notification */}
         <ToastNotification 
           visible={toast.visible} 
@@ -1935,5 +1955,5 @@ export default function ClassWiseFeePending({ visible, onClose }) {
         />
       </View>
     </Modal>
-  )
+  ) 
 }

@@ -3,6 +3,8 @@ import cloudinaryUtils from '../config/cloudinary.js'
 import multer from 'multer'
 import path from 'path'
 import fs from 'fs'
+import xlsx from 'xlsx'
+
 import {
   mapClassToEnum,
   mapEnumToDisplayName,
@@ -13,6 +15,8 @@ import {
   validateSection,
   getNextClass,
   getCurrentAcademicYear,
+  validatePhoneNumber,
+  getPreviousClass,
 } from '../utils/classMappings.js'
 
 // Multer configuration for file uploads
@@ -25,39 +29,35 @@ const tempStorage = multer.diskStorage({
     cb(null, tempDir)
   },
   filename: (req, file, cb) => {
-    cb(
-      null,
-      Date.now() +
-        '-' +
-        Math.round(Math.random() * 1e9) +
-        path.extname(file.originalname)
-    )
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+    cb(null, uniqueSuffix + path.extname(file.originalname))
   },
 })
 
-const upload = multer({
+const upload = multer({ 
   storage: tempStorage,
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif/
-    const extname = allowedTypes.test(
-      path.extname(file.originalname).toLowerCase()
-    )
-    const mimetype = file.mimetype.startsWith('image/')
-
+    const allowedTypes = /jpeg|jpg|png|gif|xlsx|xls/
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase())
+    const mimetype = file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+                    file.mimetype === 'application/vnd.ms-excel' ||
+                    file.mimetype.startsWith('image/')
+    
     if (mimetype && extname) {
       return cb(null, true)
     } else {
-      cb(new Error('Only image files are allowed for profile pictures'))
+      cb(new Error('Only image and Excel files are allowed'))
     }
   },
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 }
 })
 
+// Helper function to cleanup temporary files
 const cleanupTempFiles = (files) => {
   if (!files) return
-
+  
   if (Array.isArray(files)) {
-    files.forEach((file) => {
+    files.forEach(file => {
       if (fs.existsSync(file.path)) {
         fs.unlinkSync(file.path)
       }
@@ -65,6 +65,88 @@ const cleanupTempFiles = (files) => {
   } else if (files.path && fs.existsSync(files.path)) {
     fs.unlinkSync(files.path)
   }
+}
+
+// Helper function to parse date
+const parseDate = (dateStr) => {
+  if (!dateStr) return new Date()
+  
+  const date = new Date(dateStr)
+  if (isNaN(date.getTime())) {
+    // Try different formats
+    const formats = [
+      'YYYY-MM-DD',
+      'DD-MM-YYYY',
+      'MM/DD/YYYY',
+      'DD/MM/YYYY',
+      'YYYY/MM/DD'
+    ]
+    
+    for (const format of formats) {
+      let normalizedDate = dateStr
+      
+      if (format === 'DD-MM-YYYY' && dateStr.includes('-')) {
+        const parts = dateStr.split('-')
+        if (parts.length === 3 && parts[0].length === 2 && parts[2].length === 4) {
+          normalizedDate = `${parts[2]}-${parts[1]}-${parts[0]}`
+        }
+      } else if (format === 'MM/DD/YYYY' && dateStr.includes('/')) {
+        const parts = dateStr.split('/')
+        if (parts.length === 3 && parts[0].length === 2 && parts[2].length === 4) {
+          normalizedDate = `${parts[2]}-${parts[0]}-${parts[1]}`
+        }
+      } else if (format === 'DD/MM/YYYY' && dateStr.includes('/')) {
+        const parts = dateStr.split('/')
+        if (parts.length === 3 && parts[0].length === 2 && parts[2].length === 4) {
+          normalizedDate = `${parts[2]}-${parts[1]}-${parts[0]}`
+        }
+      }
+      
+      const testDate = new Date(normalizedDate)
+      if (!isNaN(testDate.getTime())) {
+        return testDate
+      }
+    }
+    
+    return new Date() // Return current date if parsing fails
+  }
+  
+  return date
+}
+
+// Helper function to calculate term distribution
+const calculateTermDistribution = (discountedSchoolFee, discountedTransportFee, discountedHostelFee, terms = 3) => {
+  if (terms <= 0) return {}
+  
+  const distribution = {}
+  
+  const baseSchoolFee = Math.floor(discountedSchoolFee / terms)
+  const baseTransportFee = Math.floor(discountedTransportFee / terms)
+  const baseHostelFee = Math.floor(discountedHostelFee / terms)
+  
+  const remainderSchool = discountedSchoolFee - (baseSchoolFee * terms)
+  const remainderTransport = discountedTransportFee - (baseTransportFee * terms)
+  const remainderHostel = discountedHostelFee - (baseHostelFee * terms)
+  
+  for (let i = 1; i <= terms; i++) {
+    const schoolFee = baseSchoolFee + (i <= remainderSchool ? 1 : 0)
+    const transportFee = baseTransportFee + (i <= remainderTransport ? 1 : 0)
+    const hostelFee = baseHostelFee + (i <= remainderHostel ? 1 : 0)
+    
+    distribution[i] = {
+      schoolFee,
+      transportFee,
+      hostelFee,
+      total: schoolFee + transportFee + hostelFee,
+      schoolFeePaid: 0,
+      transportFeePaid: 0,
+      hostelFeePaid: 0,
+      totalPaid: 0,
+      status: 'Unpaid'
+    }
+  }
+  
+  return distribution
 }
 
 const calculateDiscountedFees = (originalAmount, discountPercent) => {
@@ -226,7 +308,7 @@ export const createStudent = [
             isActive: true
           }
         })
-        transportFee = busFeeStructure?.feeAmount || 0
+        transportFee = busFeeStructure?.feeAmount || 5000
       }
 
       // Calculate hostel fee if applicable
@@ -2804,7 +2886,7 @@ export const promoteStudents = async (req, res) => {
                   isActive: true
                 }
               })
-              transportFee = busFeeStructure?.feeAmount || 0
+              transportFee = busFeeStructure?.feeAmount || 5000
             }
 
             // Calculate hostel fee if applicable
@@ -3142,7 +3224,7 @@ export const getPromotionPreview = async (req, res) => {
               isActive: true
             }
           })
-          transportFee = busFeeStructure?.feeAmount || 0
+          transportFee = busFeeStructure?.feeAmount || 5000
         }
 
         let hostelFee = 0
@@ -3343,3 +3425,439 @@ export const getStudentPromotionHistory = async (req, res) => {
     })
   }
 }
+
+// Bulk import students from Excel
+export const bulkImportStudents = [
+  upload.single('excelFile'),
+  async (req, res) => {
+    console.log('=== BULK IMPORT STARTED ===')
+    
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: 'No Excel file uploaded'
+        })
+      }
+      
+      let workbook, data
+      try {
+        workbook = xlsx.readFile(req.file.path)
+        const sheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+        
+        data = xlsx.utils.sheet_to_json(worksheet, {
+          raw: false,
+          defval: '',
+          blankrows: false
+        })
+        
+      } catch (excelError) {
+        cleanupTempFiles(req.file)
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid Excel file format'
+        })
+      }
+      
+      if (data.length === 0) {
+        cleanupTempFiles(req.file)
+        return res.status(400).json({
+          success: false,
+          message: 'Excel file is empty'
+        })
+      }
+      
+      const errors = []
+      let successCount = 0
+      let skippedCount = 0
+      const results = []
+      
+      // Process each row
+      for (const [index, row] of data.entries()) {
+        const rowNumber = index + 2
+        
+        try {
+          // Skip empty rows
+          if (!row.firstName && !row.lastName && !row.admissionNo) {
+            skippedCount++
+            continue
+          }
+          
+          // Validate required fields
+          const missingFields = []
+          if (!row.firstName) missingFields.push('firstName')
+          if (!row.lastName) missingFields.push('lastName')
+          if (!row.admissionNo) missingFields.push('admissionNo')
+          if (!row.parentPhone) missingFields.push('parentPhone')
+          if (!row.parentName) missingFields.push('parentName')
+          
+          if (missingFields.length > 0) {
+            errors.push({
+              row: rowNumber,
+              admissionNo: row.admissionNo || 'N/A',
+              error: `Missing required fields: ${missingFields.join(', ')}`
+            })
+            continue
+          }
+          
+          const firstName = row.firstName.toString().trim()
+          const lastName = row.lastName.toString().trim()
+          const admissionNo = row.admissionNo.toString().trim()
+          
+          // Check duplicate
+          const existingStudent = await prisma.student.findUnique({
+            where: { admissionNo }
+          })
+          
+          if (existingStudent) {
+            errors.push({
+              row: rowNumber,
+              admissionNo,
+              error: `Duplicate admission number`
+            })
+            continue
+          }
+          
+          // Map class
+          const classEnum = mapClassToEnum(row.class)
+          if (!classEnum) {
+            errors.push({
+              row: rowNumber,
+              admissionNo,
+              error: `Invalid class: "${row.class}"`
+            })
+            continue
+          }
+          
+          // Validate section
+          let section = 'A'
+          if (row.section) {
+            const sectionStr = row.section.toString().trim().toUpperCase()
+            if (['A', 'B', 'C', 'D', 'E'].includes(sectionStr)) {
+              section = sectionStr
+            } else {
+              errors.push({
+                row: rowNumber,
+                admissionNo,
+                error: `Invalid section. Must be A, B, C, D, or E`
+              })
+              continue
+            }
+          }
+          
+          // Validate phone
+          if (!validatePhoneNumber(row.parentPhone)) {
+            errors.push({
+              row: rowNumber,
+              admissionNo,
+              error: `Invalid parent phone number`
+            })
+            continue
+          }
+          
+          const dob = parseDate(row.dob)
+          
+          // Parse student type
+          let studentType = 'DAY_SCHOLAR'
+          if (row.studentType) {
+            const typeStr = row.studentType.toString().trim().toUpperCase()
+            if (typeStr === 'HOSTELLER') {
+              studentType = 'HOSTELLER'
+            }
+          }
+          
+          // Parse transport
+          let isUsingSchoolTransport = false
+          if (row.isUsingSchoolTransport) {
+            const transportStr = row.isUsingSchoolTransport.toString().trim().toLowerCase()
+            isUsingSchoolTransport = transportStr === 'true' || transportStr === 'yes' || transportStr === '1'
+          }
+          
+          // Parse discounts
+          const schoolFeeDiscount = parseDiscount(row.schoolFeeDiscount)
+          const transportFeeDiscount = parseDiscount(row.transportFeeDiscount)
+          const hostelFeeDiscount = parseDiscount(row.hostelFeeDiscount)
+          
+          // ========== HANDLE PREVIOUS YEAR FEE ==========
+          let previousYearDetailsArray = []
+          let totalPreviousYearFee = 0
+          
+          const previousYearFee = parseFloat(row.previousYearFee) || 0
+          
+          if (previousYearFee > 0) {
+            const currentAcademicYear = getCurrentAcademicYear()
+            const [startYear, endYear] = currentAcademicYear.split('-').map(Number)
+            const previousAcademicYear = `${startYear - 1}-${endYear - 1}`
+
+            const currentClassDisplay = mapEnumToDisplayName(classEnum)
+            const previousClassDisplay = getPreviousClass(currentClassDisplay)
+            const previousClassEnum = previousClassDisplay ? mapClassToEnum(previousClassDisplay) : null
+
+            const targetPreviousClass = previousClassEnum || classEnum
+            const targetPreviousClassLabel = mapEnumToDisplayName(targetPreviousClass)
+
+            // Create fee record following feeController structure
+            const feeYearRecord = {
+              academicYear: previousAcademicYear, 
+              class: targetPreviousClass,
+              classLabel: targetPreviousClassLabel,
+              section: section,
+              originalTotalFee: previousYearFee,
+              discountedTotalFee: previousYearFee,
+              totalPaid: 0,
+              totalDue: previousYearFee,
+              
+              // Term distribution - all in term1 (school fee only)
+              termDistribution: {
+                1: {
+                  schoolFee: previousYearFee,
+                  transportFee: 0,
+                  hostelFee: 0,
+                  total: previousYearFee,
+                  schoolFeePaid: 0,
+                  transportFeePaid: 0,
+                  hostelFeePaid: 0,
+                  totalPaid: 0,
+                  status: 'Unpaid'
+                },
+                2: {
+                  schoolFee: 0, transportFee: 0, hostelFee: 0, total: 0,
+                  schoolFeePaid: 0, transportFeePaid: 0, hostelFeePaid: 0,
+                  totalPaid: 0, status: 'Unpaid'
+                },
+                3: {
+                  schoolFee: 0, transportFee: 0, hostelFee: 0, total: 0,
+                  schoolFeePaid: 0, transportFeePaid: 0, hostelFeePaid: 0,
+                  totalPaid: 0, status: 'Unpaid'
+                }
+              },
+              
+              // Term payments breakdown
+              termPayments: {
+                term1: {
+                  due: previousYearFee,
+                  paid: 0,
+                  remaining: previousYearFee,
+                  components: {
+                    schoolFee: { due: previousYearFee, paid: 0, remaining: previousYearFee },
+                    transportFee: { due: 0, paid: 0, remaining: 0 },
+                    hostelFee: { due: 0, paid: 0, remaining: 0 }
+                  }
+                },
+                term2: {
+                  due: 0, paid: 0, remaining: 0,
+                  components: {
+                    schoolFee: { due: 0, paid: 0, remaining: 0 },
+                    transportFee: { due: 0, paid: 0, remaining: 0 },
+                    hostelFee: { due: 0, paid: 0, remaining: 0 }
+                  }
+                },
+                term3: {
+                  due: 0, paid: 0, remaining: 0,
+                  components: {
+                    schoolFee: { due: 0, paid: 0, remaining: 0 },
+                    transportFee: { due: 0, paid: 0, remaining: 0 },
+                    hostelFee: { due: 0, paid: 0, remaining: 0 }
+                  }
+                }
+              },
+              
+              remainingBreakdown: {
+                school: previousYearFee,
+                transport: 0,
+                hostel: 0,
+                total: previousYearFee
+              },
+              
+              discounts: { school: 0, transport: 0, hostel: 0 },
+              isFullyPaid: false,
+              archivedAt: new Date().toISOString()
+            }
+            
+            previousYearDetailsArray = [feeYearRecord]
+            totalPreviousYearFee = previousYearFee
+          }
+          
+          // ========== GET FEE STRUCTURES ==========
+          const classFeeStructure = await prisma.classFeeStructure.findFirst({
+            where: { className: classEnum, isActive: true }
+          })
+          
+          // Transport fee
+          let transportFee = 0
+          if (isUsingSchoolTransport && row.village) {
+            const busFeeStructure = await prisma.busFeeStructure.findFirst({
+              where: {
+                villageName: { contains: row.village.toString().trim(), mode: 'insensitive' },
+                isActive: true
+              }
+            })
+            transportFee = busFeeStructure?.feeAmount || 5000
+          }
+          
+          // Hostel fee
+          let hostelFee = 0
+          if (studentType === 'HOSTELLER') {
+            const hostelFeeStructure = await prisma.hostelFeeStructure.findFirst({
+              where: { className: classEnum, isActive: true }
+            })
+            hostelFee = hostelFeeStructure?.totalAnnualFee || 0
+          }
+          
+          // Calculate fees
+          const originalSchoolFee = classFeeStructure?.totalAnnualFee || 0
+          const originalTransportFee = transportFee
+          const originalHostelFee = hostelFee
+          const originalTotalFee = originalSchoolFee + originalTransportFee + originalHostelFee
+          
+          const discountedSchoolFee = calculateDiscountedFees(originalSchoolFee, schoolFeeDiscount)
+          const discountedTransportFee = calculateDiscountedFees(originalTransportFee, transportFeeDiscount)
+          const discountedHostelFee = calculateDiscountedFees(originalHostelFee, hostelFeeDiscount)
+          const discountedTotalFee = discountedSchoolFee + discountedTransportFee + discountedHostelFee
+          
+          // Calculate term distribution
+          const termDistribution = calculateTermDistribution(
+            discountedSchoolFee,
+            discountedTransportFee,
+            discountedHostelFee,
+            3
+          )
+          
+          // Calculate term amounts
+          let term1Due = 0, term2Due = 0, term3Due = 0
+          for (let i = 1; i <= 3; i++) {
+            if (termDistribution[i]) {
+              if (i === 1) term1Due = termDistribution[i].total
+              if (i === 2) term2Due = termDistribution[i].total
+              if (i === 3) term3Due = termDistribution[i].total
+            }
+          }
+          
+          // Calculate due dates
+          const now = new Date()
+          const termDueDates = {
+            term1DueDate: new Date(now.setMonth(now.getMonth() + 4)),
+            term2DueDate: new Date(now.setMonth(now.getMonth() + 8)),
+            term3DueDate: new Date(now.setMonth(now.getMonth() + 12))
+          }
+          
+          // ========== CREATE STUDENT ==========
+          const student = await prisma.student.create({
+            data: {
+              firstName,
+              lastName,
+              dob,
+              gender: row.gender?.toUpperCase() || 'NOT_SPECIFIED',
+              class: classEnum,
+              section,
+              admissionNo,
+              rollNo: row.rollNo ? row.rollNo.toString().trim() : null,
+              address: row.address ? row.address.toString().trim() : null,
+              village: row.village ? row.village.toString().trim() : null,
+              parentName: row.parentName.toString().trim(),
+              parentPhone: row.parentPhone,
+              parentPhone2: row.parentPhone2 ? row.parentPhone2 : null,
+              parentEmail: row.parentEmail ? row.parentEmail.toString().trim().toLowerCase() : null,
+              studentType,
+              isUsingSchoolTransport,
+              schoolFeeDiscount,
+              transportFeeDiscount,
+              hostelFeeDiscount,
+              isActive: true,
+              
+              feeDetails: {
+                create: {
+                  originalSchoolFee,
+                  originalTransportFee,
+                  originalHostelFee,
+                  originalTotalFee,
+                  discountedSchoolFee,
+                  discountedTransportFee,
+                  discountedHostelFee,
+                  discountedTotalFee,
+                  schoolFeePaid: 0,
+                  transportFeePaid: 0,
+                  hostelFeePaid: 0,
+                  totalPaid: 0,
+                  termDistribution,
+                  term1Due,
+                  term2Due,
+                  term3Due,
+                  term1DueDate: termDueDates.term1DueDate,
+                  term2DueDate: termDueDates.term2DueDate,
+                  term3DueDate: termDueDates.term3DueDate,
+                  term1Paid: 0,
+                  term2Paid: 0,
+                  term3Paid: 0,
+                  schoolFeeDiscountApplied: schoolFeeDiscount,
+                  transportFeeDiscountApplied: transportFeeDiscount,
+                  hostelFeeDiscountApplied: hostelFeeDiscount,
+                  previousYearDetails: previousYearDetailsArray,
+                  previousYearFee: totalPreviousYearFee,
+                  totalDue: discountedTotalFee + totalPreviousYearFee,
+                  isFullyPaid: false,
+                  updatedBy: 'bulk-import'
+                }
+              }
+            },
+            include: {
+              feeDetails: {
+                orderBy: { createdAt: 'desc' },
+                take: 1
+              }
+            }
+          })
+          
+          successCount++
+          results.push({
+            row: rowNumber,
+            admissionNo,
+            name: `${firstName} ${lastName}`,
+            status: 'success',
+            previousYearFee: totalPreviousYearFee,
+            currentYearFee: discountedTotalFee,
+            totalDue: discountedTotalFee + totalPreviousYearFee
+          })
+          
+        } catch (error) {
+          console.error(`Error row ${rowNumber}:`, error)
+          errors.push({
+            row: rowNumber,
+            admissionNo: row.admissionNo || 'N/A',
+            error: error.code === 'P2002' ? 'Duplicate admission number' : error.message
+          })
+        }
+      }
+      
+      cleanupTempFiles(req.file)
+      
+      const response = {
+        success: true,
+        message: `Imported ${successCount} students successfully`,
+        summary: {
+          total: data.length,
+          success: successCount,
+          failed: errors.length,
+          skipped: skippedCount
+        },
+        results
+      }
+      
+      if (errors.length > 0) {
+        response.errors = errors.slice(0, 100)
+      }
+      
+      res.status(errors.length > 0 ? 207 : 200).json(response)
+      
+    } catch (error) {
+      console.error('Bulk import error:', error)
+      cleanupTempFiles(req.file)
+      res.status(500).json({
+        success: false,
+        message: 'Bulk import failed',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      })
+    }
+  }
+]

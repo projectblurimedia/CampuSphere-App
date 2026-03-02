@@ -18,10 +18,12 @@ import {
   promoteStudents,
   getPromotionPreview,
   getStudentPromotionHistory,
+  bulkImportStudents,
 } from '../controllers/studentController.js'
 
 const router = express.Router()
 
+router.use('/bulk-import', bulkImportStudents)
 router.get('/birthdays', getTodayBirthdays)
 router.get('/attendance-stats', getAttendanceStatsByClassSection)
 router.get('/marks-stats', getMarksStatsByClassSection)

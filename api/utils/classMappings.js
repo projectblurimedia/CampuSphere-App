@@ -101,6 +101,13 @@ export const validateSection = (sectionInput) => {
   return validSections.includes(sectionStr) ? sectionStr : null
 }
 
+export const validatePhoneNumber = (phone) => {
+  if (!phone) return false
+  const cleanPhone = phone.toString().replace(/\D/g, '')
+  return /^[0-9]{10}$/.test(cleanPhone)
+}
+
+
 // Add exam type mapping helper
 export const mapExamType = (examType) => {
   if (!examType) return null

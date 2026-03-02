@@ -901,10 +901,6 @@ exports.recalculateStudentFees = async (req, res) => {
   }
 }
 
-// Keep all other existing functions exactly as they were...
-// getAllStudents, getStudentById, deleteStudent, promoteStudent, batchPromoteStudents,
-// searchStudents, getStudentStatistics, getClassesSummary, getClassDetails, getStudentsByClassAndSection
-
 // Export all functions
 exports.getAllStudents = async (req, res) => {
   try {

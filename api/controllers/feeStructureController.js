@@ -64,24 +64,6 @@ const validateFeeValue = (value, fieldName) => {
   return { valid: true, value: num }
 }
 
-const parseExcelDate = (dateValue) => {
-  if (!dateValue) return null
-  
-  if (typeof dateValue === 'number') {
-    const date = new Date((dateValue - 25569) * 86400 * 1000)
-    return date.toISOString().split('T')[0]
-  }
-  
-  if (typeof dateValue === 'string') {
-    const date = new Date(dateValue)
-    if (!isNaN(date.getTime())) {
-      return date.toISOString().split('T')[0]
-    }
-  }
-  
-  return null
-}
-
 export const createClassFeeStructure = asyncHandler(async (req, res) => {
   const {
     className,

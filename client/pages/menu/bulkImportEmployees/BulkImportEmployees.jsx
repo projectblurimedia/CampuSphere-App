@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Platform,
   Dimensions,
-  Alert,
   ActivityIndicator,
   Modal,
 } from 'react-native'
@@ -112,6 +111,7 @@ export default function BulkImportEmployees({ visible, onClose }) {
 
     setLoading(true)
     setUploadProgress(0)
+    setImportResult(null)
     
     try {
       // Get the actual file URI (different for iOS/Android)
@@ -150,15 +150,32 @@ export default function BulkImportEmployees({ visible, onClose }) {
       })
 
       if (response.data.success) {
-        setImportResult(response.data.summary)
-        showToast(`Successfully imported ${response.data.summary.success} employee members`, 'success')
+        const summary = response.data.summary || {
+          total: 0,
+          success: 0,
+          failed: 0,
+          skipped: 0
+        };
         
-        if (response.data.summary.failed > 0) {
-          Alert.alert(
-            'Import Completed with Errors',
-            `${response.data.summary.success} employee members imported successfully, ${response.data.summary.failed} failed. Check the error details below.`,
-            [{ text: 'OK' }]
-          )
+        // Get errors from response
+        const errors = response.data.summary?.errors || [];
+        
+        setImportResult({
+          total: summary.total,
+          success: summary.success,
+          failed: summary.failed,
+          skipped: summary.skipped || 0,
+          errors: errors,
+          results: response.data.results || []
+        })
+        
+        // Show appropriate toast based on results
+        if (summary.failed === 0 && summary.success > 0) {
+          showToast(`✅ Successfully imported ${summary.success} employees`, 'success')
+        } else if (summary.success === 0 && summary.failed > 0) {
+          showToast(`❌ Import failed: ${summary.failed} errors`, 'error')
+        } else if (summary.success > 0 && summary.failed > 0) {
+          showToast(`⚠️ Imported ${summary.success}, failed ${summary.failed}`, 'warning')
         }
       }
     } catch (error) {
@@ -166,20 +183,74 @@ export default function BulkImportEmployees({ visible, onClose }) {
       console.error('Error response:', error.response?.data);
       
       let errorMessage = 'Failed to import employees';
+      let errorDetails = [];
       
       if (error.response) {
-        errorMessage = error.response.data?.message || 
-                      error.response.data?.error || 
-                      `Server error: ${error.response.status}`;
-        
-        // Show more details if available
-        if (error.response.data?.errorDetails) {
-          console.error('Server error details:', error.response.data.errorDetails);
+        // Check if it's a validation error from multer
+        if (error.response.status === 400 && error.response.data?.message) {
+          errorMessage = error.response.data.message;
+          
+          // Create a structured error
+          errorDetails = [{
+            row: 0,
+            employeeId: 'N/A',
+            error: errorMessage,
+            type: 'server_error'
+          }];
+        } 
+        // Check if it's a bulk import error with details
+        else if (error.response.data?.summary?.errors) {
+          errorDetails = error.response.data.summary.errors;
+          errorMessage = error.response.data.message || 'Bulk import failed';
         }
+        // Generic error response
+        else if (error.response.data?.message) {
+          errorMessage = error.response.data.message;
+          errorDetails = [{
+            row: 0,
+            employeeId: 'N/A',
+            error: errorMessage,
+            type: 'server_error'
+          }];
+        }
+        
+        // Set import result with error information
+        setImportResult({
+          total: 0,
+          success: 0,
+          failed: errorDetails.length || 1,
+          skipped: 0,
+          errors: errorDetails,
+          results: []
+        });
       } else if (error.request) {
         errorMessage = 'No response from server. Check your internet connection.';
+        setImportResult({
+          total: 0,
+          success: 0,
+          failed: 1,
+          skipped: 0,
+          errors: [{
+            row: 0,
+            employeeId: 'N/A',
+            error: errorMessage,
+            type: 'connection_error'
+          }]
+        });
       } else {
         errorMessage = error.message || 'Failed to import employees';
+        setImportResult({
+          total: 0,
+          success: 0,
+          failed: 1,
+          skipped: 0,
+          errors: [{
+            row: 0,
+            employeeId: 'N/A',
+            error: errorMessage,
+            type: 'unknown_error'
+          }]
+        });
       }
       
       showToast(errorMessage, 'error');
@@ -201,6 +272,46 @@ export default function BulkImportEmployees({ visible, onClose }) {
       onClose()
     }
   }, [loading, resetImport, onClose])
+
+  // Helper function to get error icon based on error type
+  const getErrorIcon = (errorType) => {
+    switch(errorType) {
+      case 'missing_fields':
+        return 'alert-circle';
+      case 'duplicate':
+        return 'copy';
+      case 'invalid_email':
+        return 'mail';
+      case 'invalid_phone':
+        return 'phone';
+      case 'invalid_aadhar':
+        return 'credit-card';
+      case 'invalid_designation':
+        return 'briefcase';
+      default:
+        return 'x-circle';
+    }
+  }
+
+  // Helper function to get error color based on type
+  const getErrorColor = (errorType) => {
+    switch(errorType) {
+      case 'missing_fields':
+        return '#f59e0b'; // Orange
+      case 'duplicate':
+        return '#ef4444'; // Red
+      case 'invalid_email':
+        return '#f97316'; // Orange-red
+      case 'invalid_phone':
+        return '#f97316'; // Orange-red
+      case 'invalid_aadhar':
+        return '#f97316'; // Orange-red
+      case 'invalid_designation':
+        return '#f97316'; // Orange-red
+      default:
+        return '#dc2626'; // Dark red
+    }
+  }
 
   const styles = useMemo(() => StyleSheet.create({
     container: {
@@ -366,7 +477,9 @@ export default function BulkImportEmployees({ visible, onClose }) {
       padding: 16,
       backgroundColor: colors.inputBackground,
       borderWidth: 1,
-      borderColor: importResult?.failed > 0 ? '#f59e0b' : '#10b981',
+      borderColor: importResult?.failed > 0 ? 
+        (importResult?.success === 0 ? '#ef4444' : '#f59e0b') : 
+        '#10b981',
       marginTop: 16,
     },
     resultHeader: {
@@ -379,16 +492,20 @@ export default function BulkImportEmployees({ visible, onClose }) {
     },
     resultTitle: {
       fontSize: 16,
-      color: importResult?.failed > 0 ? '#f59e0b' : '#10b981',
+      color: importResult?.failed > 0 ? 
+        (importResult?.success === 0 ? '#ef4444' : '#f59e0b') : 
+        '#10b981',
       fontWeight: 'bold',
     },
     resultStats: {
       flexDirection: 'row',
       justifyContent: 'space-around',
       marginBottom: 12,
+      flexWrap: 'wrap',
     },
     statItem: {
       alignItems: 'center',
+      minWidth: 70,
     },
     statValue: {
       fontSize: 20,
@@ -411,15 +528,48 @@ export default function BulkImportEmployees({ visible, onClose }) {
     },
     errorItem: {
       backgroundColor: '#fef2f2',
-      borderRadius: 6,
-      padding: 10,
-      marginBottom: 6,
-      borderLeftWidth: 3,
+      borderRadius: 8,
+      padding: 12,
+      marginBottom: 8,
+      borderLeftWidth: 4,
       borderLeftColor: '#ef4444',
     },
+    errorRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+    },
+    errorIcon: {
+      marginRight: 10,
+      marginTop: 2,
+    },
+    errorContent: {
+      flex: 1,
+    },
+    errorEmployeeId: {
+      fontSize: 13,
+      fontWeight: 'bold',
+      color: '#374151',
+      marginBottom: 2,
+    },
     errorText: {
-      fontSize: 12,
-      color: '#dc2626',
+      fontSize: 13,
+      color: '#4B5563',
+      lineHeight: 18,
+    },
+    errorRowNumber: {
+      fontSize: 11,
+      color: '#9CA3AF',
+      marginTop: 4,
+    },
+    errorChip: {
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 12,
+      alignSelf: 'flex-start',
+      marginTop: 4,
+    },
+    errorChipText: {
+      fontSize: 10,
     },
     footerWrapper: {
       position: 'absolute',
@@ -430,6 +580,8 @@ export default function BulkImportEmployees({ visible, onClose }) {
       paddingBottom: Platform.OS === 'ios' ? 24 : 16,
       paddingTop: 8,
       backgroundColor: colors.background,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
     },
     buttonRow: {
       flexDirection: 'row',
@@ -474,7 +626,25 @@ export default function BulkImportEmployees({ visible, onClose }) {
       fontSize: 15,
       marginLeft: 8,
     },
+    disabledButton: {
+      opacity: 0.5,
+    },
+    successRow: {
+      backgroundColor: '#f0fdf4',
+      borderRadius: 6,
+      padding: 8,
+      marginBottom: 4,
+    },
+    successText: {
+      color: '#166534',
+      fontSize: 12,
+    },
   }), [colors, importResult])
+
+  // Check if import button should be enabled
+  const isImportEnabled = useMemo(() => {
+    return excelFile !== null && !loading;
+  }, [excelFile, loading]);
 
   return (
     <Modal visible={visible} animationType="fade" onRequestClose={handleClose} statusBarTranslucent>
@@ -493,8 +663,8 @@ export default function BulkImportEmployees({ visible, onClose }) {
                 <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
               </TouchableOpacity>
               <View style={{ flex: 1, alignItems: 'center' }}>
-                <ThemedText type='subtitle' style={styles.title}>Bulk Import employees</ThemedText>
-                <ThemedText style={styles.subtitle}>Upload Excel file with employees data</ThemedText>
+                <ThemedText type='subtitle' style={styles.title}>Bulk Import Employees</ThemedText>
+                <ThemedText style={styles.subtitle}>Upload Excel file with employee data</ThemedText>
               </View>
               <View style={{ width: 44 }} />
             </View>
@@ -515,7 +685,7 @@ export default function BulkImportEmployees({ visible, onClose }) {
                 <ThemedText type='subtitle' style={styles.stepTitle}>Download Excel Template</ThemedText>
               </View>
               <ThemedText style={styles.stepDescription}>
-                Download our Excel template to ensure correct formatting. Fill in employees data following the provided format.
+                Download our Excel template to ensure correct formatting. Fill in employee data following the provided format.
               </ThemedText>
               <TouchableOpacity 
                 style={[styles.filePickerButton, { marginTop: 8 }]}
@@ -537,7 +707,7 @@ export default function BulkImportEmployees({ visible, onClose }) {
                 <ThemedText type='subtitle' style={styles.stepTitle}>Prepare Your Excel File</ThemedText>
               </View>
               <ThemedText style={styles.stepDescription}>
-                Fill the Excel template with employees data. Required columns: firstName, lastName, gender, dob, email, phone, address, city, state, pincode, employeeId, designation, department, qualification, experience, aadharNumber
+                Fill the Excel template with employee data. Required columns: firstName, lastName, gender, dob, email, phone, address, village, designation, joiningDate, qualification, aadharNumber, panNumber
               </ThemedText>
               <ThemedText style={styles.excelFormatInfo}>
                 Format: Excel (.xlsx or .xls), max 10MB file size. First row should contain headers.
@@ -552,7 +722,7 @@ export default function BulkImportEmployees({ visible, onClose }) {
                 <ThemedText type='subtitle' style={styles.stepTitle}>Select Excel File</ThemedText>
               </View>
               <ThemedText style={styles.stepDescription}>
-                Choose the Excel file you've prepared with employees data. File must be less than 10MB.
+                Choose the Excel file you've prepared with employee data. File must be less than 10MB.
               </ThemedText>
               
               <TouchableOpacity 
@@ -606,13 +776,19 @@ export default function BulkImportEmployees({ visible, onClose }) {
               <View style={styles.resultCard}>
                 <View style={styles.resultHeader}>
                   <Feather 
-                    name={importResult.failed > 0 ? "alert-triangle" : "check-circle"} 
+                    name={importResult.failed > 0 ? 
+                      (importResult.success === 0 ? "x-circle" : "alert-triangle") : 
+                      "check-circle"} 
                     size={24} 
-                    color={importResult.failed > 0 ? '#f59e0b' : '#10b981'} 
+                    color={importResult.failed > 0 ? 
+                      (importResult.success === 0 ? '#ef4444' : '#f59e0b') : 
+                      '#10b981'} 
                     style={styles.resultIcon}
                   />
                   <ThemedText style={styles.resultTitle}>
-                    {importResult.failed > 0 ? 'Import Completed with Errors' : 'Import Successful'}
+                    {importResult.failed > 0 ? 
+                      (importResult.success === 0 ? 'Import Failed' : 'Import Completed with Errors') : 
+                      'Import Successful'}
                   </ThemedText>
                 </View>
                 
@@ -625,7 +801,7 @@ export default function BulkImportEmployees({ visible, onClose }) {
                     <ThemedText style={[styles.statValue, { color: '#10b981' }]}>
                       {importResult.success}
                     </ThemedText>
-                    <ThemedText style={styles.statLabel}>Successful</ThemedText>
+                    <ThemedText style={styles.statLabel}>Success</ThemedText>
                   </View>
                   <View style={styles.statItem}>
                     <ThemedText style={[styles.statValue, { color: '#ef4444' }]}>
@@ -633,21 +809,117 @@ export default function BulkImportEmployees({ visible, onClose }) {
                     </ThemedText>
                     <ThemedText style={styles.statLabel}>Failed</ThemedText>
                   </View>
+                  {importResult.skipped > 0 && (
+                    <View style={styles.statItem}>
+                      <ThemedText style={[styles.statValue, { color: '#9ca3af' }]}>
+                        {importResult.skipped}
+                      </ThemedText>
+                      <ThemedText style={styles.statLabel}>Skipped</ThemedText>
+                    </View>
+                  )}
                 </View>
                 
                 {importResult.errors && importResult.errors.length > 0 && (
                   <View style={styles.errorSection}>
-                    <ThemedText style={styles.errorTitle}>Errors ({importResult.errors.length}):</ThemedText>
-                    {importResult.errors.slice(0, 5).map((error, index) => (
+                    <ThemedText style={styles.errorTitle}>
+                      Error Details ({importResult.errors.length}):
+                    </ThemedText>
+                    {importResult.errors.slice(0, 10).map((error, index) => (
                       <View key={index} style={styles.errorItem}>
-                        <ThemedText style={styles.errorText}>
-                          Row {error.row}: {error.employeeId} - {error.error}
+                        <View style={styles.errorRow}>
+                          <Feather 
+                            name={getErrorIcon(error.type)} 
+                            size={16} 
+                            color={getErrorColor(error.type)} 
+                            style={styles.errorIcon}
+                          />
+                          <View style={styles.errorContent}>
+                            {error.email && error.email !== 'N/A' && (
+                              <ThemedText style={styles.errorEmployeeId}>
+                                Email: {error.email}
+                              </ThemedText>
+                            )}
+                            <ThemedText style={styles.errorText}>
+                              {error.error}
+                            </ThemedText>
+                            {error.row > 0 && (
+                              <ThemedText style={styles.errorRowNumber}>
+                                Row {error.row}
+                              </ThemedText>
+                            )}
+                          </View>
+                        </View>
+                        
+                        {/* Show error type chip for common errors */}
+                        {error.error.includes('Missing required fields') && (
+                          <View style={[styles.errorChip, { backgroundColor: '#fff3cd' }]}>
+                            <ThemedText style={[styles.errorChipText, { color: '#856404' }]}>
+                              Missing Fields
+                            </ThemedText>
+                          </View>
+                        )}
+                        {error.error.includes('Duplicate') && (
+                          <View style={[styles.errorChip, { backgroundColor: '#f8d7da' }]}>
+                            <ThemedText style={[styles.errorChipText, { color: '#721c24' }]}>
+                              Duplicate
+                            </ThemedText>
+                          </View>
+                        )}
+                        {error.error.includes('Invalid email') && (
+                          <View style={[styles.errorChip, { backgroundColor: '#fff3cd' }]}>
+                            <ThemedText style={[styles.errorChipText, { color: '#856404' }]}>
+                              Invalid Email
+                            </ThemedText>
+                          </View>
+                        )}
+                        {error.error.includes('Invalid phone') && (
+                          <View style={[styles.errorChip, { backgroundColor: '#fff3cd' }]}>
+                            <ThemedText style={[styles.errorChipText, { color: '#856404' }]}>
+                              Invalid Phone
+                            </ThemedText>
+                          </View>
+                        )}
+                        {error.error.includes('Invalid Aadhar') && (
+                          <View style={[styles.errorChip, { backgroundColor: '#fff3cd' }]}>
+                            <ThemedText style={[styles.errorChipText, { color: '#856404' }]}>
+                              Invalid Aadhar
+                            </ThemedText>
+                          </View>
+                        )}
+                        {error.error.includes('Invalid designation') && (
+                          <View style={[styles.errorChip, { backgroundColor: '#fff3cd' }]}>
+                            <ThemedText style={[styles.errorChipText, { color: '#856404' }]}>
+                              Invalid Designation
+                            </ThemedText>
+                          </View>
+                        )}
+                      </View>
+                    ))}
+                    
+                    {importResult.errors.length > 10 && (
+                      <ThemedText style={{ color: colors.textSecondary, fontSize: 12, marginTop: 8, textAlign: 'center' }}>
+                        + {importResult.errors.length - 10} more errors. Fix these and try again.
+                      </ThemedText>
+                    )}
+                  </View>
+                )}
+
+                {/* Show success results if available */}
+                {importResult.results && importResult.results.length > 0 && (
+                  <View style={[styles.errorSection, { marginTop: 16 }]}>
+                    <ThemedText style={[styles.errorTitle, { color: '#10b981' }]}>
+                      Successfully Imported ({importResult.results.length}):
+                    </ThemedText>
+                    {importResult.results.slice(0, 5).map((result, index) => (
+                      <View key={index} style={[styles.successRow]}>
+                        <ThemedText style={styles.successText}>
+                          {result.email || result.employeeId} - {result.name}
                         </ThemedText>
                       </View>
                     ))}
-                    {importResult.errors.length > 5 && (
+                    {importResult.results.length > 5 && (
                       <ThemedText style={{ color: colors.textSecondary, fontSize: 12, marginTop: 4 }}>
-                        + {importResult.errors.length - 5} more errors...
+                        + {importResult.results.length - 5} more employees imported
                       </ThemedText>
                     )}
                   </View>
@@ -660,7 +932,7 @@ export default function BulkImportEmployees({ visible, onClose }) {
         <View style={styles.footerWrapper}>
           <View style={styles.buttonRow}>
             <TouchableOpacity 
-              style={[styles.secondaryButton, loading && { opacity: 0.5 }]}
+              style={[styles.secondaryButton, loading && styles.disabledButton]}
               onPress={resetImport}
               disabled={loading}
             >
@@ -669,7 +941,7 @@ export default function BulkImportEmployees({ visible, onClose }) {
             
             <View style={styles.buttonCard}>
               <LinearGradient
-                colors={[colors.gradientStart, colors.gradientEnd]}
+                colors={!isImportEnabled ? [colors.border, colors.border] : [colors.gradientStart, colors.gradientEnd]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.importButtonGradient}
@@ -677,8 +949,11 @@ export default function BulkImportEmployees({ visible, onClose }) {
                 <TouchableOpacity
                   onPress={handleImport}
                   activeOpacity={0.9}
-                  style={[styles.importButtonPressable, loading && { opacity: 0.5 }]}
-                  disabled={loading || !excelFile}
+                  style={[
+                    styles.importButtonPressable, 
+                    (!isImportEnabled) && styles.disabledButton
+                  ]}
+                  disabled={!isImportEnabled}
                 >
                   {loading ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />

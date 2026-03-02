@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Platform,
   Dimensions,
-  Alert,
   ActivityIndicator,
   Modal,
 } from 'react-native'
@@ -18,8 +17,6 @@ import { useTheme } from '@/hooks/useTheme'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import axiosApi from '@/utils/axiosApi'
 import * as DocumentPicker from 'expo-document-picker'
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
 export default function BulkImportStudents({ visible, onClose }) {
   const { colors } = useTheme()
@@ -75,6 +72,37 @@ export default function BulkImportStudents({ visible, onClose }) {
     }
   }, [showToast])
 
+  const downloadTemplate = useCallback(async () => {
+    try {
+      setLoading(true)
+      const response = await axiosApi.get('/students/download-template', {
+        responseType: 'blob'
+      })
+      
+      // Create blob from response
+      const blob = new Blob([response.data], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      })
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'students_bulk_import_template.xlsx'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      
+      showToast('Template downloaded successfully', 'success')
+    } catch (error) {
+      console.error('Download error:', error)
+      showToast('Failed to download template. Please try again.', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }, [showToast])
+
   const handleImport = useCallback(async () => {
     if (!excelFile) {
       showToast('Please select an Excel file first', 'error')
@@ -83,6 +111,7 @@ export default function BulkImportStudents({ visible, onClose }) {
 
     setLoading(true)
     setUploadProgress(0)
+    setImportResult(null)
     
     try {
       // Get the actual file URI (different for iOS/Android)
@@ -106,7 +135,7 @@ export default function BulkImportStudents({ visible, onClose }) {
         type: excelFile.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       });
 
-      console.log('Uploading file:', fileName, fileUri); // For debugging
+      console.log('Uploading file:', fileName, fileUri); 
 
       const response = await axiosApi.post('/students/bulk-import', formData, {
         headers: {
@@ -120,16 +149,34 @@ export default function BulkImportStudents({ visible, onClose }) {
         },
       })
 
-      if (response.data.success) {
-        setImportResult(response.data.summary)
-        showToast(`Successfully imported ${response.data.summary.success} students`, 'success')
+      // Handle response based on status code
+      if (response.status === 200 || response.status === 207) {
+        const summary = response.data.summary || {
+          total: 0,
+          success: 0,
+          failed: 0,
+          skipped: 0
+        };
         
-        if (response.data.summary.failed > 0) {
-          Alert.alert(
-            'Import Completed with Errors',
-            `${response.data.summary.success} students imported successfully, ${response.data.summary.failed} failed. Check the error details below.`,
-            [{ text: 'OK' }]
-          )
+        // Get errors from response
+        const errors = response.data.errors || [];
+        
+        setImportResult({
+          total: summary.total,
+          success: summary.success,
+          failed: summary.failed,
+          skipped: summary.skipped || 0,
+          errors: errors,
+          results: response.data.results || []
+        })
+        
+        // Show appropriate toast based on results
+        if (summary.failed === 0 && summary.success > 0) {
+          showToast(`✅ Successfully imported ${summary.success} students`, 'success')
+        } else if (summary.success === 0 && summary.failed > 0) {
+          showToast(`❌ Import failed: ${summary.failed} errors`, 'error')
+        } else if (summary.success > 0 && summary.failed > 0) {
+          showToast(`⚠️ Imported ${summary.success}, failed ${summary.failed}`, 'warning')
         }
       }
     } catch (error) {
@@ -137,20 +184,74 @@ export default function BulkImportStudents({ visible, onClose }) {
       console.error('Error response:', error.response?.data);
       
       let errorMessage = 'Failed to import students';
+      let errorDetails = [];
       
       if (error.response) {
-        errorMessage = error.response.data?.message || 
-                      error.response.data?.error || 
-                      `Server error: ${error.response.status}`;
-        
-        // Show more details if available
-        if (error.response.data?.errorDetails) {
-          console.error('Server error details:', error.response.data.errorDetails);
+        // Check if it's a validation error from multer
+        if (error.response.status === 400 && error.response.data?.message) {
+          errorMessage = error.response.data.message;
+          
+          // Create a structured error
+          errorDetails = [{
+            row: 0,
+            admissionNo: 'N/A',
+            error: errorMessage,
+            type: 'server_error'
+          }];
+        } 
+        // Check if it's a bulk import error with details
+        else if (error.response.data?.errors) {
+          errorDetails = error.response.data.errors;
+          errorMessage = error.response.data.message || 'Bulk import failed';
         }
+        // Generic error response
+        else if (error.response.data?.message) {
+          errorMessage = error.response.data.message;
+          errorDetails = [{
+            row: 0,
+            admissionNo: 'N/A',
+            error: errorMessage,
+            type: 'server_error'
+          }];
+        }
+        
+        // Set import result with error information
+        setImportResult({
+          total: 0,
+          success: 0,
+          failed: errorDetails.length || 1,
+          skipped: 0,
+          errors: errorDetails,
+          results: []
+        });
       } else if (error.request) {
         errorMessage = 'No response from server. Check your internet connection.';
+        setImportResult({
+          total: 0,
+          success: 0,
+          failed: 1,
+          skipped: 0,
+          errors: [{
+            row: 0,
+            admissionNo: 'N/A',
+            error: errorMessage,
+            type: 'connection_error'
+          }]
+        });
       } else {
         errorMessage = error.message || 'Failed to import students';
+        setImportResult({
+          total: 0,
+          success: 0,
+          failed: 1,
+          skipped: 0,
+          errors: [{
+            row: 0,
+            admissionNo: 'N/A',
+            error: errorMessage,
+            type: 'unknown_error'
+          }]
+        });
       }
       
       showToast(errorMessage, 'error');
@@ -172,6 +273,42 @@ export default function BulkImportStudents({ visible, onClose }) {
       onClose()
     }
   }, [loading, resetImport, onClose])
+
+  // Helper function to get error icon based on error type
+  const getErrorIcon = (errorType) => {
+    switch(errorType) {
+      case 'missing_fields':
+        return 'alert-circle';
+      case 'duplicate':
+        return 'copy';
+      case 'invalid_class':
+        return 'grid';
+      case 'invalid_section':
+        return 'layers';
+      case 'invalid_phone':
+        return 'phone';
+      default:
+        return 'x-circle';
+    }
+  }
+
+  // Helper function to get error color based on type
+  const getErrorColor = (errorType) => {
+    switch(errorType) {
+      case 'missing_fields':
+        return '#f59e0b'; // Orange
+      case 'duplicate':
+        return '#ef4444'; // Red
+      case 'invalid_class':
+        return '#f97316'; // Orange-red
+      case 'invalid_section':
+        return '#f97316'; // Orange-red
+      case 'invalid_phone':
+        return '#f97316'; // Orange-red
+      default:
+        return '#dc2626'; // Dark red
+    }
+  }
 
   const styles = useMemo(() => StyleSheet.create({
     container: {
@@ -337,7 +474,9 @@ export default function BulkImportStudents({ visible, onClose }) {
       padding: 16,
       backgroundColor: colors.inputBackground,
       borderWidth: 1,
-      borderColor: importResult?.failed > 0 ? '#f59e0b' : '#10b981',
+      borderColor: importResult?.failed > 0 ? 
+        (importResult?.success === 0 ? '#ef4444' : '#f59e0b') : 
+        '#10b981',
       marginTop: 16,
     },
     resultHeader: {
@@ -350,16 +489,20 @@ export default function BulkImportStudents({ visible, onClose }) {
     },
     resultTitle: {
       fontSize: 16,
-      color: importResult?.failed > 0 ? '#f59e0b' : '#10b981',
+      color: importResult?.failed > 0 ? 
+        (importResult?.success === 0 ? '#ef4444' : '#f59e0b') : 
+        '#10b981',
       fontWeight: 'bold',
     },
     resultStats: {
       flexDirection: 'row',
       justifyContent: 'space-around',
       marginBottom: 12,
+      flexWrap: 'wrap',
     },
     statItem: {
       alignItems: 'center',
+      minWidth: 70,
     },
     statValue: {
       fontSize: 20,
@@ -382,14 +525,49 @@ export default function BulkImportStudents({ visible, onClose }) {
     },
     errorItem: {
       backgroundColor: '#fef2f2',
-      borderRadius: 6,
-      padding: 10,
-      marginBottom: 6,
-      borderLeftWidth: 3,
+      borderRadius: 8,
+      padding: 12,
+      marginBottom: 8,
+      borderLeftWidth: 4,
       borderLeftColor: '#ef4444',
     },
+    errorRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+    },
+    errorIcon: {
+      marginRight: 10,
+      marginTop: 2,
+    },
+    errorContent: {
+      flex: 1,
+    },
+    errorAdmissionNo: {
+      fontSize: 13,
+      fontWeight: 'bold',
+      color: '#374151',
+      marginBottom: 2,
+    },
     errorText: {
-      fontSize: 12,
+      fontSize: 13,
+      color: '#4B5563',
+      lineHeight: 18,
+    },
+    errorRowNumber: {
+      fontSize: 11,
+      color: '#9CA3AF',
+      marginTop: 4,
+    },
+    errorChip: {
+      backgroundColor: '#fee2e2',
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 12,
+      alignSelf: 'flex-start',
+      marginTop: 4,
+    },
+    errorChipText: {
+      fontSize: 10,
       color: '#dc2626',
     },
     footerWrapper: {
@@ -401,6 +579,8 @@ export default function BulkImportStudents({ visible, onClose }) {
       paddingBottom: Platform.OS === 'ios' ? 24 : 16,
       paddingTop: 8,
       backgroundColor: colors.background,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
     },
     buttonRow: {
       flexDirection: 'row',
@@ -445,7 +625,25 @@ export default function BulkImportStudents({ visible, onClose }) {
       fontSize: 15,
       marginLeft: 8,
     },
+    disabledButton: {
+      opacity: 0.8,
+    },
+    successRow: {
+      backgroundColor: '#f0fdf4',
+      borderRadius: 6,
+      padding: 8,
+      marginBottom: 4,
+    },
+    successText: {
+      color: '#166534',
+      fontSize: 12,
+    },
   }), [colors, importResult])
+
+  // Check if import button should be enabled
+  const isImportEnabled = useMemo(() => {
+    return excelFile !== null && !loading;
+  }, [excelFile, loading]);
 
   return (
     <Modal visible={visible} animationType="fade" onRequestClose={handleClose} statusBarTranslucent>
@@ -490,19 +688,13 @@ export default function BulkImportStudents({ visible, onClose }) {
               </ThemedText>
               <TouchableOpacity 
                 style={[styles.filePickerButton, { marginTop: 8 }]}
-                onPress={() => {
-                  // Create and download Excel template
-                  const templateUrl = 'https://docs.google.com/spreadsheets/d/1abc123example/export?format=xlsx'
-                  // Or implement a server endpoint to generate template
-                  Alert.alert(
-                    'Download Template',
-                    'Template download feature will be implemented. For now, please use Excel with the following columns:',
-                    [{ text: 'OK' }]
-                  )
-                }}
+                onPress={downloadTemplate}
+                disabled={loading}
               >
                 <Feather name="download" size={20} color={colors.primary} style={styles.filePickerIcon} />
-                <ThemedText style={styles.filePickerText}>Download Template</ThemedText>
+                <ThemedText style={styles.filePickerText}>
+                  {loading ? 'Downloading...' : 'Download Template'}
+                </ThemedText>
               </TouchableOpacity>
             </View>
 
@@ -583,13 +775,19 @@ export default function BulkImportStudents({ visible, onClose }) {
               <View style={styles.resultCard}>
                 <View style={styles.resultHeader}>
                   <Feather 
-                    name={importResult.failed > 0 ? "alert-triangle" : "check-circle"} 
+                    name={importResult.failed > 0 ? 
+                      (importResult.success === 0 ? "x-circle" : "alert-triangle") : 
+                      "check-circle"} 
                     size={24} 
-                    color={importResult.failed > 0 ? '#f59e0b' : '#10b981'} 
+                    color={importResult.failed > 0 ? 
+                      (importResult.success === 0 ? '#ef4444' : '#f59e0b') : 
+                      '#10b981'} 
                     style={styles.resultIcon}
                   />
                   <ThemedText style={styles.resultTitle}>
-                    {importResult.failed > 0 ? 'Import Completed with Errors' : 'Import Successful'}
+                    {importResult.failed > 0 ? 
+                      (importResult.success === 0 ? 'Import Failed' : 'Import Completed with Errors') : 
+                      'Import Successful'}
                   </ThemedText>
                 </View>
                 
@@ -602,7 +800,7 @@ export default function BulkImportStudents({ visible, onClose }) {
                     <ThemedText style={[styles.statValue, { color: '#10b981' }]}>
                       {importResult.success}
                     </ThemedText>
-                    <ThemedText style={styles.statLabel}>Successful</ThemedText>
+                    <ThemedText style={styles.statLabel}>Success</ThemedText>
                   </View>
                   <View style={styles.statItem}>
                     <ThemedText style={[styles.statValue, { color: '#ef4444' }]}>
@@ -610,21 +808,111 @@ export default function BulkImportStudents({ visible, onClose }) {
                     </ThemedText>
                     <ThemedText style={styles.statLabel}>Failed</ThemedText>
                   </View>
+                  {importResult.skipped > 0 && (
+                    <View style={styles.statItem}>
+                      <ThemedText style={[styles.statValue, { color: '#9ca3af' }]}>
+                        {importResult.skipped}
+                      </ThemedText>
+                      <ThemedText style={styles.statLabel}>Skipped</ThemedText>
+                    </View>
+                  )}
                 </View>
                 
                 {importResult.errors && importResult.errors.length > 0 && (
                   <View style={styles.errorSection}>
-                    <ThemedText style={styles.errorTitle}>Errors ({importResult.errors.length}):</ThemedText>
-                    {importResult.errors.slice(0, 5).map((error, index) => (
+                    <ThemedText style={styles.errorTitle}>
+                      Error Details ({importResult.errors.length}):
+                    </ThemedText>
+                    {importResult.errors.slice(0, 10).map((error, index) => (
                       <View key={index} style={styles.errorItem}>
-                        <ThemedText style={styles.errorText}>
-                          Row {error.row}: {error.admissionNo} - {error.error}
+                        <View style={styles.errorRow}>
+                          <Feather 
+                            name={getErrorIcon(error.type)} 
+                            size={16} 
+                            color={getErrorColor(error.type)} 
+                            style={styles.errorIcon}
+                          />
+                          <View style={styles.errorContent}>
+                            {error.admissionNo && error.admissionNo !== 'N/A' && (
+                              <ThemedText style={styles.errorAdmissionNo}>
+                                Admission No: {error.admissionNo}
+                              </ThemedText>
+                            )}
+                            <ThemedText style={styles.errorText}>
+                              {error.error}
+                            </ThemedText>
+                            {error.row > 0 && (
+                              <ThemedText style={styles.errorRowNumber}>
+                                Row {error.row}
+                              </ThemedText>
+                            )}
+                          </View>
+                        </View>
+                        
+                        {/* Show error type chip for common errors */}
+                        {error.error.includes('Missing required fields') && (
+                          <View style={[styles.errorChip, { backgroundColor: '#fff3cd' }]}>
+                            <ThemedText style={[styles.errorChipText, { color: '#856404' }]}>
+                              Missing Fields
+                            </ThemedText>
+                          </View>
+                        )}
+                        {error.error.includes('Duplicate admission number') && (
+                          <View style={[styles.errorChip, { backgroundColor: '#f8d7da' }]}>
+                            <ThemedText style={[styles.errorChipText, { color: '#721c24' }]}>
+                              Duplicate
+                            </ThemedText>
+                          </View>
+                        )}
+                        {error.error.includes('Invalid class') && (
+                          <View style={[styles.errorChip, { backgroundColor: '#fff3cd' }]}>
+                            <ThemedText style={[styles.errorChipText, { color: '#856404' }]}>
+                              Invalid Class
+                            </ThemedText>
+                          </View>
+                        )}
+                        {error.error.includes('Invalid section') && (
+                          <View style={[styles.errorChip, { backgroundColor: '#fff3cd' }]}>
+                            <ThemedText style={[styles.errorChipText, { color: '#856404' }]}>
+                              Invalid Section
+                            </ThemedText>
+                          </View>
+                        )}
+                        {error.error.includes('Invalid parent phone') && (
+                          <View style={[styles.errorChip, { backgroundColor: '#fff3cd' }]}>
+                            <ThemedText style={[styles.errorChipText, { color: '#856404' }]}>
+                              Invalid Phone
+                            </ThemedText>
+                          </View>
+                        )}
+                      </View>
+                    ))}
+                    
+                    {importResult.errors.length > 10 && (
+                      <ThemedText style={{ color: colors.textSecondary, fontSize: 12, marginTop: 8, textAlign: 'center' }}>
+                        + {importResult.errors.length - 10} more errors. Fix these and try again.
+                      </ThemedText>
+                    )}
+                  </View>
+                )}
+
+                {/* Show success results if available */}
+                {importResult.results && importResult.results.length > 0 && (
+                  <View style={[styles.errorSection, { marginTop: 16 }]}>
+                    <ThemedText style={[styles.errorTitle, { color: '#10b981' }]}>
+                      Successfully Imported ({importResult.results.length}):
+                    </ThemedText>
+                    {importResult.results.slice(0, 5).map((result, index) => (
+                      <View key={index} style={[styles.successRow]}>
+                        <ThemedText style={styles.successText}>
+                          {result.admissionNo} - {result.name} 
+                          {result.previousYearFee > 0 && ` (Previous year fee: ₹${result.previousYearFee})`}
                         </ThemedText>
                       </View>
                     ))}
-                    {importResult.errors.length > 5 && (
+                    {importResult.results.length > 5 && (
                       <ThemedText style={{ color: colors.textSecondary, fontSize: 12, marginTop: 4 }}>
-                        + {importResult.errors.length - 5} more errors...
+                        + {importResult.results.length - 5} more students imported
                       </ThemedText>
                     )}
                   </View>
@@ -637,7 +925,7 @@ export default function BulkImportStudents({ visible, onClose }) {
         <View style={styles.footerWrapper}>
           <View style={styles.buttonRow}>
             <TouchableOpacity 
-              style={[styles.secondaryButton, loading && { opacity: 0.5 }]}
+              style={[styles.secondaryButton, loading && styles.disabledButton]}
               onPress={resetImport}
               disabled={loading}
             >
@@ -646,7 +934,7 @@ export default function BulkImportStudents({ visible, onClose }) {
             
             <View style={styles.buttonCard}>
               <LinearGradient
-                colors={[colors.gradientStart, colors.gradientEnd]}
+                colors={!isImportEnabled ? [colors.border, colors.border] : [colors.gradientStart, colors.gradientEnd]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.importButtonGradient}
@@ -654,8 +942,11 @@ export default function BulkImportStudents({ visible, onClose }) {
                 <TouchableOpacity
                   onPress={handleImport}
                   activeOpacity={0.9}
-                  style={[styles.importButtonPressable, loading && { opacity: 0.5 }]}
-                  disabled={loading || !excelFile}
+                  style={[
+                    styles.importButtonPressable, 
+                    (!isImportEnabled) && styles.disabledButton
+                  ]}
+                  disabled={!isImportEnabled}
                 >
                   {loading ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />

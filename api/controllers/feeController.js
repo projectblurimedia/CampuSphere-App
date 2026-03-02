@@ -6,6 +6,7 @@ import {
   mapEnumToDisplayName,
   parseDiscount,
 } from '../utils/classMappings.js'
+import { createIncome } from '../utils/createIncome.js'
 
 // ========== HELPER FUNCTIONS ==========
 
@@ -2377,7 +2378,48 @@ export const getClassWiseFeePending = async (req, res) => {
 }
 
 /**
- * @desc    Process a payment for a student
+ * Process payment and create income in a single transaction
+ */
+const processPaymentTransaction = async (
+  tx, 
+  { 
+    student, 
+    studentDetailsSnapshot, 
+    paymentData,
+    feeRecord,
+    feeUpdateData,
+    totalAmount,
+    paymentMode,
+    receivedBy
+  }
+) => {
+  // 1. Create payment history
+  const payment = await tx.paymentHistory.create({
+    data: paymentData
+  })
+
+  // 2. CREATE INCOME - ONCE PER PAYMENT
+  const income = await createIncome({
+    tx,
+    studentName: `${student.firstName} ${student.lastName || ''}`.trim(),
+    amount: totalAmount,
+    paymentMode,
+    receivedBy,
+    receiptNo: payment.receiptNo
+  })
+  console.log('✅ Income record created with ID:', income.id)
+
+  // 3. Update fee record
+  const updatedFeeRecord = await tx.feeDetails.update({
+    where: { id: feeRecord.id },
+    data: feeUpdateData
+  })
+
+  return { payment, updatedFeeRecord, income }
+}
+
+/**
+ * @desc    Process a payment for a student with combined totals
  * @route   POST /api/fee/students/:studentId/process-payment
  */
 export const processPayment = async (req, res) => {
@@ -2396,8 +2438,8 @@ export const processPayment = async (req, res) => {
       termNumber: providedTermNumber,
       receiptNo: customReceiptNo,
       receivedBy,
-      paymentType,
-      previousYearIndex,
+      paymentType, // 'term', 'currentYear', 'previousYear', 'allPreviousYears', 'total'
+      previousYearIndex, // For single previous year payment
     } = req.body
 
     if (!receivedBy) {
@@ -2415,6 +2457,7 @@ export const processPayment = async (req, res) => {
       })
     }
 
+    // Get student with current fee details
     const student = await prisma.student.findUnique({
       where: { id: studentId },
       include: {
@@ -2442,598 +2485,174 @@ export const processPayment = async (req, res) => {
       })
     }
 
+    // Parse previous year details
     let previousYearDetails = getFormattedPreviousYearDetails(feeRecord.previousYearDetails)
     let previousYearFee = calculateTotalPreviousYearPending(previousYearDetails)
 
+    // Calculate previous year totals by component
+    const previousYearTotals = {
+      school: previousYearDetails.reduce((sum, year) => sum + (year.remainingBreakdown?.school || 0), 0),
+      transport: previousYearDetails.reduce((sum, year) => sum + (year.remainingBreakdown?.transport || 0), 0),
+      hostel: previousYearDetails.reduce((sum, year) => sum + (year.remainingBreakdown?.hostel || 0), 0),
+      total: previousYearFee
+    }
+
+    // Current year calculations
     const discountedSchoolFee = feeRecord.discountedSchoolFee || 0
     const discountedTransportFee = feeRecord.discountedTransportFee || 0
     const discountedHostelFee = feeRecord.discountedHostelFee || 0
-    const discountedTotalFee = discountedSchoolFee + discountedTransportFee + discountedHostelFee
     
     const currentYearPaidSchool = feeRecord.schoolFeePaid || 0
     const currentYearPaidTransport = feeRecord.transportFeePaid || 0
     const currentYearPaidHostel = feeRecord.hostelFeePaid || 0
     
-    const currentYearDueSchool = discountedSchoolFee - currentYearPaidSchool
-    const currentYearDueTransport = discountedTransportFee - currentYearPaidTransport
-    const currentYearDueHostel = discountedHostelFee - currentYearPaidHostel
-    const currentYearDue = currentYearDueSchool + currentYearDueTransport + currentYearDueHostel
-    
-    const totalDue = previousYearFee + currentYearDue
+    const currentYearDueSchool = Math.max(0, discountedSchoolFee - currentYearPaidSchool)
+    const currentYearDueTransport = Math.max(0, discountedTransportFee - currentYearPaidTransport)
+    const currentYearDueHostel = Math.max(0, discountedHostelFee - currentYearPaidHostel)
+    const currentYearTotalDue = currentYearDueSchool + currentYearDueTransport + currentYearDueHostel
 
-    const previousYearFeeBeforePayment = previousYearFee
-    const currentYearDueBeforePayment = currentYearDue
-
-    // ========== PREVIOUS YEAR PAYMENT (Single Year) - FIXED ==========
-    if (paymentType === 'previousYear' && previousYearIndex !== undefined) {
-      if (previousYearIndex < 0 || previousYearIndex >= previousYearDetails.length) {
+    // ========== TERM PAYMENT ==========
+    if (paymentType === 'term' && providedTermNumber) {
+      if (providedTermNumber < 1 || providedTermNumber > 3) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid previous year index'
+          message: `Invalid term number: ${providedTermNumber}`
         })
       }
 
-      // Deep clone the year record
-      const yearRecord = JSON.parse(JSON.stringify(previousYearDetails[previousYearIndex]))
+      let termDistribution = JSON.parse(JSON.stringify(feeRecord.termDistribution || {}))
       
-      // Validate that the payment amounts don't exceed what's due for each component
-      if (schoolFeePaid > (yearRecord.remainingBreakdown?.school || 0)) {
+      if (!termDistribution[providedTermNumber]) {
         return res.status(400).json({
           success: false,
-          message: `School fee payment (${schoolFeePaid}) exceeds due amount (${yearRecord.remainingBreakdown?.school || 0}) for ${yearRecord.academicYear}`
-        })
-      }
-      if (transportFeePaid > (yearRecord.remainingBreakdown?.transport || 0)) {
-        return res.status(400).json({
-          success: false,
-          message: `Transport fee payment (${transportFeePaid}) exceeds due amount (${yearRecord.remainingBreakdown?.transport || 0}) for ${yearRecord.academicYear}`
-        })
-      }
-      if (hostelFeePaid > (yearRecord.remainingBreakdown?.hostel || 0)) {
-        return res.status(400).json({
-          success: false,
-          message: `Hostel fee payment (${hostelFeePaid}) exceeds due amount (${yearRecord.remainingBreakdown?.hostel || 0}) for ${yearRecord.academicYear}`
+          message: `Term ${providedTermNumber} not found in distribution`
         })
       }
 
-      // Keep track of original payment amounts - these are EXACTLY what the user paid
-      const originalSchoolPaid = schoolFeePaid
-      const originalTransportPaid = transportFeePaid
-      const originalHostelPaid = hostelFeePaid
+      const termData = termDistribution[providedTermNumber]
+      const schoolFeeDue = Math.max(0, termData.schoolFee - (termData.schoolFeePaid || 0))
+      const transportFeeDue = Math.max(0, termData.transportFee - (termData.transportFeePaid || 0))
+      const hostelFeeDue = Math.max(0, termData.hostelFee - (termData.hostelFeePaid || 0))
 
-      // Track remaining amounts to allocate
-      let remainingSchool = schoolFeePaid
-      let remainingTransport = transportFeePaid
-      let remainingHostel = hostelFeePaid
+      // Validate payment amounts
+      if (schoolFeePaid > schoolFeeDue) {
+        return res.status(400).json({
+          success: false,
+          message: `School fee payment (${schoolFeePaid}) exceeds term ${providedTermNumber} due amount (${schoolFeeDue})`
+        })
+      }
+      if (transportFeePaid > transportFeeDue) {
+        return res.status(400).json({
+          success: false,
+          message: `Transport fee payment (${transportFeePaid}) exceeds term ${providedTermNumber} due amount (${transportFeeDue})`
+        })
+      }
+      if (hostelFeePaid > hostelFeeDue) {
+        return res.status(400).json({
+          success: false,
+          message: `Hostel fee payment (${hostelFeePaid}) exceeds term ${providedTermNumber} due amount (${hostelFeeDue})`
+        })
+      }
 
-      console.log('Starting previous year payment distribution:', {
-        academicYear: yearRecord.academicYear,
-        schoolPayment: originalSchoolPaid,
-        transportPayment: originalTransportPaid,
-        hostelPayment: originalHostelPaid,
-        totalPayment: totalAmount
-      })
+      // Update term distribution with payment
+      termDistribution = updateTermPaidAmounts(
+        termDistribution,
+        providedTermNumber,
+        schoolFeePaid,
+        transportFeePaid,
+        hostelFeePaid
+      )
 
-      // Process payments by component type (school, transport, hostel)
-      // Each component's payment should ONLY be applied to that component's outstanding amounts
-      
-      if (yearRecord.termPayments) {
-        // Process terms in order (term1, term2, term3) - oldest first
-        const termOrder = ['term1', 'term2', 'term3']
-        
-        for (const termKey of termOrder) {
-          const termData = yearRecord.termPayments[termKey]
-          if (!termData) continue
-          
-          // Process SCHOOL fee for this term - ONLY if we have school payment remaining
-          if (remainingSchool > 0 && termData.components?.schoolFee?.remaining > 0) {
-            const schoolPayment = Math.min(remainingSchool, termData.components.schoolFee.remaining)
-            termData.components.schoolFee.paid = (termData.components.schoolFee.paid || 0) + schoolPayment
-            termData.components.schoolFee.remaining = termData.components.schoolFee.due - termData.components.schoolFee.paid
-            remainingSchool -= schoolPayment
-            console.log(`Applied ${schoolPayment} school fee to ${termKey}`)
-          }
-          
-          // Process TRANSPORT fee for this term - ONLY if we have transport payment remaining
-          if (remainingTransport > 0 && termData.components?.transportFee?.remaining > 0) {
-            const transportPayment = Math.min(remainingTransport, termData.components.transportFee.remaining)
-            termData.components.transportFee.paid = (termData.components.transportFee.paid || 0) + transportPayment
-            termData.components.transportFee.remaining = termData.components.transportFee.due - termData.components.transportFee.paid
-            remainingTransport -= transportPayment
-            console.log(`Applied ${transportPayment} transport fee to ${termKey}`)
-          }
-          
-          // Process HOSTEL fee for this term - ONLY if we have hostel payment remaining
-          if (remainingHostel > 0 && termData.components?.hostelFee?.remaining > 0) {
-            const hostelPayment = Math.min(remainingHostel, termData.components.hostelFee.remaining)
-            termData.components.hostelFee.paid = (termData.components.hostelFee.paid || 0) + hostelPayment
-            termData.components.hostelFee.remaining = termData.components.hostelFee.due - termData.components.hostelFee.paid
-            remainingHostel -= hostelPayment
-            console.log(`Applied ${hostelPayment} hostel fee to ${termKey}`)
-          }
-          
-          // Recalculate term totals based on components
-          const termComponents = termData.components
-          termData.paid = (termComponents.schoolFee?.paid || 0) + 
-                          (termComponents.transportFee?.paid || 0) + 
-                          (termComponents.hostelFee?.paid || 0)
-          termData.remaining = termData.due - termData.paid
-        }
-        
-        // If there's any remaining payment that couldn't be allocated (shouldn't happen if validation passed)
-        if (remainingSchool > 0 || remainingTransport > 0 || remainingHostel > 0) {
-          console.warn('Unallocated payment remaining:', { remainingSchool, remainingTransport, remainingHostel })
-        }
-      } else if (yearRecord.termDistribution) {
-        // Fallback to termDistribution if termPayments doesn't exist
-        const termNumbers = [1, 2, 3]
-        
-        for (const termNum of termNumbers) {
-          const termData = yearRecord.termDistribution[termNum]
-          if (!termData) continue
-          
-          // Process SCHOOL fee - ONLY if we have school payment remaining
-          if (remainingSchool > 0) {
-            const termSchoolRemaining = Math.max(0, (termData.schoolFee || 0) - (termData.schoolFeePaid || 0))
-            if (termSchoolRemaining > 0) {
-              const schoolPayment = Math.min(remainingSchool, termSchoolRemaining)
-              termData.schoolFeePaid = (termData.schoolFeePaid || 0) + schoolPayment
-              remainingSchool -= schoolPayment
-            }
-          }
-          
-          // Process TRANSPORT fee - ONLY if we have transport payment remaining
-          if (remainingTransport > 0) {
-            const termTransportRemaining = Math.max(0, (termData.transportFee || 0) - (termData.transportFeePaid || 0))
-            if (termTransportRemaining > 0) {
-              const transportPayment = Math.min(remainingTransport, termTransportRemaining)
-              termData.transportFeePaid = (termData.transportFeePaid || 0) + transportPayment
-              remainingTransport -= transportPayment
-            }
-          }
-          
-          // Process HOSTEL fee - ONLY if we have hostel payment remaining
-          if (remainingHostel > 0) {
-            const termHostelRemaining = Math.max(0, (termData.hostelFee || 0) - (termData.hostelFeePaid || 0))
-            if (termHostelRemaining > 0) {
-              const hostelPayment = Math.min(remainingHostel, termHostelRemaining)
-              termData.hostelFeePaid = (termData.hostelFeePaid || 0) + hostelPayment
-              remainingHostel -= hostelPayment
-            }
-          }
-          
-          // Recalculate term totals
-          termData.totalPaid = (termData.schoolFeePaid || 0) + (termData.transportFeePaid || 0) + (termData.hostelFeePaid || 0)
-          
-          // Update status
-          if (termData.totalPaid >= termData.total) {
-            termData.status = 'Paid'
-          } else if (termData.totalPaid > 0) {
-            termData.status = 'Partial'
-          } else {
-            termData.status = 'Unpaid'
-          }
-        }
-        
-        // Rebuild termPayments from termDistribution
-        if (!yearRecord.termPayments) {
-          yearRecord.termPayments = {}
-          for (const termNum of termNumbers) {
-            const termData = yearRecord.termDistribution[termNum]
-            if (termData) {
-              const schoolDue = termData.schoolFee || 0
-              const transportDue = termData.transportFee || 0
-              const hostelDue = termData.hostelFee || 0
-              const totalDue = schoolDue + transportDue + hostelDue
-              
-              const schoolPaid = termData.schoolFeePaid || 0
-              const transportPaid = termData.transportFeePaid || 0
-              const hostelPaid = termData.hostelFeePaid || 0
-              const totalPaid = schoolPaid + transportPaid + hostelPaid
-              
-              yearRecord.termPayments[`term${termNum}`] = {
-                due: totalDue,
-                paid: totalPaid,
-                remaining: totalDue - totalPaid,
-                components: {
-                  schoolFee: {
-                    due: schoolDue,
-                    paid: schoolPaid,
-                    remaining: schoolDue - schoolPaid
-                  },
-                  transportFee: {
-                    due: transportDue,
-                    paid: transportPaid,
-                    remaining: transportDue - transportPaid
-                  },
-                  hostelFee: {
-                    due: hostelDue,
-                    paid: hostelPaid,
-                    remaining: hostelDue - hostelPaid
-                  }
-                }
-              }
-            }
-          }
+      const totals = recalculateOverallTotals(termDistribution)
+
+      // Calculate new due amounts AFTER this payment
+      const newSchoolDue = Math.max(0, discountedSchoolFee - totals.schoolFeePaid)
+      const newTransportDue = Math.max(0, discountedTransportFee - totals.transportFeePaid)
+      const newHostelDue = Math.max(0, discountedHostelFee - totals.hostelFeePaid)
+      const newTotalDue = newSchoolDue + newTransportDue + newHostelDue
+
+      // COMBINED TOTALS (Previous Years + Current Year)
+      const combinedSchoolRemaining = previousYearTotals.school + newSchoolDue
+      const combinedTransportRemaining = previousYearTotals.transport + newTransportDue
+      const combinedHostelRemaining = previousYearTotals.hostel + newHostelDue
+      const combinedTotalRemaining = combinedSchoolRemaining + combinedTransportRemaining + combinedHostelRemaining
+
+      // MINIMAL METADATA WITH COMBINED TOTALS
+      const paymentMetadata = {
+        paymentType: 'term',
+        termNumber: providedTermNumber,
+        paid: {
+          school: schoolFeePaid,
+          transport: transportFeePaid,
+          hostel: hostelFeePaid,
+          total: totalAmount
+        },
+        remaining: {
+          school: combinedSchoolRemaining,
+          transport: combinedTransportRemaining,
+          hostel: combinedHostelRemaining,
+          total: combinedTotalRemaining
         }
       }
 
-      // Update year totals - these are the exact amounts paid
-      yearRecord.totalPaid = (yearRecord.totalPaid || 0) + totalAmount
-      yearRecord.totalDue = Math.max(0, (yearRecord.totalDue || 0) - totalAmount)
-      yearRecord.isFullyPaid = yearRecord.totalDue === 0
-
-      // Recalculate remainingBreakdown - SUM BY COMPONENT TYPE
-      let yearSchoolRemaining = 0
-      let yearTransportRemaining = 0
-      let yearHostelRemaining = 0
-      
-      if (yearRecord.termPayments) {
-        Object.values(yearRecord.termPayments).forEach(term => {
-          if (term.components) {
-            yearSchoolRemaining += term.components.schoolFee?.remaining || 0
-            yearTransportRemaining += term.components.transportFee?.remaining || 0
-            yearHostelRemaining += term.components.hostelFee?.remaining || 0
-          }
-        })
-      }
-      
-      yearRecord.remainingBreakdown = {
-        school: yearSchoolRemaining,
-        transport: yearTransportRemaining,
-        hostel: yearHostelRemaining,
-        total: yearSchoolRemaining + yearTransportRemaining + yearHostelRemaining
+      // Prepare payment data
+      const paymentData = {
+        studentId,
+        studentDetails: studentDetailsSnapshot,
+        date: new Date(),
+        schoolFeePaid,
+        transportFeePaid,
+        hostelFeePaid,
+        totalAmount,
+        receiptNo: customReceiptNo || generateReceiptNo(),
+        paymentMode,
+        description: description || `Term ${providedTermNumber} payment`,
+        chequeNo,
+        bankName,
+        transactionId,
+        referenceNo,
+        termNumber: providedTermNumber,
+        receivedBy,
+        metadata: paymentMetadata
       }
 
-      // Update the previous year details array
-      previousYearDetails[previousYearIndex] = yearRecord
-      previousYearFee = calculateTotalPreviousYearPending(previousYearDetails)
+      // Fee update data
+      const feeUpdateData = {
+        schoolFeePaid: totals.schoolFeePaid,
+        transportFeePaid: totals.transportFeePaid,
+        hostelFeePaid: totals.hostelFeePaid,
+        totalPaid: totals.totalPaid,
+        termDistribution: termDistribution,
+        term1Paid: termDistribution[1]?.totalPaid || 0,
+        term2Paid: termDistribution[2]?.totalPaid || 0,
+        term3Paid: termDistribution[3]?.totalPaid || 0,
+        totalDue: previousYearFee + newTotalDue,
+        isFullyPaid: newTotalDue === 0 && previousYearFee === 0,
+        updatedBy: receivedBy
+      }
 
-      console.log('After Payment - Final State:', {
-        academicYear: yearRecord.academicYear,
-        schoolPaid: originalSchoolPaid,
-        transportPaid: originalTransportPaid,
-        hostelPaid: originalHostelPaid,
-        schoolRemaining: yearSchoolRemaining,
-        transportRemaining: yearTransportRemaining,
-        hostelRemaining: yearHostelRemaining,
-        totalRemaining: yearRecord.totalDue
-      })
-
+      // Process transaction
       const result = await prisma.$transaction(async (tx) => {
-        const payment = await tx.paymentHistory.create({
-          data: {
-            studentId,
-            studentDetails: studentDetailsSnapshot,
-            date: new Date(),
-            schoolFeePaid: originalSchoolPaid,
-            transportFeePaid: originalTransportPaid,
-            hostelFeePaid: originalHostelPaid,
-            totalAmount,
-            receiptNo: customReceiptNo || generateReceiptNo(),
-            paymentMode,
-            description: description || `Payment for ${yearRecord.academicYear}`,
-            chequeNo,
-            bankName,
-            transactionId,
-            referenceNo,
-            termNumber: null,
-            receivedBy,
-            metadata: {
-              paymentType: 'previousYear',
-              academicYear: yearRecord.academicYear,
-              previousYearIndex,
-              previousYearBreakdown: {
-                school: originalSchoolPaid,
-                transport: originalTransportPaid,
-                hostel: originalHostelPaid,
-                total: totalAmount
-              },
-              remainingAfterPayment: {
-                school: yearSchoolRemaining,
-                transport: yearTransportRemaining,
-                hostel: yearHostelRemaining,
-                total: yearRecord.totalDue
-              }
-            }
-          }
+        return await processPaymentTransaction(tx, {
+          student,
+          studentDetailsSnapshot,
+          paymentData,
+          feeRecord,
+          feeUpdateData,
+          totalAmount,
+          paymentMode,
+          receivedBy
         })
-
-        const updatedFeeRecord = await tx.feeDetails.update({
-          where: { id: feeRecord.id },
-          data: {
-            previousYearDetails: previousYearDetails,
-            previousYearFee: previousYearFee,
-            totalDue: previousYearFee + currentYearDue,
-            updatedBy: receivedBy
-          }
-        })
-
-        return { payment, updatedFeeRecord }
       })
 
       return res.status(201).json({
         success: true,
-        message: 'Previous year payment processed successfully',
+        message: `Term ${providedTermNumber} payment processed successfully`,
         data: {
           paymentId: result.payment.id,
           receiptNo: result.payment.receiptNo,
           date: result.payment.date,
-          totalAmount: result.payment.totalAmount,
-          previousYearBreakdown: {
-            school: originalSchoolPaid,
-            transport: originalTransportPaid,
-            hostel: originalHostelPaid,
-            total: totalAmount
-          },
-          paymentType: 'previousYear',
-          academicYear: yearRecord.academicYear,
-          receiptUrl: `/api/fee/receipt/${result.payment.id}`,
-          remainingAfterPayment: {
-            school: yearSchoolRemaining,
-            transport: yearTransportRemaining,
-            hostel: yearHostelRemaining,
-            total: yearRecord.totalDue
-          }
-        }
-      })
-    }
-
-    // ========== ALL PREVIOUS YEARS PAYMENT - FIXED ==========
-    if (paymentType === 'allPreviousYears') {
-      if (totalAmount > previousYearFee) {
-        return res.status(400).json({
-          success: false,
-          message: `Payment amount (${totalAmount}) exceeds total previous years due (${previousYearFee})`
-        })
-      }
-
-      // Track exactly what was paid for each component
-      let remainingSchoolToAllocate = schoolFeePaid
-      let remainingTransportToAllocate = transportFeePaid
-      let remainingHostelToAllocate = hostelFeePaid
-      
-      const originalSchoolPaid = schoolFeePaid
-      const originalTransportPaid = transportFeePaid
-      const originalHostelPaid = hostelFeePaid
-
-      const updatedPreviousYears = []
-      const distributionLog = []
-
-      // Distribute payment across previous years (oldest first) - but keep components separate
-      for (let i = 0; i < previousYearDetails.length; i++) {
-        if (remainingSchoolToAllocate === 0 && remainingTransportToAllocate === 0 && remainingHostelToAllocate === 0) {
-          updatedPreviousYears.push(previousYearDetails[i])
-          continue
-        }
-        
-        const yearRecord = JSON.parse(JSON.stringify(previousYearDetails[i]))
-        
-        // Skip fully paid years
-        if (yearRecord.totalDue <= 0) {
-          updatedPreviousYears.push(yearRecord)
-          continue
-        }
-
-        // Calculate how much of each component is due for this year
-        let yearSchoolDue = 0
-        let yearTransportDue = 0
-        let yearHostelDue = 0
-        
-        if (yearRecord.remainingBreakdown) {
-          yearSchoolDue = yearRecord.remainingBreakdown.school || 0
-          yearTransportDue = yearRecord.remainingBreakdown.transport || 0
-          yearHostelDue = yearRecord.remainingBreakdown.hostel || 0
-        } else if (yearRecord.termPayments) {
-          Object.values(yearRecord.termPayments).forEach(term => {
-            if (term.components) {
-              yearSchoolDue += term.components.schoolFee?.remaining || 0
-              yearTransportDue += term.components.transportFee?.remaining || 0
-              yearHostelDue += term.components.hostelFee?.remaining || 0
-            }
-          })
-        }
-
-        // Calculate how much to pay for each component for THIS YEAR ONLY
-        // School payments ONLY go to school dues, transport ONLY to transport, etc.
-        const yearSchoolPaid = Math.min(remainingSchoolToAllocate, yearSchoolDue)
-        const yearTransportPaid = Math.min(remainingTransportToAllocate, yearTransportDue)
-        const yearHostelPaid = Math.min(remainingHostelToAllocate, yearHostelDue)
-        const yearTotalPaid = yearSchoolPaid + yearTransportPaid + yearHostelPaid
-
-        // Update remaining amounts to allocate
-        remainingSchoolToAllocate -= yearSchoolPaid
-        remainingTransportToAllocate -= yearTransportPaid
-        remainingHostelToAllocate -= yearHostelPaid
-
-        // Apply the payments to this year's record if any payment was made
-        if (yearTotalPaid > 0) {
-          // Update termPayments for this year - component by component
-          if (yearRecord.termPayments) {
-            let remainingSchool = yearSchoolPaid
-            let remainingTransport = yearTransportPaid
-            let remainingHostel = yearHostelPaid
-            
-            const termOrder = ['term1', 'term2', 'term3']
-            
-            for (const termKey of termOrder) {
-              if (remainingSchool === 0 && remainingTransport === 0 && remainingHostel === 0) break
-              
-              const termData = yearRecord.termPayments[termKey]
-              if (!termData) continue
-              
-              // Apply school payment
-              if (remainingSchool > 0 && termData.components?.schoolFee?.remaining > 0) {
-                const schoolPayment = Math.min(remainingSchool, termData.components.schoolFee.remaining)
-                termData.components.schoolFee.paid = (termData.components.schoolFee.paid || 0) + schoolPayment
-                termData.components.schoolFee.remaining = termData.components.schoolFee.due - termData.components.schoolFee.paid
-                remainingSchool -= schoolPayment
-              }
-              
-              // Apply transport payment
-              if (remainingTransport > 0 && termData.components?.transportFee?.remaining > 0) {
-                const transportPayment = Math.min(remainingTransport, termData.components.transportFee.remaining)
-                termData.components.transportFee.paid = (termData.components.transportFee.paid || 0) + transportPayment
-                termData.components.transportFee.remaining = termData.components.transportFee.due - termData.components.transportFee.paid
-                remainingTransport -= transportPayment
-              }
-              
-              // Apply hostel payment
-              if (remainingHostel > 0 && termData.components?.hostelFee?.remaining > 0) {
-                const hostelPayment = Math.min(remainingHostel, termData.components.hostelFee.remaining)
-                termData.components.hostelFee.paid = (termData.components.hostelFee.paid || 0) + hostelPayment
-                termData.components.hostelFee.remaining = termData.components.hostelFee.due - termData.components.hostelFee.paid
-                remainingHostel -= hostelPayment
-              }
-              
-              // Recalculate term totals
-              const termComponents = termData.components
-              termData.paid = (termComponents.schoolFee?.paid || 0) + 
-                              (termComponents.transportFee?.paid || 0) + 
-                              (termComponents.hostelFee?.paid || 0)
-              termData.remaining = termData.due - termData.paid
-            }
-          }
-          
-          // Update termDistribution to match termPayments
-          if (yearRecord.termDistribution && yearRecord.termPayments) {
-            Object.keys(yearRecord.termDistribution).forEach(termNum => {
-              const termKey = `term${termNum}`
-              const termPaymentData = yearRecord.termPayments[termKey]
-              
-              if (termPaymentData && termPaymentData.components) {
-                const schoolFeePaid = termPaymentData.components.schoolFee?.paid || 0
-                const transportFeePaid = termPaymentData.components.transportFee?.paid || 0
-                const hostelFeePaid = termPaymentData.components.hostelFee?.paid || 0
-                const totalPaid = schoolFeePaid + transportFeePaid + hostelFeePaid
-                
-                let status = 'Unpaid'
-                if (totalPaid >= yearRecord.termDistribution[termNum].total) {
-                  status = 'Paid'
-                } else if (totalPaid > 0) {
-                  status = 'Partial'
-                }
-                
-                yearRecord.termDistribution[termNum] = {
-                  ...yearRecord.termDistribution[termNum],
-                  schoolFeePaid: schoolFeePaid,
-                  transportFeePaid: transportFeePaid,
-                  hostelFeePaid: hostelFeePaid,
-                  totalPaid: totalPaid,
-                  status: status
-                }
-              }
-            })
-          }
-
-          // Update year totals
-          yearRecord.totalPaid = (yearRecord.totalPaid || 0) + yearTotalPaid
-          yearRecord.totalDue = Math.max(0, (yearRecord.totalDue || 0) - yearTotalPaid)
-          yearRecord.isFullyPaid = yearRecord.totalDue === 0
-
-          // Recalculate remainingBreakdown
-          let yearSchoolRemaining = 0
-          let yearTransportRemaining = 0
-          let yearHostelRemaining = 0
-          
-          if (yearRecord.termPayments) {
-            Object.values(yearRecord.termPayments).forEach(term => {
-              if (term.components) {
-                yearSchoolRemaining += term.components.schoolFee?.remaining || 0
-                yearTransportRemaining += term.components.transportFee?.remaining || 0
-                yearHostelRemaining += term.components.hostelFee?.remaining || 0
-              }
-            })
-          }
-          
-          yearRecord.remainingBreakdown = {
-            school: yearSchoolRemaining,
-            transport: yearTransportRemaining,
-            hostel: yearHostelRemaining,
-            total: yearSchoolRemaining + yearTransportRemaining + yearHostelRemaining
-          }
-        }
-
-        updatedPreviousYears.push(yearRecord)
-        
-        if (yearTotalPaid > 0) {
-          distributionLog.push({
-            academicYear: yearRecord.academicYear,
-            amount: yearTotalPaid,
-            breakdown: {
-              school: yearSchoolPaid,
-              transport: yearTransportPaid,
-              hostel: yearHostelPaid
-            }
-          })
-        }
-      }
-
-      previousYearDetails = updatedPreviousYears
-      previousYearFee = calculateTotalPreviousYearPending(previousYearDetails)
-
-      const result = await prisma.$transaction(async (tx) => {
-        const payment = await tx.paymentHistory.create({
-          data: {
-            studentId,
-            studentDetails: studentDetailsSnapshot,
-            date: new Date(),
-            schoolFeePaid: originalSchoolPaid,
-            transportFeePaid: originalTransportPaid,
-            hostelFeePaid: originalHostelPaid,
-            totalAmount,
-            receiptNo: customReceiptNo || generateReceiptNo(),
-            paymentMode,
-            description: description || 'Payment for all previous years',
-            chequeNo,
-            bankName,
-            transactionId,
-            referenceNo,
-            termNumber: null,
-            receivedBy,
-            metadata: {
-              paymentType: 'allPreviousYears',
-              distribution: distributionLog,
-              previousYearBreakdown: {
-                school: originalSchoolPaid,
-                transport: originalTransportPaid,
-                hostel: originalHostelPaid,
-                total: totalAmount
-              },
-              previousYearFee: previousYearFeeBeforePayment,
-              currentYearDue: currentYearDueBeforePayment
-            }
-          }
-        })
-
-        const updatedFeeRecord = await tx.feeDetails.update({
-          where: { id: feeRecord.id },
-          data: {
-            previousYearDetails: previousYearDetails,
-            previousYearFee: previousYearFee,
-            totalDue: previousYearFee + currentYearDue,
-            updatedBy: receivedBy
-          }
-        })
-
-        return { payment, updatedFeeRecord }
-      })
-
-      return res.status(201).json({
-        success: true,
-        message: 'Previous years payment processed successfully',
-        data: {
-          paymentId: result.payment.id,
-          receiptNo: result.payment.receiptNo,
-          date: result.payment.date,
-          totalAmount: result.payment.totalAmount,
-          previousYearBreakdown: {
-            school: originalSchoolPaid,
-            transport: originalTransportPaid,
-            hostel: originalHostelPaid,
-            total: totalAmount
-          },
-          paymentType: 'allPreviousYears',
+          metadata: paymentMetadata,
           receiptUrl: `/api/fee/receipt/${result.payment.id}`
         }
       })
@@ -3041,31 +2660,47 @@ export const processPayment = async (req, res) => {
 
     // ========== CURRENT YEAR PAYMENT ==========
     if (paymentType === 'currentYear') {
-      if (totalAmount > currentYearDue) {
+      if (totalAmount > currentYearTotalDue) {
         return res.status(400).json({
           success: false,
-          message: `Payment amount (${totalAmount}) exceeds current year due (${currentYearDue})`
+          message: `Payment amount (${totalAmount}) exceeds current year due (${currentYearTotalDue})`
+        })
+      }
+
+      if (schoolFeePaid > currentYearDueSchool) {
+        return res.status(400).json({
+          success: false,
+          message: `School fee payment (${schoolFeePaid}) exceeds current year school due (${currentYearDueSchool})`
+        })
+      }
+      if (transportFeePaid > currentYearDueTransport) {
+        return res.status(400).json({
+          success: false,
+          message: `Transport fee payment (${transportFeePaid}) exceeds current year transport due (${currentYearDueTransport})`
+        })
+      }
+      if (hostelFeePaid > currentYearDueHostel) {
+        return res.status(400).json({
+          success: false,
+          message: `Hostel fee payment (${hostelFeePaid}) exceeds current year hostel due (${currentYearDueHostel})`
         })
       }
 
       let termDistribution = JSON.parse(JSON.stringify(feeRecord.termDistribution || {}))
       
-      let schoolPaid = schoolFeePaid
-      let transportPaid = transportFeePaid
-      let hostelPaid = hostelFeePaid
-      
-      let remainingSchool = schoolPaid
-      let remainingTransport = transportPaid
-      let remainingHostel = hostelPaid
+      // Track distribution across terms
+      let remainingSchool = schoolFeePaid
+      let remainingTransport = transportFeePaid
+      let remainingHostel = hostelFeePaid
       
       for (let termNum = 1; termNum <= 3; termNum++) {
         if (!termDistribution[termNum]) continue
         
         const termData = termDistribution[termNum]
         
-        const schoolFeeDue = termData.schoolFee - (termData.schoolFeePaid || 0)
-        const transportFeeDue = termData.transportFee - (termData.transportFeePaid || 0)
-        const hostelFeeDue = termData.hostelFee - (termData.hostelFeePaid || 0)
+        const schoolFeeDue = Math.max(0, termData.schoolFee - (termData.schoolFeePaid || 0))
+        const transportFeeDue = Math.max(0, termData.transportFee - (termData.transportFeePaid || 0))
+        const hostelFeeDue = Math.max(0, termData.hostelFee - (termData.hostelFeePaid || 0))
         
         const schoolFeeToPay = Math.min(remainingSchool, schoolFeeDue)
         const transportFeeToPay = Math.min(remainingTransport, transportFeeDue)
@@ -3090,57 +2725,83 @@ export const processPayment = async (req, res) => {
 
       const totals = recalculateOverallTotals(termDistribution)
 
+      // Calculate new due amounts AFTER this payment
+      const newSchoolDue = Math.max(0, discountedSchoolFee - totals.schoolFeePaid)
+      const newTransportDue = Math.max(0, discountedTransportFee - totals.transportFeePaid)
+      const newHostelDue = Math.max(0, discountedHostelFee - totals.hostelFeePaid)
+      const newTotalDue = newSchoolDue + newTransportDue + newHostelDue
+
+      // COMBINED TOTALS (Previous Years + Current Year)
+      const combinedSchoolRemaining = previousYearTotals.school + newSchoolDue
+      const combinedTransportRemaining = previousYearTotals.transport + newTransportDue
+      const combinedHostelRemaining = previousYearTotals.hostel + newHostelDue
+      const combinedTotalRemaining = combinedSchoolRemaining + combinedTransportRemaining + combinedHostelRemaining
+
+      // MINIMAL METADATA WITH COMBINED TOTALS
+      const paymentMetadata = {
+        paymentType: 'currentYear',
+        paid: {
+          school: schoolFeePaid,
+          transport: transportFeePaid,
+          hostel: hostelFeePaid,
+          total: totalAmount
+        },
+        remaining: {
+          school: combinedSchoolRemaining,
+          transport: combinedTransportRemaining,
+          hostel: combinedHostelRemaining,
+          total: combinedTotalRemaining
+        }
+      }
+
+      // Prepare payment data
+      const paymentData = {
+        studentId,
+        studentDetails: studentDetailsSnapshot,
+        date: new Date(),
+        schoolFeePaid,
+        transportFeePaid,
+        hostelFeePaid,
+        totalAmount,
+        receiptNo: customReceiptNo || generateReceiptNo(),
+        paymentMode,
+        description: description || 'Current year payment',
+        chequeNo,
+        bankName,
+        transactionId,
+        referenceNo,
+        termNumber: null,
+        receivedBy,
+        metadata: paymentMetadata
+      }
+
+      // Fee update data
+      const feeUpdateData = {
+        schoolFeePaid: totals.schoolFeePaid,
+        transportFeePaid: totals.transportFeePaid,
+        hostelFeePaid: totals.hostelFeePaid,
+        totalPaid: totals.totalPaid,
+        termDistribution: termDistribution,
+        term1Paid: termDistribution[1]?.totalPaid || 0,
+        term2Paid: termDistribution[2]?.totalPaid || 0,
+        term3Paid: termDistribution[3]?.totalPaid || 0,
+        totalDue: previousYearFee + newTotalDue,
+        isFullyPaid: newTotalDue === 0 && previousYearFee === 0,
+        updatedBy: receivedBy
+      }
+
+      // Process transaction
       const result = await prisma.$transaction(async (tx) => {
-        const payment = await tx.paymentHistory.create({
-          data: {
-            studentId,
-            studentDetails: studentDetailsSnapshot,
-            date: new Date(),
-            schoolFeePaid: schoolPaid,
-            transportFeePaid: transportPaid,
-            hostelFeePaid: hostelPaid,
-            totalAmount,
-            receiptNo: customReceiptNo || generateReceiptNo(),
-            paymentMode,
-            description: description || 'Current year payment',
-            chequeNo,
-            bankName,
-            transactionId,
-            referenceNo,
-            termNumber: null,
-            receivedBy,
-            metadata: {
-              paymentType: 'currentYear',
-              currentYearBreakdown: {
-                school: schoolPaid,
-                transport: transportPaid,
-                hostel: hostelPaid,
-                total: totalAmount
-              },
-              previousYearFee: previousYearFeeBeforePayment,
-              currentYearDue: currentYearDueBeforePayment
-            }
-          }
+        return await processPaymentTransaction(tx, {
+          student,
+          studentDetailsSnapshot,
+          paymentData,
+          feeRecord,
+          feeUpdateData,
+          totalAmount,
+          paymentMode,
+          receivedBy
         })
-
-        const updatedFeeRecord = await tx.feeDetails.update({
-          where: { id: feeRecord.id },
-          data: {
-            schoolFeePaid: totals.schoolFeePaid,
-            transportFeePaid: totals.transportFeePaid,
-            hostelFeePaid: totals.hostelFeePaid,
-            totalPaid: totals.totalPaid,
-            termDistribution: termDistribution,
-            term1Paid: termDistribution[1]?.totalPaid || 0,
-            term2Paid: termDistribution[2]?.totalPaid || 0,
-            term3Paid: termDistribution[3]?.totalPaid || 0,
-            totalDue: previousYearFee + (discountedTotalFee - totals.totalPaid),
-            isFullyPaid: (discountedTotalFee - totals.totalPaid) === 0 && previousYearFee === 0,
-            updatedBy: receivedBy
-          }
-        })
-
-        return { payment, updatedFeeRecord }
       })
 
       return res.status(201).json({
@@ -3150,481 +2811,961 @@ export const processPayment = async (req, res) => {
           paymentId: result.payment.id,
           receiptNo: result.payment.receiptNo,
           date: result.payment.date,
-          totalAmount: result.payment.totalAmount,
-          currentYearBreakdown: {
-            school: schoolPaid,
-            transport: transportPaid,
-            hostel: hostelPaid,
-            total: totalAmount
-          },
-          paymentType: 'currentYear',
+          metadata: paymentMetadata,
           receiptUrl: `/api/fee/receipt/${result.payment.id}`
         }
       })
     }
 
-    // ========== TERM PAYMENT ==========
-    if (providedTermNumber) {
-      if (providedTermNumber < 1 || providedTermNumber > 3) {
+    // ========== SINGLE PREVIOUS YEAR PAYMENT ==========
+    if (paymentType === 'previousYear' && previousYearIndex !== undefined) {
+      if (previousYearIndex < 0 || previousYearIndex >= previousYearDetails.length) {
         return res.status(400).json({
           success: false,
-          message: `Invalid term number: ${providedTermNumber}`
+          message: 'Invalid previous year index'
         })
       }
 
-      let termDistribution = JSON.parse(JSON.stringify(feeRecord.termDistribution || {}))
+      // Deep clone the year record
+      const yearRecord = JSON.parse(JSON.stringify(previousYearDetails[previousYearIndex]))
       
-      if (!termDistribution[providedTermNumber]) {
+      // Validate payment amounts against remaining breakdown
+      if (schoolFeePaid > (yearRecord.remainingBreakdown?.school || 0)) {
         return res.status(400).json({
           success: false,
-          message: `Term ${providedTermNumber} not found in distribution`
+          message: `School fee payment (${schoolFeePaid}) exceeds due amount for ${yearRecord.academicYear}`
+        })
+      }
+      if (transportFeePaid > (yearRecord.remainingBreakdown?.transport || 0)) {
+        return res.status(400).json({
+          success: false,
+          message: `Transport fee payment (${transportFeePaid}) exceeds due amount for ${yearRecord.academicYear}`
+        })
+      }
+      if (hostelFeePaid > (yearRecord.remainingBreakdown?.hostel || 0)) {
+        return res.status(400).json({
+          success: false,
+          message: `Hostel fee payment (${hostelFeePaid}) exceeds due amount for ${yearRecord.academicYear}`
         })
       }
 
-      const termData = termDistribution[providedTermNumber]
-      const schoolFeeDue = termData.schoolFee - (termData.schoolFeePaid || 0)
-      const transportFeeDue = termData.transportFee - (termData.transportFeePaid || 0)
-      const hostelFeeDue = termData.hostelFee - (termData.hostelFeePaid || 0)
+      // Track payment amounts
+      const originalSchoolPaid = schoolFeePaid
+      const originalTransportPaid = transportFeePaid
+      const originalHostelPaid = hostelFeePaid
 
-      if (schoolFeePaid > schoolFeeDue) {
-        return res.status(400).json({
-          success: false,
-          message: `School fee payment (${schoolFeePaid}) exceeds term ${providedTermNumber} due amount (${schoolFeeDue})`
-        })
-      }
-      if (transportFeePaid > transportFeeDue) {
-        return res.status(400).json({
-          success: false,
-          message: `Transport fee payment (${transportFeePaid}) exceeds term ${providedTermNumber} due amount (${transportFeeDue})`
-        })
-      }
-      if (hostelFeePaid > hostelFeeDue) {
-        return res.status(400).json({
-          success: false,
-          message: `Hostel fee payment (${hostelFeePaid}) exceeds term ${providedTermNumber} due amount (${hostelFeeDue})`
-        })
-      }
+      // Variables to track remaining amounts to distribute
+      let remainingSchool = schoolFeePaid
+      let remainingTransport = transportFeePaid
+      let remainingHostel = hostelFeePaid
 
-      termDistribution = updateTermPaidAmounts(
-        termDistribution,
-        providedTermNumber,
-        schoolFeePaid,
-        transportFeePaid,
-        hostelFeePaid
-      )
+      // Create a deep copy of termPayments and termDistribution to update
+      const termPayments = JSON.parse(JSON.stringify(yearRecord.termPayments || {}))
+      const termDistribution = JSON.parse(JSON.stringify(yearRecord.termDistribution || {}))
 
-      const totals = recalculateOverallTotals(termDistribution)
+      // Distribute payment across terms based on remaining dues
+      for (let termNum = 1; termNum <= 3; termNum++) {
+        const termKey = `term${termNum}`
+        
+        // Skip if no remaining amounts to distribute
+        if (remainingSchool === 0 && remainingTransport === 0 && remainingHostel === 0) {
+          break
+        }
 
-      const result = await prisma.$transaction(async (tx) => {
-        const payment = await tx.paymentHistory.create({
-          data: {
-            studentId,
-            studentDetails: studentDetailsSnapshot,
-            date: new Date(),
-            schoolFeePaid,
-            transportFeePaid,
-            hostelFeePaid,
-            totalAmount,
-            receiptNo: customReceiptNo || generateReceiptNo(),
-            paymentMode,
-            description: description || `Term ${providedTermNumber} payment`,
-            chequeNo,
-            bankName,
-            transactionId,
-            referenceNo,
-            termNumber: providedTermNumber,
-            receivedBy,
-            metadata: {
-              paymentType: 'term',
-              termNumber: providedTermNumber,
-              currentYearBreakdown: {
-                school: schoolFeePaid,
-                transport: transportFeePaid,
-                hostel: hostelFeePaid,
-                total: totalAmount
+        // Get term data from termPayments (preferred) or termDistribution
+        let termData = termPayments[termKey]
+        
+        if (!termData && termDistribution[termNum]) {
+          // Build termData from termDistribution if termPayments doesn't exist
+          const td = termDistribution[termNum]
+          termData = {
+            due: td.total || 0,
+            paid: td.totalPaid || 0,
+            remaining: (td.total || 0) - (td.totalPaid || 0),
+            components: {
+              schoolFee: {
+                due: td.schoolFee || 0,
+                paid: td.schoolFeePaid || 0,
+                remaining: (td.schoolFee || 0) - (td.schoolFeePaid || 0)
               },
-              previousYearFee: previousYearFeeBeforePayment,
-              currentYearDue: currentYearDueBeforePayment
+              transportFee: {
+                due: td.transportFee || 0,
+                paid: td.transportFeePaid || 0,
+                remaining: (td.transportFee || 0) - (td.transportFeePaid || 0)
+              },
+              hostelFee: {
+                due: td.hostelFee || 0,
+                paid: td.hostelFeePaid || 0,
+                remaining: (td.hostelFee || 0) - (td.hostelFeePaid || 0)
+              }
             }
           }
-        })
+          termPayments[termKey] = termData
+        }
 
-        const updatedFeeRecord = await tx.feeDetails.update({
-          where: { id: feeRecord.id },
-          data: {
-            schoolFeePaid: totals.schoolFeePaid,
-            transportFeePaid: totals.transportFeePaid,
-            hostelFeePaid: totals.hostelFeePaid,
-            totalPaid: totals.totalPaid,
-            termDistribution: termDistribution,
-            term1Paid: termDistribution[1]?.totalPaid || 0,
-            term2Paid: termDistribution[2]?.totalPaid || 0,
-            term3Paid: termDistribution[3]?.totalPaid || 0,
-            totalDue: previousYearFee + (discountedTotalFee - totals.totalPaid),
-            isFullyPaid: (discountedTotalFee - totals.totalPaid) === 0 && previousYearFee === 0,
-            updatedBy: receivedBy
+        if (!termData) continue
+
+        // Calculate how much to pay for each component in this term
+        const schoolFeeDue = termData.components?.schoolFee?.remaining || 0
+        const transportFeeDue = termData.components?.transportFee?.remaining || 0
+        const hostelFeeDue = termData.components?.hostelFee?.remaining || 0
+
+        const schoolFeeToPay = Math.min(remainingSchool, schoolFeeDue)
+        const transportFeeToPay = Math.min(remainingTransport, transportFeeDue)
+        const hostelFeeToPay = Math.min(remainingHostel, hostelFeeDue)
+        const termTotalPaid = schoolFeeToPay + transportFeeToPay + hostelFeeToPay
+
+        if (termTotalPaid > 0) {
+          // Update termPayments
+          termPayments[termKey].paid = (termPayments[termKey].paid || 0) + termTotalPaid
+          termPayments[termKey].remaining = Math.max(0, termPayments[termKey].remaining - termTotalPaid)
+          
+          // Update component level in termPayments
+          if (termPayments[termKey].components) {
+            if (schoolFeeToPay > 0) {
+              termPayments[termKey].components.schoolFee.paid += schoolFeeToPay
+              termPayments[termKey].components.schoolFee.remaining -= schoolFeeToPay
+            }
+            if (transportFeeToPay > 0) {
+              termPayments[termKey].components.transportFee.paid += transportFeeToPay
+              termPayments[termKey].components.transportFee.remaining -= transportFeeToPay
+            }
+            if (hostelFeeToPay > 0) {
+              termPayments[termKey].components.hostelFee.paid += hostelFeeToPay
+              termPayments[termKey].components.hostelFee.remaining -= hostelFeeToPay
+            }
           }
-        })
 
-        return { payment, updatedFeeRecord }
+          // Update termDistribution
+          if (termDistribution[termNum]) {
+            if (schoolFeeToPay > 0) {
+              termDistribution[termNum].schoolFeePaid = (termDistribution[termNum].schoolFeePaid || 0) + schoolFeeToPay
+            }
+            if (transportFeeToPay > 0) {
+              termDistribution[termNum].transportFeePaid = (termDistribution[termNum].transportFeePaid || 0) + transportFeeToPay
+            }
+            if (hostelFeeToPay > 0) {
+              termDistribution[termNum].hostelFeePaid = (termDistribution[termNum].hostelFeePaid || 0) + hostelFeeToPay
+            }
+            
+            // Recalculate total paid for this term
+            termDistribution[termNum].totalPaid = 
+              (termDistribution[termNum].schoolFeePaid || 0) +
+              (termDistribution[termNum].transportFeePaid || 0) +
+              (termDistribution[termNum].hostelFeePaid || 0)
+            
+            // Update status
+            if (termDistribution[termNum].totalPaid >= (termDistribution[termNum].total || 0)) {
+              termDistribution[termNum].status = 'Paid'
+            } else if (termDistribution[termNum].totalPaid > 0) {
+              termDistribution[termNum].status = 'Partial'
+            }
+          }
+
+          // Reduce remaining amounts
+          remainingSchool -= schoolFeeToPay
+          remainingTransport -= transportFeeToPay
+          remainingHostel -= hostelFeeToPay
+        }
+      }
+
+      // Recalculate year totals based on updated term data
+      let yearSchoolPaid = 0
+      let yearTransportPaid = 0
+      let yearHostelPaid = 0
+      let yearTotalPaid = 0
+      let yearSchoolRemaining = 0
+      let yearTransportRemaining = 0
+      let yearHostelRemaining = 0
+
+      // Calculate from termPayments
+      Object.values(termPayments).forEach(term => {
+        if (term.components) {
+          yearSchoolPaid += term.components.schoolFee?.paid || 0
+          yearTransportPaid += term.components.transportFee?.paid || 0
+          yearHostelPaid += term.components.hostelFee?.paid || 0
+          
+          yearSchoolRemaining += term.components.schoolFee?.remaining || 0
+          yearTransportRemaining += term.components.transportFee?.remaining || 0
+          yearHostelRemaining += term.components.hostelFee?.remaining || 0
+        }
+      })
+      
+      yearTotalPaid = yearSchoolPaid + yearTransportPaid + yearHostelPaid
+
+      // Update year record
+      yearRecord.totalPaid = yearTotalPaid
+      yearRecord.totalDue = yearSchoolRemaining + yearTransportRemaining + yearHostelRemaining
+      yearRecord.termPayments = termPayments
+      yearRecord.termDistribution = termDistribution
+      
+      // Update remaining breakdown
+      yearRecord.remainingBreakdown = {
+        school: yearSchoolRemaining,
+        transport: yearTransportRemaining,
+        hostel: yearHostelRemaining,
+        total: yearSchoolRemaining + yearTransportRemaining + yearHostelRemaining
+      }
+      
+      yearRecord.isFullyPaid = yearRecord.totalDue === 0
+
+      // Update previous year details array
+      let updatedPreviousYears = [...previousYearDetails]
+      
+      if (yearRecord.isFullyPaid) {
+        // Remove this year if fully paid
+        updatedPreviousYears = updatedPreviousYears.filter((_, index) => index !== previousYearIndex)
+      } else {
+        updatedPreviousYears[previousYearIndex] = yearRecord
+      }
+
+      // Calculate new previous year totals AFTER payment
+      const newPreviousYearTotals = {
+        school: updatedPreviousYears.reduce((sum, y) => sum + (y.remainingBreakdown?.school || 0), 0),
+        transport: updatedPreviousYears.reduce((sum, y) => sum + (y.remainingBreakdown?.transport || 0), 0),
+        hostel: updatedPreviousYears.reduce((sum, y) => sum + (y.remainingBreakdown?.hostel || 0), 0),
+        total: updatedPreviousYears.reduce((sum, y) => sum + (y.totalDue || 0), 0)
+      }
+
+      // COMBINED TOTALS (Previous Years + Current Year)
+      const combinedSchoolRemaining = newPreviousYearTotals.school + currentYearDueSchool
+      const combinedTransportRemaining = newPreviousYearTotals.transport + currentYearDueTransport
+      const combinedHostelRemaining = newPreviousYearTotals.hostel + currentYearDueHostel
+      const combinedTotalRemaining = combinedSchoolRemaining + combinedTransportRemaining + combinedHostelRemaining
+
+      // MINIMAL METADATA WITH COMBINED TOTALS
+      const paymentMetadata = {
+        paymentType: 'previousYear',
+        academicYear: yearRecord.academicYear,
+        paid: {
+          school: originalSchoolPaid,
+          transport: originalTransportPaid,
+          hostel: originalHostelPaid,
+          total: totalAmount
+        },
+        remaining: {
+          school: combinedSchoolRemaining,
+          transport: combinedTransportRemaining,
+          hostel: combinedHostelRemaining,
+          total: combinedTotalRemaining
+        }
+      }
+
+      // Prepare payment data
+      const paymentData = {
+        studentId,
+        studentDetails: studentDetailsSnapshot,
+        date: new Date(),
+        schoolFeePaid: originalSchoolPaid,
+        transportFeePaid: originalTransportPaid,
+        hostelFeePaid: originalHostelPaid,
+        totalAmount,
+        receiptNo: customReceiptNo || generateReceiptNo(),
+        paymentMode,
+        description: description || `Payment for ${yearRecord.academicYear}`,
+        chequeNo,
+        bankName,
+        transactionId,
+        referenceNo,
+        termNumber: null,
+        receivedBy,
+        metadata: paymentMetadata
+      }
+
+      // Fee update data - Update both previousYearDetails and previousYearFee
+      const feeUpdateData = {
+        previousYearDetails: updatedPreviousYears,
+        previousYearFee: newPreviousYearTotals.total,
+        totalDue: newPreviousYearTotals.total + currentYearTotalDue,
+        isFullyPaid: currentYearTotalDue === 0 && newPreviousYearTotals.total === 0,
+        updatedBy: receivedBy
+      }
+
+      // Process transaction
+      const result = await prisma.$transaction(async (tx) => {
+        return await processPaymentTransaction(tx, {
+          student,
+          studentDetailsSnapshot,
+          paymentData,
+          feeRecord,
+          feeUpdateData,
+          totalAmount,
+          paymentMode,
+          receivedBy
+        })
       })
 
       return res.status(201).json({
         success: true,
-        message: `Term ${providedTermNumber} payment processed successfully`,
+        message: yearRecord.isFullyPaid 
+          ? `Previous year (${yearRecord.academicYear}) fully paid and cleared`
+          : `Previous year payment processed successfully`,
         data: {
           paymentId: result.payment.id,
           receiptNo: result.payment.receiptNo,
           date: result.payment.date,
-          totalAmount: result.payment.totalAmount,
-          currentYearBreakdown: {
-            school: schoolFeePaid,
-            transport: transportFeePaid,
-            hostel: hostelFeePaid,
-            total: totalAmount
-          },
-          termNumber: providedTermNumber,
-          paymentType: 'term',
+          metadata: paymentMetadata,
           receiptUrl: `/api/fee/receipt/${result.payment.id}`
         }
       })
     }
 
-    // ========== TOTAL PAYMENT ==========
-    if (paymentType === 'total' || paymentType === 'full') {
-      let remainingAmount = totalAmount
-      const distributionLog = []
-      let updatedPreviousYears = JSON.parse(JSON.stringify(previousYearDetails))
+    // ========== ALL PREVIOUS YEARS PAYMENT ==========
+    if (paymentType === 'allPreviousYears') {
+      if (totalAmount > previousYearFee) {
+        return res.status(400).json({
+          success: false,
+          message: `Payment amount (${totalAmount}) exceeds total previous years due (${previousYearFee})`
+        })
+      }
+
+      if (schoolFeePaid > previousYearTotals.school) {
+        return res.status(400).json({
+          success: false,
+          message: `School fee payment (${schoolFeePaid}) exceeds total previous years school due (${previousYearTotals.school})`
+        })
+      }
+      if (transportFeePaid > previousYearTotals.transport) {
+        return res.status(400).json({
+          success: false,
+          message: `Transport fee payment (${transportFeePaid}) exceeds total previous years transport due (${previousYearTotals.transport})`
+        })
+      }
+      if (hostelFeePaid > previousYearTotals.hostel) {
+        return res.status(400).json({
+          success: false,
+          message: `Hostel fee payment (${hostelFeePaid}) exceeds total previous years hostel due (${previousYearTotals.hostel})`
+        })
+      }
+
+      let remainingSchool = schoolFeePaid
+      let remainingTransport = transportFeePaid
+      let remainingHostel = hostelFeePaid
       
-      let allocatedSchoolToPrevious = 0
-      let allocatedTransportToPrevious = 0
-      let allocatedHostelToPrevious = 0
+      const yearsFullyPaid = []
+      const updatedPreviousYears = []
+      
+      // Distribute payment across previous years
+      for (let i = 0; i < previousYearDetails.length; i++) {
+        if (remainingSchool === 0 && remainingTransport === 0 && remainingHostel === 0) {
+          updatedPreviousYears.push(previousYearDetails[i])
+          continue
+        }
+        
+        const yearRecord = JSON.parse(JSON.stringify(previousYearDetails[i]))
+        if (yearRecord.totalDue <= 0) {
+          updatedPreviousYears.push(yearRecord)
+          continue
+        }
 
-      if (previousYearFee > 0 && remainingAmount > 0) {
-        for (let i = 0; i < updatedPreviousYears.length; i++) {
-          if (remainingAmount <= 0) break
-          
-          const yearRecord = updatedPreviousYears[i]
-          if (!yearRecord || yearRecord.totalDue <= 0) continue
+        // Calculate how much to pay for this year
+        const yearSchoolDue = yearRecord.remainingBreakdown?.school || 0
+        const yearTransportDue = yearRecord.remainingBreakdown?.transport || 0
+        const yearHostelDue = yearRecord.remainingBreakdown?.hostel || 0
 
-          let yearSchoolDue = 0
-          let yearTransportDue = 0
-          let yearHostelDue = 0
-          
-          if (yearRecord.termPayments) {
-            Object.values(yearRecord.termPayments).forEach(term => {
-              if (term.components) {
-                yearSchoolDue += term.components.schoolFee?.remaining || 0
-                yearTransportDue += term.components.transportFee?.remaining || 0
-                yearHostelDue += term.components.hostelFee?.remaining || 0
+        const yearSchoolPaid = Math.min(remainingSchool, yearSchoolDue)
+        const yearTransportPaid = Math.min(remainingTransport, yearTransportDue)
+        const yearHostelPaid = Math.min(remainingHostel, yearHostelDue)
+        const yearTotalPaid = yearSchoolPaid + yearTransportPaid + yearHostelPaid
+
+        if (yearTotalPaid > 0) {
+          // Distribute payment across terms for this year
+          const termPayments = JSON.parse(JSON.stringify(yearRecord.termPayments || {}))
+          const termDistribution = JSON.parse(JSON.stringify(yearRecord.termDistribution || {}))
+
+          let remSchool = yearSchoolPaid
+          let remTransport = yearTransportPaid
+          let remHostel = yearHostelPaid
+
+          for (let termNum = 1; termNum <= 3; termNum++) {
+            const termKey = `term${termNum}`
+            
+            if (remSchool === 0 && remTransport === 0 && remHostel === 0) break
+
+            // Get term data
+            let termData = termPayments[termKey]
+            
+            if (!termData && termDistribution[termNum]) {
+              const td = termDistribution[termNum]
+              termData = {
+                due: td.total || 0,
+                paid: td.totalPaid || 0,
+                remaining: (td.total || 0) - (td.totalPaid || 0),
+                components: {
+                  schoolFee: {
+                    due: td.schoolFee || 0,
+                    paid: td.schoolFeePaid || 0,
+                    remaining: (td.schoolFee || 0) - (td.schoolFeePaid || 0)
+                  },
+                  transportFee: {
+                    due: td.transportFee || 0,
+                    paid: td.transportFeePaid || 0,
+                    remaining: (td.transportFee || 0) - (td.transportFeePaid || 0)
+                  },
+                  hostelFee: {
+                    due: td.hostelFee || 0,
+                    paid: td.hostelFeePaid || 0,
+                    remaining: (td.hostelFee || 0) - (td.hostelFeePaid || 0)
+                  }
+                }
               }
-            })
-          }
+              termPayments[termKey] = termData
+            }
 
-          const yearTotalDue = yearSchoolDue + yearTransportDue + yearHostelDue
-          if (yearTotalDue <= 0) continue
+            if (!termData) continue
 
-          const paymentForThisYear = Math.min(remainingAmount, yearTotalDue)
-          
-          let yearSchoolPaid = 0
-          let yearTransportPaid = 0
-          let yearHostelPaid = 0
-          
-          if (yearSchoolDue > 0) {
-            const schoolRatio = yearSchoolDue / yearTotalDue
-            yearSchoolPaid = Math.min(
-              Math.round(schoolRatio * paymentForThisYear),
-              yearSchoolDue
-            )
-          }
-          
-          if (yearTransportDue > 0) {
-            const transportRatio = yearTransportDue / yearTotalDue
-            yearTransportPaid = Math.min(
-              Math.round(transportRatio * paymentForThisYear),
-              yearTransportDue
-            )
-          }
-          
-          yearHostelPaid = paymentForThisYear - yearSchoolPaid - yearTransportPaid
-          if (yearHostelPaid > yearHostelDue) {
-            const excess = yearHostelPaid - yearHostelDue
-            yearHostelPaid = yearHostelDue
-            if (yearSchoolDue - yearSchoolPaid > 0) {
-              yearSchoolPaid += Math.min(excess, yearSchoolDue - yearSchoolPaid)
-            } else if (yearTransportDue - yearTransportPaid > 0) {
-              yearTransportPaid += Math.min(excess, yearTransportDue - yearTransportPaid)
+            const schoolFeeDue = termData.components?.schoolFee?.remaining || 0
+            const transportFeeDue = termData.components?.transportFee?.remaining || 0
+            const hostelFeeDue = termData.components?.hostelFee?.remaining || 0
+
+            const schoolFeeToPay = Math.min(remSchool, schoolFeeDue)
+            const transportFeeToPay = Math.min(remTransport, transportFeeDue)
+            const hostelFeeToPay = Math.min(remHostel, hostelFeeDue)
+            const termTotalPaid = schoolFeeToPay + transportFeeToPay + hostelFeeToPay
+
+            if (termTotalPaid > 0) {
+              // Update termPayments
+              termPayments[termKey].paid = (termPayments[termKey].paid || 0) + termTotalPaid
+              termPayments[termKey].remaining = Math.max(0, termPayments[termKey].remaining - termTotalPaid)
+              
+              if (termPayments[termKey].components) {
+                if (schoolFeeToPay > 0) {
+                  termPayments[termKey].components.schoolFee.paid += schoolFeeToPay
+                  termPayments[termKey].components.schoolFee.remaining -= schoolFeeToPay
+                }
+                if (transportFeeToPay > 0) {
+                  termPayments[termKey].components.transportFee.paid += transportFeeToPay
+                  termPayments[termKey].components.transportFee.remaining -= transportFeeToPay
+                }
+                if (hostelFeeToPay > 0) {
+                  termPayments[termKey].components.hostelFee.paid += hostelFeeToPay
+                  termPayments[termKey].components.hostelFee.remaining -= hostelFeeToPay
+                }
+              }
+
+              // Update termDistribution
+              if (termDistribution[termNum]) {
+                if (schoolFeeToPay > 0) {
+                  termDistribution[termNum].schoolFeePaid = (termDistribution[termNum].schoolFeePaid || 0) + schoolFeeToPay
+                }
+                if (transportFeeToPay > 0) {
+                  termDistribution[termNum].transportFeePaid = (termDistribution[termNum].transportFeePaid || 0) + transportFeeToPay
+                }
+                if (hostelFeeToPay > 0) {
+                  termDistribution[termNum].hostelFeePaid = (termDistribution[termNum].hostelFeePaid || 0) + hostelFeeToPay
+                }
+                
+                termDistribution[termNum].totalPaid = 
+                  (termDistribution[termNum].schoolFeePaid || 0) +
+                  (termDistribution[termNum].transportFeePaid || 0) +
+                  (termDistribution[termNum].hostelFeePaid || 0)
+                
+                if (termDistribution[termNum].totalPaid >= (termDistribution[termNum].total || 0)) {
+                  termDistribution[termNum].status = 'Paid'
+                } else if (termDistribution[termNum].totalPaid > 0) {
+                  termDistribution[termNum].status = 'Partial'
+                }
+              }
+
+              remSchool -= schoolFeeToPay
+              remTransport -= transportFeeToPay
+              remHostel -= hostelFeeToPay
             }
           }
 
-          allocatedSchoolToPrevious += yearSchoolPaid
-          allocatedTransportToPrevious += yearTransportPaid
-          allocatedHostelToPrevious += yearHostelPaid
+          // Recalculate year totals
+          let yearSchoolPaidTotal = 0
+          let yearTransportPaidTotal = 0
+          let yearHostelPaidTotal = 0
+          let yearSchoolRemainingTotal = 0
+          let yearTransportRemainingTotal = 0
+          let yearHostelRemainingTotal = 0
 
-          // Update termPayments for this year
-          if (yearRecord.termPayments) {
-            let remainingSchool = yearSchoolPaid
-            let remainingTransport = yearTransportPaid
-            let remainingHostel = yearHostelPaid
-            
-            const termOrder = ['term1', 'term2', 'term3']
-            
-            for (const termKey of termOrder) {
-              if (remainingSchool === 0 && remainingTransport === 0 && remainingHostel === 0) break
+          Object.values(termPayments).forEach(term => {
+            if (term.components) {
+              yearSchoolPaidTotal += term.components.schoolFee?.paid || 0
+              yearTransportPaidTotal += term.components.transportFee?.paid || 0
+              yearHostelPaidTotal += term.components.hostelFee?.paid || 0
               
-              const termData = yearRecord.termPayments[termKey]
-              if (!termData) continue
-              
-              const termSchoolRemaining = termData.components?.schoolFee?.remaining || 0
-              const termTransportRemaining = termData.components?.transportFee?.remaining || 0
-              const termHostelRemaining = termData.components?.hostelFee?.remaining || 0
-              
-              if (remainingSchool > 0 && termSchoolRemaining > 0) {
-                const schoolPayment = Math.min(remainingSchool, termSchoolRemaining)
-                termData.components.schoolFee.paid = (termData.components.schoolFee.paid || 0) + schoolPayment
-                termData.components.schoolFee.remaining = termData.components.schoolFee.due - termData.components.schoolFee.paid
-                remainingSchool -= schoolPayment
-              }
-              
-              if (remainingTransport > 0 && termTransportRemaining > 0) {
-                const transportPayment = Math.min(remainingTransport, termTransportRemaining)
-                termData.components.transportFee.paid = (termData.components.transportFee.paid || 0) + transportPayment
-                termData.components.transportFee.remaining = termData.components.transportFee.due - termData.components.transportFee.paid
-                remainingTransport -= transportPayment
-              }
-              
-              if (remainingHostel > 0 && termHostelRemaining > 0) {
-                const hostelPayment = Math.min(remainingHostel, termHostelRemaining)
-                termData.components.hostelFee.paid = (termData.components.hostelFee.paid || 0) + hostelPayment
-                termData.components.hostelFee.remaining = termData.components.hostelFee.due - termData.components.hostelFee.paid
-                remainingHostel -= hostelPayment
-              }
-              
-              const termComponents = termData.components
-              termData.paid = (termComponents.schoolFee?.paid || 0) + 
-                              (termComponents.transportFee?.paid || 0) + 
-                              (termComponents.hostelFee?.paid || 0)
-              termData.remaining = termData.due - termData.paid
-            }
-          }
-          
-          // Update termDistribution
-          if (yearRecord.termDistribution && yearRecord.termPayments) {
-            Object.keys(yearRecord.termDistribution).forEach(termNum => {
-              const termKey = `term${termNum}`
-              const termPaymentData = yearRecord.termPayments[termKey]
-              
-              if (termPaymentData && termPaymentData.components) {
-                const schoolFeePaid = termPaymentData.components.schoolFee?.paid || 0
-                const transportFeePaid = termPaymentData.components.transportFee?.paid || 0
-                const hostelFeePaid = termPaymentData.components.hostelFee?.paid || 0
-                const totalPaid = schoolFeePaid + transportFeePaid + hostelFeePaid
-                const totalDue = (termPaymentData.components.schoolFee?.due || 0) + 
-                                 (termPaymentData.components.transportFee?.due || 0) + 
-                                 (termPaymentData.components.hostelFee?.due || 0)
-                
-                let status = 'Unpaid'
-                if (totalPaid >= totalDue) {
-                  status = 'Paid'
-                } else if (totalPaid > 0) {
-                  status = 'Partial'
-                }
-                
-                yearRecord.termDistribution[termNum] = {
-                  ...yearRecord.termDistribution[termNum],
-                  schoolFeePaid: schoolFeePaid,
-                  transportFeePaid: transportFeePaid,
-                  hostelFeePaid: hostelFeePaid,
-                  totalPaid: totalPaid,
-                  status: status
-                }
-              }
-            })
-          }
-
-          // Update year totals
-          yearRecord.totalPaid = (yearRecord.totalPaid || 0) + paymentForThisYear
-          yearRecord.totalDue = (yearRecord.totalDue || 0) - paymentForThisYear
-          yearRecord.isFullyPaid = yearRecord.totalDue === 0
-
-          // Recalculate remainingBreakdown
-          let yearSchoolRemaining = 0
-          let yearTransportRemaining = 0
-          let yearHostelRemaining = 0
-          
-          if (yearRecord.termPayments) {
-            Object.values(yearRecord.termPayments).forEach(term => {
-              if (term.components) {
-                yearSchoolRemaining += term.components.schoolFee?.remaining || 0
-                yearTransportRemaining += term.components.transportFee?.remaining || 0
-                yearHostelRemaining += term.components.hostelFee?.remaining || 0
-              }
-            })
-          }
-          
-          yearRecord.remainingBreakdown = {
-            school: yearSchoolRemaining,
-            transport: yearTransportRemaining,
-            hostel: yearHostelRemaining,
-            total: yearSchoolRemaining + yearTransportRemaining + yearHostelRemaining
-          }
-
-          updatedPreviousYears[i] = yearRecord
-          remainingAmount -= paymentForThisYear
-          
-          distributionLog.push({
-            academicYear: yearRecord.academicYear,
-            amount: paymentForThisYear,
-            breakdown: {
-              school: yearSchoolPaid,
-              transport: yearTransportPaid,
-              hostel: yearHostelPaid
+              yearSchoolRemainingTotal += term.components.schoolFee?.remaining || 0
+              yearTransportRemainingTotal += term.components.transportFee?.remaining || 0
+              yearHostelRemainingTotal += term.components.hostelFee?.remaining || 0
             }
           })
+
+          // Update year record
+          yearRecord.totalPaid = yearSchoolPaidTotal + yearTransportPaidTotal + yearHostelPaidTotal
+          yearRecord.totalDue = yearSchoolRemainingTotal + yearTransportRemainingTotal + yearHostelRemainingTotal
+          yearRecord.termPayments = termPayments
+          yearRecord.termDistribution = termDistribution
+          yearRecord.remainingBreakdown = {
+            school: yearSchoolRemainingTotal,
+            transport: yearTransportRemainingTotal,
+            hostel: yearHostelRemainingTotal,
+            total: yearSchoolRemainingTotal + yearTransportRemainingTotal + yearHostelRemainingTotal
+          }
+          yearRecord.isFullyPaid = yearRecord.totalDue === 0
+
+          if (yearRecord.isFullyPaid) {
+            yearsFullyPaid.push(yearRecord.academicYear)
+            // Don't push fully paid years
+          } else {
+            updatedPreviousYears.push(yearRecord)
+          }
+
+          remainingSchool -= yearSchoolPaid
+          remainingTransport -= yearTransportPaid
+          remainingHostel -= yearHostelPaid
+        } else {
+          updatedPreviousYears.push(yearRecord)
         }
       }
 
-      let updatedTermDistribution = JSON.parse(JSON.stringify(feeRecord.termDistribution || {}))
-      let schoolFeePaidCurrent = 0
-      let transportFeePaidCurrent = 0
-      let hostelFeePaidCurrent = 0
-      
-      if (remainingAmount > 0 && currentYearDue > 0) {
-        const remainingSchoolFromRequest = Math.max(0, schoolFeePaid - allocatedSchoolToPrevious)
-        const remainingTransportFromRequest = Math.max(0, transportFeePaid - allocatedTransportToPrevious)
-        const remainingHostelFromRequest = Math.max(0, hostelFeePaid - allocatedHostelToPrevious)
-        
-        schoolFeePaidCurrent = Math.min(remainingSchoolFromRequest, currentYearDueSchool)
-        transportFeePaidCurrent = Math.min(remainingTransportFromRequest, currentYearDueTransport)
-        hostelFeePaidCurrent = Math.min(remainingHostelFromRequest, currentYearDueHostel)
+      // Calculate new previous year totals AFTER payment
+      const newPreviousYearTotals = {
+        school: updatedPreviousYears.reduce((sum, y) => sum + (y.remainingBreakdown?.school || 0), 0),
+        transport: updatedPreviousYears.reduce((sum, y) => sum + (y.remainingBreakdown?.transport || 0), 0),
+        hostel: updatedPreviousYears.reduce((sum, y) => sum + (y.remainingBreakdown?.hostel || 0), 0),
+        total: updatedPreviousYears.reduce((sum, y) => sum + (y.totalDue || 0), 0)
+      }
 
-        let remainingSchool = schoolFeePaidCurrent
-        let remainingTransport = transportFeePaidCurrent
-        let remainingHostel = hostelFeePaidCurrent
+      // COMBINED TOTALS (Previous Years + Current Year)
+      const combinedSchoolRemaining = newPreviousYearTotals.school + currentYearDueSchool
+      const combinedTransportRemaining = newPreviousYearTotals.transport + currentYearDueTransport
+      const combinedHostelRemaining = newPreviousYearTotals.hostel + currentYearDueHostel
+      const combinedTotalRemaining = combinedSchoolRemaining + combinedTransportRemaining + combinedHostelRemaining
+
+      // MINIMAL METADATA WITH COMBINED TOTALS
+      const paymentMetadata = {
+        paymentType: 'allPreviousYears',
+        paid: {
+          school: schoolFeePaid,
+          transport: transportFeePaid,
+          hostel: hostelFeePaid,
+          total: totalAmount
+        },
+        remaining: {
+          school: combinedSchoolRemaining,
+          transport: combinedTransportRemaining,
+          hostel: combinedHostelRemaining,
+          total: combinedTotalRemaining
+        }
+      }
+
+      // Prepare payment data
+      const paymentData = {
+        studentId,
+        studentDetails: studentDetailsSnapshot,
+        date: new Date(),
+        schoolFeePaid,
+        transportFeePaid,
+        hostelFeePaid,
+        totalAmount,
+        receiptNo: customReceiptNo || generateReceiptNo(),
+        paymentMode,
+        description: description || 'Payment for all previous years',
+        chequeNo,
+        bankName,
+        transactionId,
+        referenceNo,
+        termNumber: null,
+        receivedBy,
+        metadata: paymentMetadata
+      }
+
+      // Fee update data
+      const feeUpdateData = {
+        previousYearDetails: updatedPreviousYears,
+        previousYearFee: newPreviousYearTotals.total,
+        totalDue: newPreviousYearTotals.total + currentYearTotalDue,
+        isFullyPaid: currentYearTotalDue === 0 && newPreviousYearTotals.total === 0,
+        updatedBy: receivedBy
+      }
+
+      // Process transaction
+      const result = await prisma.$transaction(async (tx) => {
+        return await processPaymentTransaction(tx, {
+          student,
+          studentDetailsSnapshot,
+          paymentData,
+          feeRecord,
+          feeUpdateData,
+          totalAmount,
+          paymentMode,
+          receivedBy
+        })
+      })
+
+      return res.status(201).json({
+        success: true,
+        message: yearsFullyPaid.length > 0 
+          ? `${yearsFullyPaid.join(', ')} fully paid and cleared`
+          : 'Previous years payment processed',
+        data: {
+          paymentId: result.payment.id,
+          receiptNo: result.payment.receiptNo,
+          date: result.payment.date,
+          metadata: paymentMetadata,
+          receiptUrl: `/api/fee/receipt/${result.payment.id}`
+        }
+      })
+    }
+
+    // ========== TOTAL PAYMENT (Previous Years + Current Year) ==========
+    if (paymentType === 'total') {
+      const totalDueOverall = previousYearFee + currentYearTotalDue
+      
+      if (totalAmount > totalDueOverall) {
+        return res.status(400).json({
+          success: false,
+          message: `Payment amount (${totalAmount}) exceeds total due (${totalDueOverall})`
+        })
+      }
+
+      if (schoolFeePaid > (previousYearTotals.school + currentYearDueSchool)) {
+        return res.status(400).json({
+          success: false,
+          message: `School fee payment (${schoolFeePaid}) exceeds total school due`
+        })
+      }
+      if (transportFeePaid > (previousYearTotals.transport + currentYearDueTransport)) {
+        return res.status(400).json({
+          success: false,
+          message: `Transport fee payment (${transportFeePaid}) exceeds total transport due`
+        })
+      }
+      if (hostelFeePaid > (previousYearTotals.hostel + currentYearDueHostel)) {
+        return res.status(400).json({
+          success: false,
+          message: `Hostel fee payment (${hostelFeePaid}) exceeds total hostel due`
+        })
+      }
+
+      let remainingSchool = schoolFeePaid
+      let remainingTransport = transportFeePaid
+      let remainingHostel = hostelFeePaid
+      
+      // Track previous year payments
+      const yearsFullyPaid = []
+      let updatedPreviousYears = []
+      
+      // First, allocate to previous years (similar to allPreviousYears logic)
+      for (let i = 0; i < previousYearDetails.length; i++) {
+        if (remainingSchool === 0 && remainingTransport === 0 && remainingHostel === 0) {
+          updatedPreviousYears.push(previousYearDetails[i])
+          continue
+        }
+        
+        const yearRecord = JSON.parse(JSON.stringify(previousYearDetails[i]))
+        if (yearRecord.totalDue <= 0) {
+          updatedPreviousYears.push(yearRecord)
+          continue
+        }
+
+        const yearSchoolDue = yearRecord.remainingBreakdown?.school || 0
+        const yearTransportDue = yearRecord.remainingBreakdown?.transport || 0
+        const yearHostelDue = yearRecord.remainingBreakdown?.hostel || 0
+
+        const yearSchoolPaid = Math.min(remainingSchool, yearSchoolDue)
+        const yearTransportPaid = Math.min(remainingTransport, yearTransportDue)
+        const yearHostelPaid = Math.min(remainingHostel, yearHostelDue)
+        const yearTotalPaid = yearSchoolPaid + yearTransportPaid + yearHostelPaid
+
+        if (yearTotalPaid > 0) {
+          // Distribute payment across terms for this year (same logic as allPreviousYears)
+          const termPayments = JSON.parse(JSON.stringify(yearRecord.termPayments || {}))
+          const termDistribution = JSON.parse(JSON.stringify(yearRecord.termDistribution || {}))
+
+          let remSchool = yearSchoolPaid
+          let remTransport = yearTransportPaid
+          let remHostel = yearHostelPaid
+
+          for (let termNum = 1; termNum <= 3; termNum++) {
+            const termKey = `term${termNum}`
+            
+            if (remSchool === 0 && remTransport === 0 && remHostel === 0) break
+
+            let termData = termPayments[termKey]
+            
+            if (!termData && termDistribution[termNum]) {
+              const td = termDistribution[termNum]
+              termData = {
+                due: td.total || 0,
+                paid: td.totalPaid || 0,
+                remaining: (td.total || 0) - (td.totalPaid || 0),
+                components: {
+                  schoolFee: {
+                    due: td.schoolFee || 0,
+                    paid: td.schoolFeePaid || 0,
+                    remaining: (td.schoolFee || 0) - (td.schoolFeePaid || 0)
+                  },
+                  transportFee: {
+                    due: td.transportFee || 0,
+                    paid: td.transportFeePaid || 0,
+                    remaining: (td.transportFee || 0) - (td.transportFeePaid || 0)
+                  },
+                  hostelFee: {
+                    due: td.hostelFee || 0,
+                    paid: td.hostelFeePaid || 0,
+                    remaining: (td.hostelFee || 0) - (td.hostelFeePaid || 0)
+                  }
+                }
+              }
+              termPayments[termKey] = termData
+            }
+
+            if (!termData) continue
+
+            const schoolFeeDue = termData.components?.schoolFee?.remaining || 0
+            const transportFeeDue = termData.components?.transportFee?.remaining || 0
+            const hostelFeeDue = termData.components?.hostelFee?.remaining || 0
+
+            const schoolFeeToPay = Math.min(remSchool, schoolFeeDue)
+            const transportFeeToPay = Math.min(remTransport, transportFeeDue)
+            const hostelFeeToPay = Math.min(remHostel, hostelFeeDue)
+            const termTotalPaid = schoolFeeToPay + transportFeeToPay + hostelFeeToPay
+
+            if (termTotalPaid > 0) {
+              // Update termPayments
+              termPayments[termKey].paid = (termPayments[termKey].paid || 0) + termTotalPaid
+              termPayments[termKey].remaining = Math.max(0, termPayments[termKey].remaining - termTotalPaid)
+              
+              if (termPayments[termKey].components) {
+                if (schoolFeeToPay > 0) {
+                  termPayments[termKey].components.schoolFee.paid += schoolFeeToPay
+                  termPayments[termKey].components.schoolFee.remaining -= schoolFeeToPay
+                }
+                if (transportFeeToPay > 0) {
+                  termPayments[termKey].components.transportFee.paid += transportFeeToPay
+                  termPayments[termKey].components.transportFee.remaining -= transportFeeToPay
+                }
+                if (hostelFeeToPay > 0) {
+                  termPayments[termKey].components.hostelFee.paid += hostelFeeToPay
+                  termPayments[termKey].components.hostelFee.remaining -= hostelFeeToPay
+                }
+              }
+
+              // Update termDistribution
+              if (termDistribution[termNum]) {
+                if (schoolFeeToPay > 0) {
+                  termDistribution[termNum].schoolFeePaid = (termDistribution[termNum].schoolFeePaid || 0) + schoolFeeToPay
+                }
+                if (transportFeeToPay > 0) {
+                  termDistribution[termNum].transportFeePaid = (termDistribution[termNum].transportFeePaid || 0) + transportFeeToPay
+                }
+                if (hostelFeeToPay > 0) {
+                  termDistribution[termNum].hostelFeePaid = (termDistribution[termNum].hostelFeePaid || 0) + hostelFeeToPay
+                }
+                
+                termDistribution[termNum].totalPaid = 
+                  (termDistribution[termNum].schoolFeePaid || 0) +
+                  (termDistribution[termNum].transportFeePaid || 0) +
+                  (termDistribution[termNum].hostelFeePaid || 0)
+                
+                if (termDistribution[termNum].totalPaid >= (termDistribution[termNum].total || 0)) {
+                  termDistribution[termNum].status = 'Paid'
+                } else if (termDistribution[termNum].totalPaid > 0) {
+                  termDistribution[termNum].status = 'Partial'
+                }
+              }
+
+              remSchool -= schoolFeeToPay
+              remTransport -= transportFeeToPay
+              remHostel -= hostelFeeToPay
+            }
+          }
+
+          // Recalculate year totals
+          let yearSchoolPaidTotal = 0
+          let yearTransportPaidTotal = 0
+          let yearHostelPaidTotal = 0
+          let yearSchoolRemainingTotal = 0
+          let yearTransportRemainingTotal = 0
+          let yearHostelRemainingTotal = 0
+
+          Object.values(termPayments).forEach(term => {
+            if (term.components) {
+              yearSchoolPaidTotal += term.components.schoolFee?.paid || 0
+              yearTransportPaidTotal += term.components.transportFee?.paid || 0
+              yearHostelPaidTotal += term.components.hostelFee?.paid || 0
+              
+              yearSchoolRemainingTotal += term.components.schoolFee?.remaining || 0
+              yearTransportRemainingTotal += term.components.transportFee?.remaining || 0
+              yearHostelRemainingTotal += term.components.hostelFee?.remaining || 0
+            }
+          })
+
+          // Update year record
+          yearRecord.totalPaid = yearSchoolPaidTotal + yearTransportPaidTotal + yearHostelPaidTotal
+          yearRecord.totalDue = yearSchoolRemainingTotal + yearTransportRemainingTotal + yearHostelRemainingTotal
+          yearRecord.termPayments = termPayments
+          yearRecord.termDistribution = termDistribution
+          yearRecord.remainingBreakdown = {
+            school: yearSchoolRemainingTotal,
+            transport: yearTransportRemainingTotal,
+            hostel: yearHostelRemainingTotal,
+            total: yearSchoolRemainingTotal + yearTransportRemainingTotal + yearHostelRemainingTotal
+          }
+          yearRecord.isFullyPaid = yearRecord.totalDue === 0
+
+          if (yearRecord.isFullyPaid) {
+            yearsFullyPaid.push(yearRecord.academicYear)
+            // Don't push fully paid years
+          } else {
+            updatedPreviousYears.push(yearRecord)
+          }
+
+          remainingSchool -= yearSchoolPaid
+          remainingTransport -= yearTransportPaid
+          remainingHostel -= yearHostelPaid
+        } else {
+          updatedPreviousYears.push(yearRecord)
+        }
+      }
+
+      // Calculate new previous year totals AFTER payment
+      const newPreviousYearTotals = {
+        school: updatedPreviousYears.reduce((sum, y) => sum + (y.remainingBreakdown?.school || 0), 0),
+        transport: updatedPreviousYears.reduce((sum, y) => sum + (y.remainingBreakdown?.transport || 0), 0),
+        hostel: updatedPreviousYears.reduce((sum, y) => sum + (y.remainingBreakdown?.hostel || 0), 0),
+        total: updatedPreviousYears.reduce((sum, y) => sum + (y.totalDue || 0), 0)
+      }
+
+      // Then allocate remaining to current year
+      let currentSchoolPaid = remainingSchool
+      let currentTransportPaid = remainingTransport
+      let currentHostelPaid = remainingHostel
+      
+      // Update current year fee record
+      let termDistribution = JSON.parse(JSON.stringify(feeRecord.termDistribution || {}))
+      
+      if (currentSchoolPaid > 0 || currentTransportPaid > 0 || currentHostelPaid > 0) {
+        let remSchool = currentSchoolPaid
+        let remTransport = currentTransportPaid
+        let remHostel = currentHostelPaid
         
         for (let termNum = 1; termNum <= 3; termNum++) {
-          if (remainingSchool === 0 && remainingTransport === 0 && remainingHostel === 0) break
-          if (!updatedTermDistribution[termNum]) continue
+          if (!termDistribution[termNum]) continue
           
-          const termData = updatedTermDistribution[termNum]
+          const termData = termDistribution[termNum]
           
-          const schoolFeeDue = termData.schoolFee - (termData.schoolFeePaid || 0)
-          const transportFeeDue = termData.transportFee - (termData.transportFeePaid || 0)
-          const hostelFeeDue = termData.hostelFee - (termData.hostelFeePaid || 0)
+          const schoolFeeDue = Math.max(0, termData.schoolFee - (termData.schoolFeePaid || 0))
+          const transportFeeDue = Math.max(0, termData.transportFee - (termData.transportFeePaid || 0))
+          const hostelFeeDue = Math.max(0, termData.hostelFee - (termData.hostelFeePaid || 0))
           
-          const schoolFeeToPay = Math.min(remainingSchool, schoolFeeDue)
-          const transportFeeToPay = Math.min(remainingTransport, transportFeeDue)
-          const hostelFeeToPay = Math.min(remainingHostel, hostelFeeDue)
+          const schoolFeeToPay = Math.min(remSchool, schoolFeeDue)
+          const transportFeeToPay = Math.min(remTransport, transportFeeDue)
+          const hostelFeeToPay = Math.min(remHostel, hostelFeeDue)
           
           if (schoolFeeToPay > 0 || transportFeeToPay > 0 || hostelFeeToPay > 0) {
-            updatedTermDistribution = updateTermPaidAmounts(
-              updatedTermDistribution,
+            termDistribution = updateTermPaidAmounts(
+              termDistribution,
               termNum,
               schoolFeeToPay,
               transportFeeToPay,
               hostelFeeToPay
             )
             
-            remainingSchool -= schoolFeeToPay
-            remainingTransport -= transportFeeToPay
-            remainingHostel -= hostelFeeToPay
+            remSchool -= schoolFeeToPay
+            remTransport -= transportFeeToPay
+            remHostel -= hostelFeeToPay
           }
+          
+          if (remSchool === 0 && remTransport === 0 && remHostel === 0) break
         }
       }
 
-      previousYearFee = calculateTotalPreviousYearPending(updatedPreviousYears)
-      const totals = recalculateOverallTotals(updatedTermDistribution)
-      
-      const newCurrentYearDueSchool = discountedSchoolFee - totals.schoolFeePaid
-      const newCurrentYearDueTransport = discountedTransportFee - totals.transportFeePaid
-      const newCurrentYearDueHostel = discountedHostelFee - totals.hostelFeePaid
-      const newCurrentYearDue = newCurrentYearDueSchool + newCurrentYearDueTransport + newCurrentYearDueHostel
+      const totals = recalculateOverallTotals(termDistribution)
 
+      // Calculate new due amounts AFTER this payment
+      const newSchoolDue = Math.max(0, discountedSchoolFee - totals.schoolFeePaid)
+      const newTransportDue = Math.max(0, discountedTransportFee - totals.transportFeePaid)
+      const newHostelDue = Math.max(0, discountedHostelFee - totals.hostelFeePaid)
+      const newTotalDue = newSchoolDue + newTransportDue + newHostelDue
+
+      // COMBINED TOTALS (Previous Years + Current Year)
+      const combinedSchoolRemaining = newPreviousYearTotals.school + newSchoolDue
+      const combinedTransportRemaining = newPreviousYearTotals.transport + newTransportDue
+      const combinedHostelRemaining = newPreviousYearTotals.hostel + newHostelDue
+      const combinedTotalRemaining = combinedSchoolRemaining + combinedTransportRemaining + combinedHostelRemaining
+
+      // MINIMAL METADATA WITH COMBINED TOTALS
+      const paymentMetadata = {
+        paymentType: 'total',
+        paid: {
+          school: schoolFeePaid,
+          transport: transportFeePaid,
+          hostel: hostelFeePaid,
+          total: totalAmount
+        },
+        remaining: {
+          school: combinedSchoolRemaining,
+          transport: combinedTransportRemaining,
+          hostel: combinedHostelRemaining,
+          total: combinedTotalRemaining
+        }
+      }
+
+      // Prepare payment data
+      const paymentData = {
+        studentId,
+        studentDetails: studentDetailsSnapshot,
+        date: new Date(),
+        schoolFeePaid,
+        transportFeePaid,
+        hostelFeePaid,
+        totalAmount,
+        receiptNo: customReceiptNo || generateReceiptNo(),
+        paymentMode,
+        description: description || 'Total outstanding payment',
+        chequeNo,
+        bankName,
+        transactionId,
+        referenceNo,
+        termNumber: null,
+        receivedBy,
+        metadata: paymentMetadata
+      }
+
+      // Fee update data
+      const feeUpdateData = {
+        schoolFeePaid: totals.schoolFeePaid,
+        transportFeePaid: totals.transportFeePaid,
+        hostelFeePaid: totals.hostelFeePaid,
+        totalPaid: totals.totalPaid,
+        termDistribution: termDistribution,
+        term1Paid: termDistribution[1]?.totalPaid || 0,
+        term2Paid: termDistribution[2]?.totalPaid || 0,
+        term3Paid: termDistribution[3]?.totalPaid || 0,
+        previousYearDetails: updatedPreviousYears,
+        previousYearFee: newPreviousYearTotals.total,
+        totalDue: newPreviousYearTotals.total + newTotalDue,
+        isFullyPaid: newPreviousYearTotals.total === 0 && newTotalDue === 0,
+        updatedBy: receivedBy
+      }
+
+      // Process transaction
       const result = await prisma.$transaction(async (tx) => {
-        const payment = await tx.paymentHistory.create({
-          data: {
-            studentId,
-            studentDetails: studentDetailsSnapshot,
-            date: new Date(),
-            schoolFeePaid: schoolFeePaidCurrent,
-            transportFeePaid: transportFeePaidCurrent,
-            hostelFeePaid: hostelFeePaidCurrent,
-            totalAmount,
-            receiptNo: customReceiptNo || generateReceiptNo(),
-            paymentMode,
-            description: description || 'Total outstanding payment',
-            chequeNo,
-            bankName,
-            transactionId,
-            referenceNo,
-            termNumber: null,
-            receivedBy,
-            metadata: {
-              paymentType: 'total',
-              distribution: distributionLog,
-              previousYearsPaid: distributionLog.length,
-              currentYearPaid: totalAmount - (distributionLog.reduce((sum, d) => sum + d.amount, 0)),
-              previousYearBreakdown: {
-                school: allocatedSchoolToPrevious,
-                transport: allocatedTransportToPrevious,
-                hostel: allocatedHostelToPrevious,
-                total: allocatedSchoolToPrevious + allocatedTransportToPrevious + allocatedHostelToPrevious
-              },
-              currentYearBreakdown: {
-                school: schoolFeePaidCurrent,
-                transport: transportFeePaidCurrent,
-                hostel: hostelFeePaidCurrent,
-                total: schoolFeePaidCurrent + transportFeePaidCurrent + hostelFeePaidCurrent
-              },
-              previousYearFee: previousYearFeeBeforePayment,
-              currentYearDue: currentYearDueBeforePayment
-            }
-          }
+        return await processPaymentTransaction(tx, {
+          student,
+          studentDetailsSnapshot,
+          paymentData,
+          feeRecord,
+          feeUpdateData,
+          totalAmount,
+          paymentMode,
+          receivedBy
         })
-
-        const updatedFeeRecord = await tx.feeDetails.update({
-          where: { id: feeRecord.id },
-          data: {
-            schoolFeePaid: totals.schoolFeePaid,
-            transportFeePaid: totals.transportFeePaid,
-            hostelFeePaid: totals.hostelFeePaid,
-            totalPaid: totals.totalPaid,
-            termDistribution: updatedTermDistribution,
-            term1Paid: updatedTermDistribution[1]?.totalPaid || 0,
-            term2Paid: updatedTermDistribution[2]?.totalPaid || 0,
-            term3Paid: updatedTermDistribution[3]?.totalPaid || 0,
-            previousYearDetails: updatedPreviousYears,
-            previousYearFee: previousYearFee,
-            totalDue: previousYearFee + newCurrentYearDue,
-            isFullyPaid: previousYearFee === 0 && newCurrentYearDue === 0,
-            updatedBy: receivedBy
-          }
-        })
-
-        return { payment, updatedFeeRecord }
       })
 
       return res.status(201).json({
         success: true,
-        message: 'Total payment processed successfully',
+        message: paymentMetadata.remaining.total === 0 ? 'All fees fully paid!' : 'Payment processed',
         data: {
           paymentId: result.payment.id,
           receiptNo: result.payment.receiptNo,
           date: result.payment.date,
-          totalAmount: result.payment.totalAmount,
-          previousYearBreakdown: {
-            school: allocatedSchoolToPrevious,
-            transport: allocatedTransportToPrevious,
-            hostel: allocatedHostelToPrevious,
-            total: allocatedSchoolToPrevious + allocatedTransportToPrevious + allocatedHostelToPrevious
-          },
-          currentYearBreakdown: {
-            school: schoolFeePaidCurrent,
-            transport: transportFeePaidCurrent,
-            hostel: hostelFeePaidCurrent,
-            total: schoolFeePaidCurrent + transportFeePaidCurrent + hostelFeePaidCurrent
-          },
-          paymentType: 'total',
+          metadata: paymentMetadata,
           receiptUrl: `/api/fee/receipt/${result.payment.id}`
         }
       })
@@ -3645,7 +3786,7 @@ export const processPayment = async (req, res) => {
 }
 
 /**
- * @desc    Get payment receipt by ID
+ * @desc    Get payment receipt by ID - USING SIMPLIFIED METADATA
  * @route   GET /api/fee/receipt/:paymentId
  */
 export const getPaymentReceipt = async (req, res) => {
@@ -3656,11 +3797,17 @@ export const getPaymentReceipt = async (req, res) => {
       where: { id: paymentId },
       include: {
         student: {
-          include: {
-            feeDetails: {
-              orderBy: { createdAt: 'desc' },
-              take: 1
-            }
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            admissionNo: true,
+            rollNo: true,
+            class: true,
+            section: true,
+            parentName: true,
+            parentPhone: true,
+            isActive: true
           }
         }
       }
@@ -3673,279 +3820,25 @@ export const getPaymentReceipt = async (req, res) => {
       })
     }
 
-    const feeRecord = payment.student.feeDetails[0]
-    
-    // Parse previous year details
-    const previousYearDetails = getFormattedPreviousYearDetails(feeRecord.previousYearDetails)
-    
-    // Calculate previous year totals
-    let totalPreviousYearFee = 0
-    let totalPreviousYearPaid = 0
-    let totalPreviousYearDue = 0
-    
-    previousYearDetails.forEach(year => {
-      totalPreviousYearFee += year.originalTotalFee || 0
-      totalPreviousYearPaid += year.totalPaid || 0
-      totalPreviousYearDue += year.totalDue || 0
-    })
-
-    // Calculate current year totals
-    const discountedSchoolFee = feeRecord.discountedSchoolFee || 0
-    const discountedTransportFee = feeRecord.discountedTransportFee || 0
-    const discountedHostelFee = feeRecord.discountedHostelFee || 0
-    const discountedTotalFee = discountedSchoolFee + discountedTransportFee + discountedHostelFee
-
-    const currentYearPaidSchool = feeRecord.schoolFeePaid || 0
-    const currentYearPaidTransport = feeRecord.transportFeePaid || 0
-    const currentYearPaidHostel = feeRecord.hostelFeePaid || 0
-    const currentYearTotalPaid = currentYearPaidSchool + currentYearPaidTransport + currentYearPaidHostel
-
-    const currentYearDueSchool = discountedSchoolFee - currentYearPaidSchool
-    const currentYearDueTransport = discountedTransportFee - currentYearPaidTransport
-    const currentYearDueHostel = discountedHostelFee - currentYearPaidHostel
-    const currentYearDue = currentYearDueSchool + currentYearDueTransport + currentYearDueHostel
-
-    // Calculate grand totals
-    const grandTotal = discountedTotalFee + totalPreviousYearFee
-    const totalPaidAcrossAllYears = currentYearTotalPaid + totalPreviousYearPaid
-    const totalDueAcrossAllYears = currentYearDue + totalPreviousYearDue
-
-    // Get payment metadata
+    // Get metadata from payment record
     const metadata = payment.metadata || {}
-    const paymentType = metadata.paymentType || 
-                       (payment.termNumber ? 'term' : 
-                        payment.description?.toLowerCase().includes('previous') ? 'previousYear' : 'currentYear')
-
-    console.log('Payment Receipt - Processing:', {
-      paymentId: payment.id,
-      paymentType,
-      totalAmount: payment.totalAmount,
-      schoolFeePaid: payment.schoolFeePaid,
-      transportFeePaid: payment.transportFeePaid,
-      hostelFeePaid: payment.hostelFeePaid,
-      metadata
-    })
-
-    // Initialize breakdowns with exact amounts from payment
-    let previousYearPaidInThisTransaction = {
-      schoolFee: 0,
-      transportFee: 0,
-      hostelFee: 0,
-      total: 0
-    }
-
-    let currentYearPaidInThisTransaction = {
-      schoolFee: 0,
-      transportFee: 0,
-      hostelFee: 0,
-      total: 0
-    }
-
-    // ===== EXTRACT EXACT BREAKDOWN FROM METADATA =====
     
-    // For TOTAL payment type - use distribution log from metadata
-    if (paymentType === 'total' || paymentType === 'full') {
-      if (metadata.distribution && metadata.distribution.length > 0) {
-        // Sum up previous year payments from distribution log
-        metadata.distribution.forEach(dist => {
-          if (dist.breakdown) {
-            previousYearPaidInThisTransaction.schoolFee += dist.breakdown.school || 0
-            previousYearPaidInThisTransaction.transportFee += dist.breakdown.transport || 0
-            previousYearPaidInThisTransaction.hostelFee += dist.breakdown.hostel || 0
-          }
-        })
-        previousYearPaidInThisTransaction.total = 
-          previousYearPaidInThisTransaction.schoolFee + 
-          previousYearPaidInThisTransaction.transportFee + 
-          previousYearPaidInThisTransaction.hostelFee
-        
-        // Current year payment = total - previous year total
-        currentYearPaidInThisTransaction.schoolFee = payment.schoolFeePaid - previousYearPaidInThisTransaction.schoolFee
-        currentYearPaidInThisTransaction.transportFee = payment.transportFeePaid - previousYearPaidInThisTransaction.transportFee
-        currentYearPaidInThisTransaction.hostelFee = payment.hostelFeePaid - previousYearPaidInThisTransaction.hostelFee
-        currentYearPaidInThisTransaction.total = 
-          currentYearPaidInThisTransaction.schoolFee + 
-          currentYearPaidInThisTransaction.transportFee + 
-          currentYearPaidInThisTransaction.hostelFee
-      } 
-      else if (metadata.previousYearBreakdown && metadata.currentYearBreakdown) {
-        // Use breakdowns directly from metadata
-        previousYearPaidInThisTransaction = {
-          schoolFee: metadata.previousYearBreakdown.school || 0,
-          transportFee: metadata.previousYearBreakdown.transport || 0,
-          hostelFee: metadata.previousYearBreakdown.hostel || 0,
-          total: metadata.previousYearBreakdown.total || 0
-        }
-        
-        currentYearPaidInThisTransaction = {
-          schoolFee: metadata.currentYearBreakdown.school || 0,
-          transportFee: metadata.currentYearBreakdown.transport || 0,
-          hostelFee: metadata.currentYearBreakdown.hostel || 0,
-          total: metadata.currentYearBreakdown.total || 0
-        }
-      }
-      else {
-        // Fallback: Assume all payment is for previous years if previous year fee exists
-        const totalPreviousYearDue = previousYearDetails.reduce((sum, year) => sum + (year.totalDue || 0), 0)
-        const totalCurrentYearDue = currentYearDue
-        
-        // If total payment matches previous year due, it's all previous year
-        if (Math.abs(payment.totalAmount - totalPreviousYearDue) < 10 && totalPreviousYearDue > 0) {
-          previousYearPaidInThisTransaction = {
-            schoolFee: payment.schoolFeePaid,
-            transportFee: payment.transportFeePaid,
-            hostelFee: payment.hostelFeePaid,
-            total: payment.totalAmount
-          }
-        }
-        // If total payment matches current year due, it's all current year
-        else if (Math.abs(payment.totalAmount - totalCurrentYearDue) < 10 && totalCurrentYearDue > 0) {
-          currentYearPaidInThisTransaction = {
-            schoolFee: payment.schoolFeePaid,
-            transportFee: payment.transportFeePaid,
-            hostelFee: payment.hostelFeePaid,
-            total: payment.totalAmount
-          }
-        }
-        // Otherwise, split proportionally based on dues
-        else {
-          const totalDue = totalPreviousYearDue + totalCurrentYearDue
-          if (totalDue > 0) {
-            const previousYearRatio = totalPreviousYearDue / totalDue
-            const previousYearAmount = Math.round(payment.totalAmount * previousYearRatio)
-            
-            // Split component amounts proportionally
-            previousYearPaidInThisTransaction.schoolFee = Math.round(payment.schoolFeePaid * previousYearRatio)
-            previousYearPaidInThisTransaction.transportFee = Math.round(payment.transportFeePaid * previousYearRatio)
-            previousYearPaidInThisTransaction.hostelFee = Math.round(payment.hostelFeePaid * previousYearRatio)
-            previousYearPaidInThisTransaction.total = previousYearAmount
-            
-            currentYearPaidInThisTransaction.schoolFee = payment.schoolFeePaid - previousYearPaidInThisTransaction.schoolFee
-            currentYearPaidInThisTransaction.transportFee = payment.transportFeePaid - previousYearPaidInThisTransaction.transportFee
-            currentYearPaidInThisTransaction.hostelFee = payment.hostelFeePaid - previousYearPaidInThisTransaction.hostelFee
-            currentYearPaidInThisTransaction.total = payment.totalAmount - previousYearAmount
-          }
-        }
-      }
-    }
-    // For PREVIOUS YEAR payment type
-    else if (paymentType === 'previousYear' && metadata.previousYearBreakdown) {
-      previousYearPaidInThisTransaction = {
-        schoolFee: metadata.previousYearBreakdown.school || 0,
-        transportFee: metadata.previousYearBreakdown.transport || 0,
-        hostelFee: metadata.previousYearBreakdown.hostel || 0,
-        total: metadata.previousYearBreakdown.total || payment.totalAmount
-      }
-    }
-    // For ALL PREVIOUS YEARS payment type
-    else if (paymentType === 'allPreviousYears' && metadata.previousYearBreakdown) {
-      previousYearPaidInThisTransaction = {
-        schoolFee: metadata.previousYearBreakdown.school || 0,
-        transportFee: metadata.previousYearBreakdown.transport || 0,
-        hostelFee: metadata.previousYearBreakdown.hostel || 0,
-        total: metadata.previousYearBreakdown.total || payment.totalAmount
-      }
-    }
-    // For CURRENT YEAR payment type
-    else if (paymentType === 'currentYear' && metadata.currentYearBreakdown) {
-      currentYearPaidInThisTransaction = {
-        schoolFee: metadata.currentYearBreakdown.school || 0,
-        transportFee: metadata.currentYearBreakdown.transport || 0,
-        hostelFee: metadata.currentYearBreakdown.hostel || 0,
-        total: metadata.currentYearBreakdown.total || payment.totalAmount
-      }
-    }
-    // For TERM payment type
-    else if (paymentType === 'term' && metadata.currentYearBreakdown) {
-      currentYearPaidInThisTransaction = {
-        schoolFee: metadata.currentYearBreakdown.school || 0,
-        transportFee: metadata.currentYearBreakdown.transport || 0,
-        hostelFee: metadata.currentYearBreakdown.hostel || 0,
-        total: metadata.currentYearBreakdown.total || payment.totalAmount
-      }
-    }
-    // Fallback: use payment fields directly with description analysis
-    else {
-      // Check if this payment is for previous years based on description
-      if (payment.description?.toLowerCase().includes('previous') || 
-          payment.description?.toLowerCase().includes('2024') ||
-          payment.description?.toLowerCase().includes('2025')) {
-        previousYearPaidInThisTransaction = {
-          schoolFee: payment.schoolFeePaid,
-          transportFee: payment.transportFeePaid,
-          hostelFee: payment.hostelFeePaid,
-          total: payment.totalAmount
-        }
-      } else {
-        currentYearPaidInThisTransaction = {
-          schoolFee: payment.schoolFeePaid,
-          transportFee: payment.transportFeePaid,
-          hostelFee: payment.hostelFeePaid,
-          total: payment.totalAmount
-        }
-      }
-    }
-
-    // Ensure component totals match the payment total
-    const calculatedComponentTotal = previousYearPaidInThisTransaction.total + currentYearPaidInThisTransaction.total
-    if (Math.abs(calculatedComponentTotal - payment.totalAmount) > 1 && payment.totalAmount > 0) {
-      // Adjust to fix mismatch - prioritize the breakdown that makes sense
-      if (previousYearPaidInThisTransaction.total > 0 && currentYearPaidInThisTransaction.total === 0) {
-        // All payment is for previous years
-        previousYearPaidInThisTransaction.total = payment.totalAmount
-        // Adjust individual components proportionally if needed
-        const totalComponents = previousYearPaidInThisTransaction.schoolFee + 
-                               previousYearPaidInThisTransaction.transportFee + 
-                               previousYearPaidInThisTransaction.hostelFee
-        if (totalComponents > 0 && totalComponents !== payment.totalAmount) {
-          const ratio = payment.totalAmount / totalComponents
-          previousYearPaidInThisTransaction.schoolFee = Math.round(previousYearPaidInThisTransaction.schoolFee * ratio)
-          previousYearPaidInThisTransaction.transportFee = Math.round(previousYearPaidInThisTransaction.transportFee * ratio)
-          previousYearPaidInThisTransaction.hostelFee = Math.round(previousYearPaidInThisTransaction.hostelFee * ratio)
-        }
-      } else if (currentYearPaidInThisTransaction.total > 0 && previousYearPaidInThisTransaction.total === 0) {
-        // All payment is for current year
-        currentYearPaidInThisTransaction.total = payment.totalAmount
-        // Adjust individual components proportionally if needed
-        const totalComponents = currentYearPaidInThisTransaction.schoolFee + 
-                               currentYearPaidInThisTransaction.transportFee + 
-                               currentYearPaidInThisTransaction.hostelFee
-        if (totalComponents > 0 && totalComponents !== payment.totalAmount) {
-          const ratio = payment.totalAmount / totalComponents
-          currentYearPaidInThisTransaction.schoolFee = Math.round(currentYearPaidInThisTransaction.schoolFee * ratio)
-          currentYearPaidInThisTransaction.transportFee = Math.round(currentYearPaidInThisTransaction.transportFee * ratio)
-          currentYearPaidInThisTransaction.hostelFee = Math.round(currentYearPaidInThisTransaction.hostelFee * ratio)
-        }
-      } else {
-        // Split payment - use original payment fields
-        currentYearPaidInThisTransaction.schoolFee = payment.schoolFeePaid
-        currentYearPaidInThisTransaction.transportFee = payment.transportFeePaid
-        currentYearPaidInThisTransaction.hostelFee = payment.hostelFeePaid
-        currentYearPaidInThisTransaction.total = payment.totalAmount
-      }
-    }
-
-    // Log the final breakdown for verification
-    console.log('Final Payment Breakdown:', {
-      previousYear: previousYearPaidInThisTransaction,
-      currentYear: currentYearPaidInThisTransaction,
-      totalPayment: payment.totalAmount
-    })
-
     // Use student snapshot if available
     const studentSnapshot = payment.studentDetails || {}
+    
     const studentData = {
       name: studentSnapshot.firstName && studentSnapshot.lastName 
         ? `${studentSnapshot.firstName} ${studentSnapshot.lastName}`.trim()
-        : `${payment.student.firstName} ${payment.student.lastName}`.trim(),
-      admissionNo: studentSnapshot.admissionNo || payment.student.admissionNo,
-      rollNo: payment.student.rollNo,
-      class: studentSnapshot.class || payment.student.class,
-      displayClass: studentSnapshot.classLabel || mapEnumToDisplayName(payment.student.class),
-      section: studentSnapshot.section || payment.student.section,
-      parentName: studentSnapshot.parentName || payment.student.parentName,
-      parentPhone: studentSnapshot.parentPhone || payment.student.parentPhone,
-      isHistoricalData: !!studentSnapshot.firstName
+        : payment.student 
+          ? `${payment.student.firstName} ${payment.student.lastName}`.trim()
+          : 'Unknown',
+      admissionNo: studentSnapshot.admissionNo || payment.student?.admissionNo || 'N/A',
+      rollNo: payment.student?.rollNo || 'N/A',
+      class: studentSnapshot.class || payment.student?.class,
+      displayClass: studentSnapshot.classLabel || mapEnumToDisplayName(payment.student?.class),
+      section: studentSnapshot.section || payment.student?.section || '',
+      parentName: studentSnapshot.parentName || payment.student?.parentName || '',
+      parentPhone: studentSnapshot.parentPhone || payment.student?.parentPhone || '',
     }
 
     const receiptData = {
@@ -3956,7 +3849,7 @@ export const getPaymentReceipt = async (req, res) => {
         id: payment.id,
         mode: payment.paymentMode,
         termNumber: payment.termNumber,
-        type: paymentType,
+        type: metadata.paymentType || 'unknown',
         description: payment.description,
         chequeNo: payment.chequeNo,
         bankName: payment.bankName,
@@ -3964,54 +3857,13 @@ export const getPaymentReceipt = async (req, res) => {
         referenceNo: payment.referenceNo,
         receivedBy: payment.receivedBy,
         totalAmount: payment.totalAmount,
-        breakdown: {
-          schoolFee: payment.schoolFeePaid,
-          transportFee: payment.transportFeePaid,
-          hostelFee: payment.hostelFeePaid
+        basicBreakdown: {
+          school: payment.schoolFeePaid,
+          transport: payment.transportFeePaid,
+          hostel: payment.hostelFeePaid
         },
-        // EXACT breakdown of what was paid for previous years
-        previousYearBreakdown: {
-          schoolFee: previousYearPaidInThisTransaction.schoolFee,
-          transportFee: previousYearPaidInThisTransaction.transportFee,
-          hostelFee: previousYearPaidInThisTransaction.hostelFee,
-          total: previousYearPaidInThisTransaction.total
-        },
-        // EXACT breakdown of what was paid for current year
-        currentYearBreakdown: {
-          schoolFee: currentYearPaidInThisTransaction.schoolFee,
-          transportFee: currentYearPaidInThisTransaction.transportFee,
-          hostelFee: currentYearPaidInThisTransaction.hostelFee,
-          total: currentYearPaidInThisTransaction.total
-        },
-        metadata
-      },
-      feeSummary: {
-        // Current year details
-        discountedSchoolFee,
-        discountedTransportFee,
-        discountedHostelFee,
-        discountedTotalFee,
-        currentYearPaidSchool,
-        currentYearPaidTransport,
-        currentYearPaidHostel,
-        currentYearTotalPaid,
-        currentYearDueSchool,
-        currentYearDueTransport,
-        currentYearDueHostel,
-        currentYearDue,
-        
-        // Previous year details
-        previousYearDetails,
-        previousYearFee: totalPreviousYearFee,
-        previousYearPaid: totalPreviousYearPaid,
-        previousYearDue: totalPreviousYearDue,
-        
-        // Overall totals
-        grandTotal,
-        totalPaidAcrossAllYears,
-        totalDueAcrossAllYears,
-        paymentStatus: totalDueAcrossAllYears === 0 ? 'Paid' : 
-                      totalDueAcrossAllYears === grandTotal ? 'Unpaid' : 'Partial'
+        // Simplified metadata
+        metadata: metadata
       },
       schoolInfo: {
         name: process.env.SCHOOL_NAME || 'Your School Name',

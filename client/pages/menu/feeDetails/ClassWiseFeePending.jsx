@@ -20,7 +20,7 @@ import { ToastNotification } from '@/components/ui/ToastNotification'
 import axiosApi from '@/utils/axiosApi'
 import * as Sharing from 'expo-sharing'
 import * as Print from 'expo-print'
-import { schoolInfo, generateClassWisePDFHTML } from './generateClassWisePDFHTML'
+import { generateClassWisePDFHTML } from './generateClassWisePDFHTML'
 
 const { width, height } = Dimensions.get('window')
 
@@ -448,12 +448,6 @@ export default function ClassWiseFeePending({ visible, onClose }) {
           totalPreviousYearFee: grandTotals.totalPreviousYearFee,
           totalAmount: grandTotals.totalAmount
         },
-        schoolInfo: {
-          name: schoolInfo.name,
-          address: schoolInfo.address,
-          phone: schoolInfo.phone,
-          email: schoolInfo.email
-        },
         generatedAt: new Date(),
         isOverallReport: true
       })
@@ -511,12 +505,6 @@ export default function ClassWiseFeePending({ visible, onClose }) {
           totalTerm3Pending: section.totalTerm3Pending || 0,
           totalPreviousYearFee: section.totalPreviousYearPending || 0,
           totalAmount: section.totalPendingAmount || 0
-        },
-        schoolInfo: {
-          name: schoolInfo.name,
-          address: schoolInfo.address,
-          phone: schoolInfo.phone,
-          email: schoolInfo.email
         },
         generatedAt: new Date(),
         isOverallReport: false

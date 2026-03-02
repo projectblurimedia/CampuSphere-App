@@ -1,10 +1,4 @@
-export const schoolInfo = {
-  name: 'BLURI (E.M) HIGH SCHOOL',
-  address: 'Gavaravaram',
-  phone: '+91 7382181235',
-  email: 'info@bluri.edu.in',
-  website: 'www.bluri.edu.in'
-}
+import { schoolDetails } from "@/schoolDetails"
 
 export const generateClassWisePDFHTML = (data) => {
   const {
@@ -13,7 +7,6 @@ export const generateClassWisePDFHTML = (data) => {
     selectedTerm,
     sections,
     grandTotals,
-    schoolInfo,
     generatedAt
   } = data
 
@@ -80,8 +73,8 @@ export const generateClassWisePDFHTML = (data) => {
         <div class="section-page" ${index > 0 ? 'style="page-break-before: always;"' : ''}>
           <!-- School Header (repeated on each page) -->
           <div class="school-header">
-            <h1 class="school-name">${schoolInfo.name}</h1>
-            <div class="school-details">${schoolInfo.address} | ${schoolInfo.phone} | ${schoolInfo.email}</div>
+            <h1 class="school-name">${schoolDetails.name}</h1>
+            <div class="school-details">${schoolDetails.address} | ${schoolDetails.phone} | ${schoolDetails.email}</div>
           </div>
 
           <!-- Report Title with Filters -->

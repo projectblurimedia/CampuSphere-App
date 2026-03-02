@@ -14,16 +14,16 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
-import { FontAwesome5, Ionicons, Feather, MaterialIcons } from '@expo/vector-icons'
+import { FontAwesome5, Ionicons, Feather, MaterialIcons, FontAwesome6, FontAwesome } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 import axiosApi from '@/utils/axiosApi'
 import { ToastNotification } from '@/components/ui/ToastNotification'
-import ConfirmationModal from './ConfirmationModal'
 import { useSelector } from 'react-redux'
 import * as Sharing from 'expo-sharing'
 import * as Print from 'expo-print'
 import { generateReceiptHTML, generatePrintHTML } from './receiptHtmlTemplates'
 import FeeReceipt from './FeeReceipt'
+import PaymentConfirmationModal from './PaymentConfirmationModal'
 
 export default function FeePaymentModal({ visible, onClose, paymentData, student, feeDetails, onPaymentSuccess }) {
   const { colors } = useTheme()
@@ -216,6 +216,8 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
   const receivedBy = employee ? `${employee.firstName} ${employee.lastName}` : 'System'
 
   const buildPaymentPayload = () => {
+    const paymentTypeValue = paymentData?.paymentType || 'currentYear'
+
     const payload = {
       schoolFeePaid: parseInt(componentAmounts.schoolFee) || 0,
       transportFeePaid: parseInt(componentAmounts.transportFee) || 0,
@@ -224,7 +226,7 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
       description: remarks.trim() || paymentData.description,
       termNumber: paymentData.term || null,
       receivedBy: receivedBy,
-      paymentType: paymentData.paymentType,
+      paymentType: paymentTypeValue,
     }
     
     // Add previous year specific fields with more detail
@@ -1070,34 +1072,32 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
     if (!student) return null
     
     return (
-      <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+      <View style={[styles.studentInfoCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
         <View style={styles.studentHeader}>
           <View style={[styles.studentAvatar, { backgroundColor: colors.primary + '20' }]}>
             <Ionicons name="person" size={24} color={colors.primary} />
           </View>
           <View style={styles.studentInfo}>
-            <ThemedText style={styles.studentName}>{student.name}</ThemedText>
-            <ThemedText style={styles.studentDetails}>
-              {student.displayClass || student.class} • {student.section}
+            <ThemedText style={styles.studentName}>
+              {feeDetails.studentInfo?.name || student.name}
+            </ThemedText>
+            <ThemedText style={styles.studentClass}>
+              {feeDetails.studentInfo?.displayClass || student.displayClass || student.class} - {feeDetails.studentInfo?.section || student.section}
             </ThemedText>
           </View>
         </View>
         
-        <View style={styles.paymentInfo}>
-          <View style={styles.paymentInfoItem}>
-            <Feather name="calendar" size={14} color={colors.textSecondary} />
-            <ThemedText style={styles.paymentInfoText}>
-              {paymentData.term ? `Term ${paymentData.term} Payment` : 
-               paymentData.paymentType === 'previousYear' ? 'Previous Year Payment' :
-               paymentData.paymentType === 'allPreviousYears' ? 'All Previous Years' :
-               paymentData.paymentType === 'currentYear' ? 'Current Year Payment' :
-               'Full Payment'}
+        <View style={styles.studentDetailsGrid}>
+          <View style={styles.detailItem}>
+            <FontAwesome6 name="person" size={16} color={colors.textSecondary} />
+            <ThemedText style={styles.detailText}>
+              {feeDetails.studentInfo?.parentName}
             </ThemedText>
           </View>
-          <View style={styles.paymentInfoItem}>
-            <Feather name="hash" size={14} color={colors.textSecondary} />
-            <ThemedText style={styles.paymentInfoText}>
-              {student.admissionNo}
+          <View style={styles.detailItem}>
+            <FontAwesome name="phone" size={16} color={colors.textSecondary} />
+            <ThemedText style={styles.detailText}>
+              {feeDetails.studentInfo?.parentPhone}
             </ThemedText>
           </View>
         </View>
@@ -1248,6 +1248,67 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
     
     scrollView: { flex: 1 },
     scrollContent: { paddingBottom: 100, paddingHorizontal: 16 },
+
+    // Student Info
+    studentInfoCard: {
+      marginHorizontal: 0,
+      marginTop: 16,
+      marginBottom: 8,
+      padding: 16,
+      borderRadius: 12,
+      borderWidth: 1,
+    },
+    studentHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    studentAvatar: {
+      width: 50,
+      height: 50,
+      borderRadius: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 12,
+    },
+    studentInfo: {
+      flex: 1,
+    },
+    studentName: {
+      fontSize: 16,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+      marginBottom: 2,
+    },
+    studentClass: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      fontFamily: 'Poppins-Medium',
+    },
+    studentDetailsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+    },
+    detailItem: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      backgroundColor: colors.inputBackground,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+    },
+    detailText: {
+      fontSize: 12,
+      color: colors.text,
+      fontFamily: 'Poppins-Medium',
+      marginLeft: 6,
+    },
     
     // Card styles
     card: {
@@ -1260,7 +1321,8 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: 12,
+      marginBottom: 4,
+      marginRight: 15,
     },
     cardHeaderLeft: {
       flexDirection: 'row',
@@ -1804,15 +1866,18 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
         </View>
       </Modal>
       
-      {/* Confirmation Modal */}
-      <ConfirmationModal
+      {/* Payment Confirmation Modal */}
+      <PaymentConfirmationModal
         visible={showConfirmation}
-        onClose={() => setShowConfirmation(false)}
         onConfirm={processPayment}
-        title="Confirm Payment"
-        message={`Are you sure you want to process payment of ₹${totalAmount.toLocaleString()}?`}
-        confirmText="Confirm"
-        cancelText="Cancel"
+        onCancel={() => setShowConfirmation(false)}
+        totalAmount={totalAmount}
+        paymentMethod={paymentMethod}
+        paymentType={paymentData?.paymentType}
+        componentAmounts={componentAmounts}
+        student={student}
+        paymentData={paymentData}
+        loading={loading}
       />
       
       {/* Receipt Modal - Shown after successful payment */}

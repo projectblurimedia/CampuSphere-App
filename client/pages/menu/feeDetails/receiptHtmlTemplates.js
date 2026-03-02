@@ -1,35 +1,28 @@
-export const schoolInfo = {
-  name: 'BLURI (E.M) HIGH SCHOOL',
-  address: 'Gavaravaram',
-  phone: '+91 7382181235',
-  email: 'info@bluri.edu.in',
-  website: 'www.bluri.edu.in'
-}
+import { schoolDetails } from "@/schoolDetails"
 
 export const generateReceiptHTML = (receiptData) => {
-  // Calculate totals correctly
-  const discountedTotal = receiptData.feeSummary?.discountedTotalFee || 0 // Current year total fee: 32500
-  const currentYearPaid = receiptData.feeSummary?.currentYearTotalPaid || 0 // Current year paid: 2000
-  const previousYearFee = receiptData.feeSummary?.previousYearFee || 0 // Previous year total fee: 55000
-  const previousYearPaid = receiptData.feeSummary?.previousYearPaid || 0 // Previous year paid: 55000
+  // Get metadata which contains the breakdown
+  const metadata = receiptData.payment?.metadata || {}
   
-  const grandTotal = discountedTotal + previousYearFee // 32500 + 55000 = 87500
-  const totalPaid = currentYearPaid + previousYearPaid // 2000 + 55000 = 57000
-  const totalDue = grandTotal - totalPaid // 87500 - 57000 = 30500 ✅
+  // THIS TRANSACTION PAID AMOUNTS - from metadata.paid
+  const paidInThisTransaction = {
+    school: metadata.paid?.school || 0,
+    transport: metadata.paid?.transport || 0,
+    hostel: metadata.paid?.hostel || 0,
+    total: metadata.paid?.total || receiptData.payment?.totalAmount || 0
+  }
   
-  const paymentStatus = totalDue === 0 ? 'PAID' : totalDue === grandTotal ? 'UNPAID' : 'PARTIAL'
-
-  // Get payment breakdown
-  const previousYearBreakdown = receiptData.payment?.previousYearBreakdown || { schoolFee: 0, transportFee: 0, hostelFee: 0, total: 0 }
-  const currentYearBreakdown = receiptData.payment?.currentYearBreakdown || { schoolFee: 0, transportFee: 0, hostelFee: 0, total: 0 }
+  // REMAINING AMOUNTS AFTER THIS PAYMENT - from metadata.remaining (COMBINED total)
+  const remainingAfterPayment = {
+    school: metadata.remaining?.school || 0,
+    transport: metadata.remaining?.transport || 0,
+    hostel: metadata.remaining?.hostel || 0,
+    total: metadata.remaining?.total || 0
+  }
   
   // Check if transport or hostel fees exist
-  const hasTransportFee = receiptData.feeSummary?.discountedTransportFee > 0 || 
-                         currentYearBreakdown.transportFee > 0 || 
-                         previousYearBreakdown.transportFee > 0
-  const hasHostelFee = receiptData.feeSummary?.discountedHostelFee > 0 || 
-                      currentYearBreakdown.hostelFee > 0 || 
-                      previousYearBreakdown.hostelFee > 0
+  const hasTransportFee = paidInThisTransaction.transport > 0 || remainingAfterPayment.transport > 0
+  const hasHostelFee = paidInThisTransaction.hostel > 0 || remainingAfterPayment.hostel > 0
 
   return `
     <!DOCTYPE html>
@@ -105,11 +98,11 @@ export const generateReceiptHTML = (receiptData) => {
         }
         .student-name-label {
           font-weight: bold;
-          color: #555;
+          color: #333;
           font-size: 14px;
         }
         .student-name-value {
-          color: #333;
+          color: #000;
           font-size: 14px;
           font-weight: bold;
         }
@@ -123,18 +116,19 @@ export const generateReceiptHTML = (receiptData) => {
         }
         .info-label {
           font-weight: bold;
-          color: #555;
+          color: #333;
           font-size: 12px;
         }
         .info-value {
-          color: #333;
+          color: #000;
           font-size: 12px;
+          font-weight: 500;
         }
         .transaction-header {
           background: #1d9bf0;
           padding: 12px 15px;
           border-radius: 8px;
-          margin-bottom: 15px;
+          margin-bottom: 20px;
           display: flex;
           justify-content: space-between;
           align-items: center;
@@ -152,189 +146,102 @@ export const generateReceiptHTML = (receiptData) => {
           font-size: 12px;
           font-weight: bold;
         }
-        .breakdown-section {
-          margin-bottom: 20px;
-          padding: 0 15px;
-        }
-        .breakdown-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 10px;
-          padding: 8px 12px;
-          background: #f0f0f0;
-          border-radius: 6px;
-        }
-        .breakdown-title {
-          font-size: 14px;
-          font-weight: bold;
-        }
-        .previous-year-title {
-          color: #ff9800;
-        }
-        .current-year-title {
-          color: #1d9bf0;
-        }
-        .breakdown-total {
-          font-size: 14px;
-          font-weight: bold;
-        }
-        .previous-year-total {
-          color: #ff9800;
-        }
-        .current-year-total {
-          color: #1d9bf0;
-        }
-        .fee-items-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px;
-          margin-bottom: 10px;
-        }
-        .fee-item {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          background: #f9f9f9;
-          padding: 10px 12px;
-          border-radius: 6px;
-        }
-        .fee-label {
-          font-size: 13px;
-          color: #555;
-          font-weight: 500;
-        }
-        .fee-amount {
-          font-size: 14px;
-          font-weight: bold;
-        }
-        .totals-row {
+        .breakdown-container {
           display: flex;
           flex-direction: row;
-          justify-content: space-between;
-          align-items: center;
           gap: 15px;
-          margin: 15px 15px 15px 15px;
+          margin-bottom: 20px;
         }
-        .total-paid-box {
+        .paid-column {
           flex: 1;
-          background: #1d9bf0;
-          padding: 12px 15px;
+          background: #f0fff0;
           border-radius: 8px;
+          padding: 15px;
+          border-left: 4px solid #28a745;
+        }
+        .due-column {
+          flex: 1;
+          background: #fff0f0;
+          border-radius: 8px;
+          padding: 15px;
+          border-left: 4px solid #dc3545;
+        }
+        .column-title {
+          font-size: 16px;
+          font-weight: bold;
+          margin-bottom: 15px;
+          padding-bottom: 8px;
+          border-bottom: 2px solid rgba(0,0,0,0.1);
+        }
+        .paid-title {
+          color: #28a745;
+        }
+        .due-title {
+          color: #dc3545;
+        }
+        .fee-row {
           display: flex;
           justify-content: space-between;
           align-items: center;
+          padding: 10px 0;
+          border-bottom: 1px solid rgba(0,0,0,0.05);
         }
-        .total-due-box {
-          flex: 1;
-          background: #dc3545;
-          padding: 12px 15px;
-          border-radius: 8px;
+        .fee-label {
+          font-size: 14px;
+          font-weight: 600;
+          color: #333;
+        }
+        .fee-amount {
+          font-size: 16px;
+          font-weight: bold;
+        }
+        .paid-amount {
+          color: #28a745;
+        }
+        .due-amount {
+          color: #dc3545;
+        }
+        .total-row {
+          margin-top: 15px;
+          padding-top: 15px;
+          border-top: 2px solid #333;
           display: flex;
           justify-content: space-between;
           align-items: center;
         }
         .total-label {
-          color: white;
-          font-size: 14px;
+          font-size: 16px;
+          font-weight: bold;
+          color: #000;
+        }
+        .total-value {
+          font-size: 20px;
           font-weight: bold;
         }
-        .total-amount {
-          color: white;
-          font-size: 18px;
-          font-weight: bold;
+        .paid-total-value {
+          color: #28a745;
+        }
+        .due-total-value {
+          color: #dc3545;
         }
         .transaction-info {
           background: #f9f9f9;
-          padding: 8px 15px;
-          border-radius: 6px;
-          margin: 10px 15px 15px 15px;
+          padding: 12px 15px;
+          border-radius: 8px;
+          margin: 15px 0;
           display: flex;
           gap: 20px;
           font-size: 12px;
-          color: #666;
+          color: #333;
           justify-content: center;
           flex-wrap: wrap;
+          border: 1px solid #e0e0e0;
         }
         .transaction-item {
           background: white;
           padding: 4px 12px;
           border-radius: 20px;
-        }
-        .summary-section {
-          background: #f9f9f9;
-          padding: 15px;
-          border-radius: 8px;
-          margin: 15px 0;
-          border-left: 4px solid #1d9bf0;
-        }
-        .summary-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 15px;
-        }
-        .summary-title {
-          font-size: 16px;
-          font-weight: bold;
-          color: #1d9bf0;
-        }
-        .summary-status {
-          padding: 4px 15px;
-          border-radius: 20px;
-          font-size: 12px;
-          font-weight: bold;
-        }
-        .status-paid {
-          background-color: #d4edda;
-          color: #155724;
-        }
-        .status-partial {
-          background-color: #fff3cd;
-          color: #856404;
-        }
-        .status-unpaid {
-          background-color: #f8d7da;
-          color: #721c24;
-        }
-        .summary-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-          margin-bottom: 12px;
-        }
-        .summary-item {
-          display: flex;
-          justify-content: space-between;
-          background: white;
-          padding: 10px 15px;
-          border-radius: 6px;
-          font-size: 13px;
-        }
-        .summary-label {
-          color: #666;
-          font-weight: bold;
-        }
-        .summary-value {
-          font-weight: bold;
-        }
-        .progress-bar {
-          margin-top: 15px;
-          height: 6px;
-          background: #e0e0e0;
-          border-radius: 3px;
-          overflow: hidden;
-        }
-        .progress-fill {
-          height: 100%;
-          background: #1d9bf0;
-          width: ${grandTotal > 0 ? ((totalPaid / grandTotal) * 100) : 0}%;
-        }
-        .progress-text {
-          text-align: right;
-          margin-top: 3px;
-          font-size: 11px;
-          color: #666;
+          font-weight: 500;
         }
         .footer-section {
           margin-top: 30px;
@@ -350,10 +257,10 @@ export const generateReceiptHTML = (receiptData) => {
         }
         .received-by {
           font-size: 12px;
-          color: #666;
+          color: #333;
         }
         .received-by strong {
-          color: #333;
+          color: #000;
         }
         .signature {
           text-align: center;
@@ -361,12 +268,13 @@ export const generateReceiptHTML = (receiptData) => {
         }
         .signature-line {
           width: 180px;
-          border-bottom: 1px solid #333;
+          border-bottom: 2px solid #333;
           margin-bottom: 4px;
         }
         .signature-text {
           font-size: 11px;
           color: #666;
+          font-weight: 500;
         }
         .footer-note {
           text-align: center;
@@ -391,9 +299,9 @@ export const generateReceiptHTML = (receiptData) => {
       <div class="receipt">
         <!-- Header -->
         <div class="header">
-          <div class="school-name">${schoolInfo.name}</div>
-          <div class="school-address">${schoolInfo.address}</div>
-          <div class="school-contact">${schoolInfo.phone} | ${schoolInfo.email} | ${schoolInfo.website}</div>
+          <div class="school-name">${schoolDetails.name}</div>
+          <div class="school-address">${schoolDetails.address}</div>
+          <div class="school-contact">${schoolDetails.phone} | ${schoolDetails.email} | ${schoolDetails.website}</div>
           <div class="receipt-title">FEE PAYMENT RECEIPT</div>
           <div class="receipt-no">Receipt No: ${receiptData.receiptNo}</div>
         </div>
@@ -438,75 +346,62 @@ export const generateReceiptHTML = (receiptData) => {
           <span class="payment-mode-badge">${receiptData.payment.mode.replace('_', ' ')}</span>
         </div>
         
-        <!-- Previous Year Payment (if any) -->
-        ${previousYearBreakdown.total > 0 ? `
-        <div class="breakdown-section">
-          <div class="breakdown-header">
-            <div class="breakdown-title previous-year-title">
-              PREVIOUS YEAR PAYMENT
-            </div>
-            <div class="breakdown-total previous-year-total">
-              Total: ₹${previousYearBreakdown.total.toLocaleString()}
-            </div>
-          </div>
-          <div class="fee-items-grid">
-            ${previousYearBreakdown.schoolFee > 0 ? `
-            <div class="fee-item">
+        <!-- Two Column Layout - Paid and Due Side by Side -->
+        <div class="breakdown-container">
+          <!-- PAID COLUMN -->
+          <div class="paid-column">
+            <div class="column-title paid-title">✓ PAID</div>
+            
+            ${paidInThisTransaction.school > 0 ? `
+            <div class="fee-row">
               <span class="fee-label">School Fee</span>
-              <span class="fee-amount" style="color: #ff9800;">₹${previousYearBreakdown.schoolFee.toLocaleString()}</span>
+              <span class="fee-amount paid-amount">₹${paidInThisTransaction.school.toLocaleString()}</span>
             </div>` : ''}
-            ${hasTransportFee && previousYearBreakdown.transportFee > 0 ? `
-            <div class="fee-item">
+            
+            ${hasTransportFee && paidInThisTransaction.transport > 0 ? `
+            <div class="fee-row">
               <span class="fee-label">Transport Fee</span>
-              <span class="fee-amount" style="color: #ff9800;">₹${previousYearBreakdown.transportFee.toLocaleString()}</span>
+              <span class="fee-amount paid-amount">₹${paidInThisTransaction.transport.toLocaleString()}</span>
             </div>` : ''}
-            ${hasHostelFee && previousYearBreakdown.hostelFee > 0 ? `
-            <div class="fee-item">
+            
+            ${hasHostelFee && paidInThisTransaction.hostel > 0 ? `
+            <div class="fee-row">
               <span class="fee-label">Hostel Fee</span>
-              <span class="fee-amount" style="color: #ff9800;">₹${previousYearBreakdown.hostelFee.toLocaleString()}</span>
+              <span class="fee-amount paid-amount">₹${paidInThisTransaction.hostel.toLocaleString()}</span>
             </div>` : ''}
-          </div>
-        </div>` : ''}
-        
-        <!-- Current Year Payment -->
-        ${currentYearBreakdown.total > 0 ? `
-        <div class="breakdown-section">
-          <div class="breakdown-header">
-            <div class="breakdown-title current-year-title">
-              CURRENT YEAR PAYMENT
-            </div>
-            <div class="breakdown-total current-year-total">
-              Total: ₹${currentYearPaid.toLocaleString()}
+            
+            <div class="total-row">
+              <span class="total-label">TOTAL PAID</span>
+              <span class="total-value paid-total-value">₹${paidInThisTransaction.total.toLocaleString()}</span>
             </div>
           </div>
-          <div class="fee-items-grid">
-            ${currentYearBreakdown.schoolFee > 0 ? `
-            <div class="fee-item">
+          
+          <!-- DUE COLUMN -->
+          <div class="due-column">
+            <div class="column-title due-title">⚠ DUE</div>
+            
+            ${remainingAfterPayment.school > 0 ? `
+            <div class="fee-row">
               <span class="fee-label">School Fee</span>
-              <span class="fee-amount" style="color: #1d9bf0;">₹${currentYearBreakdown.schoolFee.toLocaleString()}</span>
+              <span class="fee-amount due-amount">₹${remainingAfterPayment.school.toLocaleString()}</span>
             </div>` : ''}
-            ${hasTransportFee && currentYearBreakdown.transportFee > 0 ? `
-            <div class="fee-item">
+            
+            ${hasTransportFee && remainingAfterPayment.transport > 0 ? `
+            <div class="fee-row">
               <span class="fee-label">Transport Fee</span>
-              <span class="fee-amount" style="color: #1d9bf0;">₹${currentYearBreakdown.transportFee.toLocaleString()}</span>
+              <span class="fee-amount due-amount">₹${remainingAfterPayment.transport.toLocaleString()}</span>
             </div>` : ''}
-            ${hasHostelFee && currentYearBreakdown.hostelFee > 0 ? `
-            <div class="fee-item">
+            
+            ${hasHostelFee && remainingAfterPayment.hostel > 0 ? `
+            <div class="fee-row">
               <span class="fee-label">Hostel Fee</span>
-              <span class="fee-amount" style="color: #1d9bf0;">₹${currentYearBreakdown.hostelFee.toLocaleString()}</span>
+              <span class="fee-amount due-amount">₹${remainingAfterPayment.hostel.toLocaleString()}</span>
             </div>` : ''}
-          </div>
-        </div>` : ''}
-        
-        <!-- Totals Row - Paid and Due Side by Side -->
-        <div class="totals-row">
-          <div class="total-paid-box">
-            <span class="total-label">TOTAL PAID</span>
-            <span class="total-amount">₹${receiptData.payment.totalAmount.toLocaleString()}</span>
-          </div>
-          <div class="total-due-box">
-            <span class="total-label">TOTAL DUE</span>
-            <span class="total-amount">₹${totalDue.toLocaleString()}</span>
+            
+            <div class="total-row">
+              <span class="total-label">TOTAL DUE</span>
+              <span class="total-value due-total-value">₹${remainingAfterPayment.total.toLocaleString()}</span>
+            </div>
           </div>
         </div>
 
@@ -519,52 +414,20 @@ export const generateReceiptHTML = (receiptData) => {
           ${receiptData.payment.referenceNo ? `<span class="transaction-item">Ref: ${receiptData.payment.referenceNo}</span>` : ''}
         </div>` : ''}
 
-        <!-- Fee Summary Section -->
-        <div class="summary-section">
-          <div class="summary-header">
-            <span class="summary-title">FEE SUMMARY</span>
-            <span class="summary-status status-${paymentStatus.toLowerCase()}">${paymentStatus}</span>
-          </div>
-          
-          <!-- 2x2 Grid -->
-          <div class="summary-grid">
-            <!-- Current Year Fee -->
-            <div class="summary-item">
-              <span class="summary-label">Current Year Fee:</span>
-              <span class="summary-value" style="color: #1d9bf0;">₹${discountedTotal.toLocaleString()}</span>
-            </div>
-            
-            <!-- Current Year Paid -->
-            <div class="summary-item">
-              <span class="summary-label">Current Year Paid:</span>
-              <span class="summary-value" style="color: #28a745;">₹${currentYearPaid.toLocaleString()}</span>
-            </div>
-            
-            <!-- Previous Year Fee -->
-            <div class="summary-item">
-              <span class="summary-label">Previous Year Fee:</span>
-              <span class="summary-value" style="color: #ff9800;">₹${previousYearFee.toLocaleString()}</span>
-            </div>
-            
-            <!-- Previous Year Paid -->
-            <div class="summary-item">
-              <span class="summary-label">Previous Year Paid:</span>
-              <span class="summary-value" style="color: #28a745;">₹${previousYearPaid.toLocaleString()}</span>
-            </div>
-          </div>
-
-          <!-- Progress Bar -->
-          <div class="progress-bar">
-            <div class="progress-fill"></div>
-          </div>
-          <div class="progress-text">
-            ${grandTotal > 0 ? ((totalPaid / grandTotal) * 100).toFixed(1) : 0}% Paid
-          </div>
-        </div>
-
         ${receiptData.payment.description ? `
-        <div style="margin: 10px 0; font-size: 12px; color: #666; background: #f9f9f9; padding: 8px 12px; border-radius: 6px;">
-          <strong>Note:</strong> ${receiptData.payment.description}
+        <div style="margin: 10px 0; font-size: 12px; color: #333; background: #f9f9f9; padding: 8px 12px; border-radius: 6px; border: 1px solid #e0e0e0;">
+          <strong style="color: #000;">Note:</strong> ${receiptData.payment.description}
+        </div>` : ''}
+
+        <!-- Years Fully Paid Notification -->
+        ${metadata.yearsFullyPaid?.length > 0 ? `
+        <div style="background: #d4edda; color: #155724; padding: 12px; border-radius: 6px; margin: 10px 0; font-weight: 500; border: 1px solid #c3e6cb;">
+          <strong>✓ Fully Cleared:</strong> ${metadata.yearsFullyPaid.join(', ')}
+        </div>` : ''}
+
+        ${metadata.wasFullyPaid ? `
+        <div style="background: #d4edda; color: #155724; padding: 12px; border-radius: 6px; margin: 10px 0; font-weight: 500; border: 1px solid #c3e6cb;">
+          <strong>✓ Fully Cleared:</strong> ${metadata.academicYear}
         </div>` : ''}
 
         <!-- Footer -->
@@ -584,36 +447,35 @@ export const generateReceiptHTML = (receiptData) => {
           </div>
         </div>
       </div>
-      <div class="watermark">${schoolInfo.name} - Official Receipt</div>
+      <div class="watermark">${schoolDetails.name} - Official Receipt</div>
     </body>
     </html>
   `
 }
 
 export const generatePrintHTML = (receiptData) => {
-  // Calculate totals correctly
-  const discountedTotal = receiptData.feeSummary?.discountedTotalFee || 0 // Current year total fee: 32500
-  const currentYearPaid = receiptData.feeSummary?.currentYearTotalPaid || 0 // Current year paid: 2000
-  const previousYearFee = receiptData.feeSummary?.previousYearFee || 0 // Previous year total fee: 55000
-  const previousYearPaid = receiptData.feeSummary?.previousYearPaid || 0 // Previous year paid: 55000
+  // Get metadata which contains the breakdown
+  const metadata = receiptData.payment?.metadata || {}
   
-  const grandTotal = discountedTotal + previousYearFee // 32500 + 55000 = 87500
-  const totalPaid = currentYearPaid + previousYearPaid // 2000 + 55000 = 57000
-  const totalDue = grandTotal - totalPaid // 87500 - 57000 = 30500 ✅
+  // THIS TRANSACTION PAID AMOUNTS - from metadata.paid
+  const paidInThisTransaction = {
+    school: metadata.paid?.school || 0,
+    transport: metadata.paid?.transport || 0,
+    hostel: metadata.paid?.hostel || 0,
+    total: metadata.paid?.total || receiptData.payment?.totalAmount || 0
+  }
   
-  const paymentStatus = totalDue === 0 ? 'PAID' : totalDue === grandTotal ? 'UNPAID' : 'PARTIAL'
-
-  // Get payment breakdown
-  const previousYearBreakdown = receiptData.payment?.previousYearBreakdown || { schoolFee: 0, transportFee: 0, hostelFee: 0, total: 0 }
-  const currentYearBreakdown = receiptData.payment?.currentYearBreakdown || { schoolFee: 0, transportFee: 0, hostelFee: 0, total: 0 }
+  // REMAINING AMOUNTS AFTER THIS PAYMENT - from metadata.remaining (COMBINED total)
+  const remainingAfterPayment = {
+    school: metadata.remaining?.school || 0,
+    transport: metadata.remaining?.transport || 0,
+    hostel: metadata.remaining?.hostel || 0,
+    total: metadata.remaining?.total || 0
+  }
   
   // Check if transport or hostel fees exist
-  const hasTransportFee = receiptData.feeSummary?.discountedTransportFee > 0 || 
-                         currentYearBreakdown.transportFee > 0 || 
-                         previousYearBreakdown.transportFee > 0
-  const hasHostelFee = receiptData.feeSummary?.discountedHostelFee > 0 || 
-                      currentYearBreakdown.hostelFee > 0 || 
-                      previousYearBreakdown.hostelFee > 0
+  const hasTransportFee = paidInThisTransaction.transport > 0 || remainingAfterPayment.transport > 0
+  const hasHostelFee = paidInThisTransaction.hostel > 0 || remainingAfterPayment.hostel > 0
 
   return `
     <!DOCTYPE html>
@@ -682,11 +544,11 @@ export const generatePrintHTML = (receiptData) => {
         }
         .student-name-label {
           font-weight: bold;
-          color: #555;
+          color: #333;
           font-size: 14px;
         }
         .student-name-value {
-          color: #333;
+          color: #000;
           font-size: 14px;
           font-weight: bold;
         }
@@ -700,18 +562,19 @@ export const generatePrintHTML = (receiptData) => {
         }
         .info-label {
           font-weight: bold;
-          color: #555;
+          color: #333;
           font-size: 12px;
         }
         .info-value {
-          color: #333;
+          color: #000;
           font-size: 12px;
+          font-weight: 500;
         }
         .transaction-header {
           background: #000;
           padding: 12px 15px;
           border-radius: 8px;
-          margin-bottom: 15px;
+          margin-bottom: 20px;
           display: flex;
           justify-content: space-between;
           align-items: center;
@@ -729,176 +592,102 @@ export const generatePrintHTML = (receiptData) => {
           font-size: 12px;
           font-weight: bold;
         }
-        .breakdown-section {
-          margin-bottom: 20px;
-          padding: 0 15px;
-        }
-        .breakdown-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 10px;
-          padding: 8px 12px;
-          background: #f0f0f0;
-          border-radius: 6px;
-        }
-        .breakdown-title {
-          font-size: 14px;
-          font-weight: bold;
-        }
-        .previous-year-title {
-          color: #ff9800;
-        }
-        .current-year-title {
-          color: #1d9bf0;
-        }
-        .breakdown-total {
-          font-size: 14px;
-          font-weight: bold;
-        }
-        .previous-year-total {
-          color: #ff9800;
-        }
-        .current-year-total {
-          color: #1d9bf0;
-        }
-        .fee-items-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px;
-          margin-bottom: 10px;
-        }
-        .fee-item {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          background: #f9f9f9;
-          padding: 10px 12px;
-          border-radius: 6px;
-        }
-        .fee-label {
-          font-size: 13px;
-          color: #555;
-          font-weight: 500;
-        }
-        .fee-amount {
-          font-size: 14px;
-          font-weight: bold;
-        }
-        .totals-row {
+        .breakdown-container {
           display: flex;
           flex-direction: row;
-          justify-content: space-between;
-          align-items: center;
           gap: 15px;
-          margin: 15px 15px 15px 15px;
+          margin-bottom: 20px;
         }
-        .total-paid-box {
+        .paid-column {
           flex: 1;
-          background: #000;
-          padding: 12px 15px;
+          background: #f0fff0;
           border-radius: 8px;
+          padding: 15px;
+          border-left: 4px solid #28a745;
+        }
+        .due-column {
+          flex: 1;
+          background: #fff0f0;
+          border-radius: 8px;
+          padding: 15px;
+          border-left: 4px solid #dc3545;
+        }
+        .column-title {
+          font-size: 16px;
+          font-weight: bold;
+          margin-bottom: 15px;
+          padding-bottom: 8px;
+          border-bottom: 2px solid rgba(0,0,0,0.1);
+        }
+        .paid-title {
+          color: #28a745;
+        }
+        .due-title {
+          color: #dc3545;
+        }
+        .fee-row {
           display: flex;
           justify-content: space-between;
           align-items: center;
+          padding: 10px 0;
+          border-bottom: 1px solid rgba(0,0,0,0.05);
         }
-        .total-due-box {
-          flex: 1;
-          background: #333;
-          padding: 12px 15px;
-          border-radius: 8px;
+        .fee-label {
+          font-size: 14px;
+          font-weight: 600;
+          color: #333;
+        }
+        .fee-amount {
+          font-size: 16px;
+          font-weight: bold;
+        }
+        .paid-amount {
+          color: #28a745;
+        }
+        .due-amount {
+          color: #dc3545;
+        }
+        .total-row {
+          margin-top: 15px;
+          padding-top: 15px;
+          border-top: 2px solid #333;
           display: flex;
           justify-content: space-between;
           align-items: center;
         }
         .total-label {
-          color: white;
-          font-size: 14px;
+          font-size: 16px;
+          font-weight: bold;
+          color: #000;
+        }
+        .total-value {
+          font-size: 20px;
           font-weight: bold;
         }
-        .total-amount {
-          color: white;
-          font-size: 18px;
-          font-weight: bold;
+        .paid-total-value {
+          color: #28a745;
+        }
+        .due-total-value {
+          color: #dc3545;
         }
         .transaction-info {
           background: #f9f9f9;
-          padding: 8px 15px;
-          border-radius: 6px;
-          margin: 10px 15px 15px 15px;
+          padding: 12px 15px;
+          border-radius: 8px;
+          margin: 15px 0;
           display: flex;
           gap: 20px;
           font-size: 12px;
-          color: #666;
+          color: #333;
           justify-content: center;
           flex-wrap: wrap;
+          border: 1px solid #e0e0e0;
         }
         .transaction-item {
           background: white;
           padding: 4px 12px;
           border-radius: 20px;
-        }
-        .summary-section {
-          margin: 15px 0;
-          padding: 15px;
-          background: #f9f9f9;
-          border-radius: 8px;
-          border-left: 4px solid #000;
-        }
-        .summary-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 15px;
-        }
-        .summary-title {
-          font-size: 16px;
-          font-weight: bold;
-        }
-        .summary-status {
-          padding: 4px 15px;
-          border-radius: 20px;
-          font-size: 12px;
-          font-weight: bold;
-        }
-        .summary-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-          margin-bottom: 12px;
-        }
-        .summary-item {
-          display: flex;
-          justify-content: space-between;
-          background: white;
-          padding: 10px 15px;
-          border-radius: 6px;
-          font-size: 13px;
-        }
-        .summary-label {
-          color: #666;
-          font-weight: bold;
-        }
-        .summary-value {
-          font-weight: bold;
-        }
-        .progress-bar {
-          margin-top: 15px;
-          height: 6px;
-          background: #e0e0e0;
-          border-radius: 3px;
-          overflow: hidden;
-        }
-        .progress-fill {
-          height: 100%;
-          background: #000;
-          width: ${grandTotal > 0 ? ((totalPaid / grandTotal) * 100) : 0}%;
-        }
-        .progress-text {
-          text-align: right;
-          margin-top: 3px;
-          font-size: 11px;
-          color: #666;
+          font-weight: 500;
         }
         .footer-section {
           margin-top: 30px;
@@ -914,10 +703,10 @@ export const generatePrintHTML = (receiptData) => {
         }
         .received-by {
           font-size: 12px;
-          color: #666;
+          color: #333;
         }
         .received-by strong {
-          color: #333;
+          color: #000;
         }
         .signature {
           text-align: center;
@@ -925,12 +714,13 @@ export const generatePrintHTML = (receiptData) => {
         }
         .signature-line {
           width: 180px;
-          border-bottom: 1px solid #333;
+          border-bottom: 2px solid #333;
           margin-bottom: 4px;
         }
         .signature-text {
           font-size: 11px;
           color: #666;
+          font-weight: 500;
         }
         .footer-note {
           text-align: center;
@@ -962,9 +752,9 @@ export const generatePrintHTML = (receiptData) => {
       <div class="receipt">
         <!-- Header -->
         <div class="header">
-          <div class="school-name">${schoolInfo.name}</div>
-          <div class="school-address">${schoolInfo.address}</div>
-          <div class="school-contact">${schoolInfo.phone} | ${schoolInfo.email}</div>
+          <div class="school-name">${schoolDetails.name}</div>
+          <div class="school-address">${schoolDetails.address}</div>
+          <div class="school-contact">${schoolDetails.phone} | ${schoolDetails.email}</div>
           <div class="receipt-title">FEE PAYMENT RECEIPT</div>
           <div class="receipt-no">Receipt No: ${receiptData.receiptNo}</div>
         </div>
@@ -1009,75 +799,62 @@ export const generatePrintHTML = (receiptData) => {
           <span class="payment-mode-badge">${receiptData.payment.mode.replace('_', ' ')}</span>
         </div>
         
-        <!-- Previous Year Payment (if any) -->
-        ${previousYearBreakdown.total > 0 ? `
-        <div class="breakdown-section">
-          <div class="breakdown-header">
-            <div class="breakdown-title previous-year-title">
-              PREVIOUS YEAR PAYMENT
-            </div>
-            <div class="breakdown-total previous-year-total">
-              Total: ₹${previousYearBreakdown.total.toLocaleString()}
-            </div>
-          </div>
-          <div class="fee-items-grid">
-            ${previousYearBreakdown.schoolFee > 0 ? `
-            <div class="fee-item">
+        <!-- Two Column Layout - Paid and Due Side by Side -->
+        <div class="breakdown-container">
+          <!-- PAID COLUMN -->
+          <div class="paid-column">
+            <div class="column-title paid-title">✓ PAID</div>
+            
+            ${paidInThisTransaction.school > 0 ? `
+            <div class="fee-row">
               <span class="fee-label">School Fee</span>
-              <span class="fee-amount" style="color: #ff9800;">₹${previousYearBreakdown.schoolFee.toLocaleString()}</span>
+              <span class="fee-amount paid-amount">₹${paidInThisTransaction.school.toLocaleString()}</span>
             </div>` : ''}
-            ${hasTransportFee && previousYearBreakdown.transportFee > 0 ? `
-            <div class="fee-item">
+            
+            ${hasTransportFee && paidInThisTransaction.transport > 0 ? `
+            <div class="fee-row">
               <span class="fee-label">Transport Fee</span>
-              <span class="fee-amount" style="color: #ff9800;">₹${previousYearBreakdown.transportFee.toLocaleString()}</span>
+              <span class="fee-amount paid-amount">₹${paidInThisTransaction.transport.toLocaleString()}</span>
             </div>` : ''}
-            ${hasHostelFee && previousYearBreakdown.hostelFee > 0 ? `
-            <div class="fee-item">
+            
+            ${hasHostelFee && paidInThisTransaction.hostel > 0 ? `
+            <div class="fee-row">
               <span class="fee-label">Hostel Fee</span>
-              <span class="fee-amount" style="color: #ff9800;">₹${previousYearBreakdown.hostelFee.toLocaleString()}</span>
+              <span class="fee-amount paid-amount">₹${paidInThisTransaction.hostel.toLocaleString()}</span>
             </div>` : ''}
-          </div>
-        </div>` : ''}
-        
-        <!-- Current Year Payment -->
-        ${currentYearBreakdown.total > 0 ? `
-        <div class="breakdown-section">
-          <div class="breakdown-header">
-            <div class="breakdown-title current-year-title">
-              CURRENT YEAR PAYMENT
-            </div>
-            <div class="breakdown-total current-year-total">
-              Total: ₹${currentYearPaid.toLocaleString()}
+            
+            <div class="total-row">
+              <span class="total-label">TOTAL PAID</span>
+              <span class="total-value paid-total-value">₹${paidInThisTransaction.total.toLocaleString()}</span>
             </div>
           </div>
-          <div class="fee-items-grid">
-            ${currentYearBreakdown.schoolFee > 0 ? `
-            <div class="fee-item">
+          
+          <!-- DUE COLUMN -->
+          <div class="due-column">
+            <div class="column-title due-title">⚠ DUE</div>
+            
+            ${remainingAfterPayment.school > 0 ? `
+            <div class="fee-row">
               <span class="fee-label">School Fee</span>
-              <span class="fee-amount" style="color: #1d9bf0;">₹${currentYearBreakdown.schoolFee.toLocaleString()}</span>
+              <span class="fee-amount due-amount">₹${remainingAfterPayment.school.toLocaleString()}</span>
             </div>` : ''}
-            ${hasTransportFee && currentYearBreakdown.transportFee > 0 ? `
-            <div class="fee-item">
+            
+            ${hasTransportFee && remainingAfterPayment.transport > 0 ? `
+            <div class="fee-row">
               <span class="fee-label">Transport Fee</span>
-              <span class="fee-amount" style="color: #1d9bf0;">₹${currentYearBreakdown.transportFee.toLocaleString()}</span>
+              <span class="fee-amount due-amount">₹${remainingAfterPayment.transport.toLocaleString()}</span>
             </div>` : ''}
-            ${hasHostelFee && currentYearBreakdown.hostelFee > 0 ? `
-            <div class="fee-item">
+            
+            ${hasHostelFee && remainingAfterPayment.hostel > 0 ? `
+            <div class="fee-row">
               <span class="fee-label">Hostel Fee</span>
-              <span class="fee-amount" style="color: #1d9bf0;">₹${currentYearBreakdown.hostelFee.toLocaleString()}</span>
+              <span class="fee-amount due-amount">₹${remainingAfterPayment.hostel.toLocaleString()}</span>
             </div>` : ''}
-          </div>
-        </div>` : ''}
-        
-        <!-- Totals Row - Paid and Due Side by Side -->
-        <div class="totals-row">
-          <div class="total-paid-box">
-            <span class="total-label">TOTAL PAID</span>
-            <span class="total-amount">₹${receiptData.payment.totalAmount.toLocaleString()}</span>
-          </div>
-          <div class="total-due-box">
-            <span class="total-label">TOTAL DUE</span>
-            <span class="total-amount">₹${totalDue.toLocaleString()}</span>
+            
+            <div class="total-row">
+              <span class="total-label">TOTAL DUE</span>
+              <span class="total-value due-total-value">₹${remainingAfterPayment.total.toLocaleString()}</span>
+            </div>
           </div>
         </div>
 
@@ -1090,54 +867,20 @@ export const generatePrintHTML = (receiptData) => {
           ${receiptData.payment.referenceNo ? `<span class="transaction-item">Ref: ${receiptData.payment.referenceNo}</span>` : ''}
         </div>` : ''}
 
-        <!-- Fee Summary Section -->
-        <div class="summary-section">
-          <div class="summary-header">
-            <span class="summary-title">FEE SUMMARY</span>
-            <span class="summary-status" style="background: ${paymentStatus === 'PAID' ? '#d4edda' : paymentStatus === 'PARTIAL' ? '#fff3cd' : '#f8d7da'}; color: ${paymentStatus === 'PAID' ? '#155724' : paymentStatus === 'PARTIAL' ? '#856404' : '#721c24'};">
-              ${paymentStatus}
-            </span>
-          </div>
-          
-          <!-- 2x2 Grid -->
-          <div class="summary-grid">
-            <!-- Current Year Fee -->
-            <div class="summary-item">
-              <span class="summary-label">Current Year Fee:</span>
-              <span class="summary-value">₹${discountedTotal.toLocaleString()}</span>
-            </div>
-            
-            <!-- Current Year Paid -->
-            <div class="summary-item">
-              <span class="summary-label">Current Year Paid:</span>
-              <span class="summary-value">₹${currentYearPaid.toLocaleString()}</span>
-            </div>
-            
-            <!-- Previous Year Fee -->
-            <div class="summary-item">
-              <span class="summary-label">Previous Year Fee:</span>
-              <span class="summary-value">₹${previousYearFee.toLocaleString()}</span>
-            </div>
-            
-            <!-- Previous Year Paid -->
-            <div class="summary-item">
-              <span class="summary-label">Previous Year Paid:</span>
-              <span class="summary-value">₹${previousYearPaid.toLocaleString()}</span>
-            </div>
-          </div>
-
-          <!-- Progress Bar -->
-          <div class="progress-bar">
-            <div class="progress-fill"></div>
-          </div>
-          <div class="progress-text">
-            ${grandTotal > 0 ? ((totalPaid / grandTotal) * 100).toFixed(1) : 0}% Paid
-          </div>
-        </div>
-
         ${receiptData.payment.description ? `
-        <div style="margin: 10px 0; font-size: 12px; color: #666; background: #f9f9f9; padding: 8px 12px; border-radius: 6px;">
-          <strong>Note:</strong> ${receiptData.payment.description}
+        <div style="margin: 10px 0; font-size: 12px; color: #333; background: #f9f9f9; padding: 8px 12px; border-radius: 6px; border: 1px solid #e0e0e0;">
+          <strong style="color: #000;">Note:</strong> ${receiptData.payment.description}
+        </div>` : ''}
+
+        <!-- Years Fully Paid Notification -->
+        ${metadata.yearsFullyPaid?.length > 0 ? `
+        <div style="background: #d4edda; color: #155724; padding: 12px; border-radius: 6px; margin: 10px 0; font-weight: 500; border: 1px solid #c3e6cb;">
+          <strong>✓ Fully Cleared:</strong> ${metadata.yearsFullyPaid.join(', ')}
+        </div>` : ''}
+
+        ${metadata.wasFullyPaid ? `
+        <div style="background: #d4edda; color: #155724; padding: 12px; border-radius: 6px; margin: 10px 0; font-weight: 500; border: 1px solid #c3e6cb;">
+          <strong>✓ Fully Cleared:</strong> ${metadata.academicYear}
         </div>` : ''}
 
         <!-- Footer -->
@@ -1157,7 +900,7 @@ export const generatePrintHTML = (receiptData) => {
           </div>
         </div>
       </div>
-      <div class="watermark-print">${schoolInfo.name} - Official Receipt</div>
+      <div class="watermark-print">${schoolDetails.name} - Official Receipt</div>
     </body>
     </html>
   `

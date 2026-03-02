@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
-import { FontAwesome5, MaterialIcons, Ionicons, Feather } from '@expo/vector-icons'
+import { FontAwesome5, MaterialIcons, Ionicons, Feather, FontAwesome6, FontAwesome } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 import axiosApi from '@/utils/axiosApi'
 import { ToastNotification } from '@/components/ui/ToastNotification'
@@ -1618,7 +1618,6 @@ export default function StudentFeeDetails({ visible, onClose, student, onPayment
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
       >
-        {/* Student Info */}
         <View style={[styles.studentInfoCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
           <View style={styles.studentHeader}>
             <View style={[styles.studentAvatar, { backgroundColor: colors.primary + '20' }]}>
@@ -1636,19 +1635,17 @@ export default function StudentFeeDetails({ visible, onClose, student, onPayment
           
           <View style={styles.studentDetailsGrid}>
             <View style={styles.detailItem}>
-              <Feather name="home" size={14} color={colors.textSecondary} />
+              <FontAwesome6 name="person" size={16} color={colors.textSecondary} />
               <ThemedText style={styles.detailText}>
-                {feeDetails.studentInfo?.studentType || student.studentType || 'Day Scholar'}
+                {feeDetails.studentInfo?.parentName}
               </ThemedText>
             </View>
-            {feeDetails.studentInfo?.usesTransport && (
-              <View style={styles.detailItem}>
-                <Feather name="truck" size={14} color={colors.textSecondary} />
-                <ThemedText style={styles.detailText}>
-                  {feeDetails.studentInfo?.village || 'Transport'}
-                </ThemedText>
-              </View>
-            )}
+            <View style={styles.detailItem}>
+              <FontAwesome name="phone" size={16} color={colors.textSecondary} />
+              <ThemedText style={styles.detailText}>
+                {feeDetails.studentInfo?.parentPhone}
+              </ThemedText>
+            </View>
           </View>
         </View>
         
@@ -1855,7 +1852,7 @@ export default function StudentFeeDetails({ visible, onClose, student, onPayment
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: colors.inputBackground,
-      padding: 12,
+      padding: 8,
       borderRadius: 10,
       marginBottom: 8,
       marginHorizontal: 4,
@@ -1872,7 +1869,7 @@ export default function StudentFeeDetails({ visible, onClose, student, onPayment
       flex: 1,
     },
     summaryLabel: {
-      fontSize: 12,
+      fontSize: 10,
       color: colors.textSecondary,
       fontFamily: 'Poppins-Medium',
       marginBottom: 2,

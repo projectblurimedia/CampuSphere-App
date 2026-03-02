@@ -13,7 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
 import { FontAwesome5, Feather, MaterialIcons, Ionicons } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
-import { schoolDetails } from '../../../schoolDetails.js'
+import { schoolDetails } from '@/schoolDetails.js'
 
 export default function FeeReceipt({ 
   visible, 

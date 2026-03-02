@@ -121,7 +121,15 @@ export default function DashboardMenu({ visible, onClose }) {
       componentName: 'createEmployee'
     },
     { 
-      id: 7,
+      id: 7, 
+      title: 'New Student', 
+      icon: 'user-tie', 
+      iconType: 'FontAwesome5', 
+      gradient: ['#8b5cf6', '#7c3aed'], 
+      componentName: 'createStudent'
+    },
+    { 
+      id: 8,
       title: 'Bulk Import Employees', 
       icon: 'users', 
       iconType: 'FontAwesome5', 
@@ -129,7 +137,7 @@ export default function DashboardMenu({ visible, onClose }) {
       componentName: 'bulkImportEmployees'
     },
     { 
-      id: 8, 
+      id: 9, 
       title: 'Promote Students', 
       icon: 'graduation-cap', 
       iconType: 'FontAwesome5', 
@@ -137,7 +145,7 @@ export default function DashboardMenu({ visible, onClose }) {
       componentName: 'promote'
     },
     { 
-      id: 9, 
+      id: 10, 
       title: 'Mark Attendance', 
       icon: 'clipboard-check', 
       iconType: 'MaterialCommunityIcons', 
@@ -145,7 +153,7 @@ export default function DashboardMenu({ visible, onClose }) {
       componentName: 'attendance'
     },
     { 
-      id: 10, 
+      id: 11, 
       title: 'Upload Marks',
       icon: 'upload', 
       iconType: 'Feather', 
@@ -153,7 +161,7 @@ export default function DashboardMenu({ visible, onClose }) {
       componentName: 'uploadMarks'
     },
     { 
-      id: 11, 
+      id: 12, 
       title: 'Fee Management', 
       icon: 'cogs', 
       iconType: 'FontAwesome5', 
@@ -161,7 +169,7 @@ export default function DashboardMenu({ visible, onClose }) {
       componentName: 'feeManagement'
     },
     { 
-      id: 12, 
+      id: 13, 
       title: 'Fee Details', 
       icon: 'file-invoice-dollar', 
       iconType: 'FontAwesome5', 
@@ -169,7 +177,7 @@ export default function DashboardMenu({ visible, onClose }) {
       componentName: 'feeDetails'
     },
     { 
-      id: 13, 
+      id: 14, 
       title: 'Time Tables',
       icon: 'calendar-clock',
       iconType: 'MaterialCommunityIcons', 

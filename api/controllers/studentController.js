@@ -618,6 +618,13 @@ export const updateStudent = [
         parentPhone,
         parentPhone2,
         parentEmail,
+        section,
+        rollNo,
+        studentType,
+        isUsingSchoolTransport,
+        schoolFeeDiscount,
+        transportFeeDiscount,
+        hostelFeeDiscount,
         removeProfilePic,
       } = req.body
 
@@ -669,7 +676,7 @@ export const updateStudent = [
         cleanupTempFiles(req.file)
       }
 
-      // Prepare update data - ONLY EDITABLE FIELDS
+      // Prepare update data - ONLY STUDENT FIELDS (NO FEE DETAILS)
       const updateData = {
         firstName: firstName !== undefined ? firstName.trim() : existingStudent.firstName,
         lastName: lastName !== undefined ? lastName.trim() : existingStudent.lastName,
@@ -683,13 +690,25 @@ export const updateStudent = [
           (parentPhone2 ? formatPhoneNumber(parentPhone2) : null) : 
           existingStudent.parentPhone2,
         parentEmail: parentEmail !== undefined ? parentEmail : existingStudent.parentEmail,
+        section: section !== undefined ? section.toUpperCase() : existingStudent.section,
+        rollNo: rollNo !== undefined ? (rollNo ? rollNo.trim() : null) : existingStudent.rollNo,
+        studentType: studentType !== undefined ? studentType.toUpperCase() : existingStudent.studentType,
+        isUsingSchoolTransport: isUsingSchoolTransport !== undefined ? 
+          (isUsingSchoolTransport === true || isUsingSchoolTransport === 'true') : 
+          existingStudent.isUsingSchoolTransport,
+        schoolFeeDiscount: schoolFeeDiscount !== undefined ? 
+          parseDiscount(schoolFeeDiscount) : existingStudent.schoolFeeDiscount,
+        transportFeeDiscount: transportFeeDiscount !== undefined ? 
+          parseDiscount(transportFeeDiscount) : existingStudent.transportFeeDiscount,
+        hostelFeeDiscount: hostelFeeDiscount !== undefined ? 
+          parseDiscount(hostelFeeDiscount) : existingStudent.hostelFeeDiscount,
         profilePicUrl: newProfilePicUrl,
         profilePicPublicId: newProfilePicPublicId,
       }
 
       console.log('Updating student with data:', updateData)
 
-      // Update student
+      // Update ONLY student record - NO fee details changes
       const updatedStudent = await prisma.student.update({
         where: { id: studentId },
         data: updateData

@@ -289,12 +289,11 @@ export default function CreateStudent({ visible, onClose, studentData: editStude
     parentEmail: '',
   })
 
-  // Additional state for create mode only
+  // Additional state for both create and edit mode
   const [selectedClass, setSelectedClass] = useState('1')
   const [selectedSection, setSelectedSection] = useState('A')
   const [selectedStudentType, setSelectedStudentType] = useState('DAY_SCHOLAR')
   const [isUsingSchoolTransport, setIsUsingSchoolTransport] = useState(false)
-  const [isUsingSchoolHostel, setIsUsingSchoolHostel] = useState(false)
   const [schoolFeeDiscount, setSchoolFeeDiscount] = useState(0)
   const [transportFeeDiscount, setTransportFeeDiscount] = useState(0)
   const [hostelFeeDiscount, setHostelFeeDiscount] = useState(0)
@@ -328,6 +327,17 @@ export default function CreateStudent({ visible, onClose, studentData: editStude
         parentEmail: editStudentData.parentEmail || '',
       })
 
+      // Load all fields in edit mode
+      setSelectedClass(editStudentData.class || '1')
+      setSelectedSection(editStudentData.section || 'A')
+      setSelectedStudentType(editStudentData.studentType || 'DAY_SCHOLAR')
+      setIsUsingSchoolTransport(editStudentData.isUsingSchoolTransport || false)
+      setSchoolFeeDiscount(editStudentData.schoolFeeDiscount || 0)
+      setTransportFeeDiscount(editStudentData.transportFeeDiscount || 0)
+      setHostelFeeDiscount(editStudentData.hostelFeeDiscount || 0)
+      setAdmissionNo(editStudentData.admissionNo || '')
+      setRollNo(editStudentData.rollNo || '')
+      
       setSelectedGender(editStudentData.gender || 'NOT_SPECIFIED')
       setExistingProfilePic(editStudentData.profilePicUrl || null)
       setRemoveProfilePic(false)
@@ -408,7 +418,7 @@ export default function CreateStudent({ visible, onClose, studentData: editStude
     if (!result.canceled) {
       setProfilePic(result.assets[0].uri)
       setExistingProfilePic(null)
-      setRemoveProfilePic(false) // Cancel any pending removal
+      setRemoveProfilePic(false)
     }
   }, [showToast])
 
@@ -420,7 +430,6 @@ export default function CreateStudent({ visible, onClose, studentData: editStude
     setProfilePic(null)
     setExistingProfilePic(null)
     
-    // If in edit mode, mark for removal on server
     if (isEditMode) {
       setRemoveProfilePic(true)
     }
@@ -467,19 +476,16 @@ export default function CreateStudent({ visible, onClose, studentData: editStude
       formDataToSend.append('parentPhone2', formData.parentPhone2 || '')
       formDataToSend.append('parentEmail', formData.parentEmail || '')
 
-      // Create mode specific fields
-      if (!isEditMode) {
-        formDataToSend.append('class', selectedClass)
-        formDataToSend.append('section', selectedSection)
-        formDataToSend.append('admissionNo', admissionNo.trim())
-        formDataToSend.append('rollNo', rollNo || '')
-        formDataToSend.append('studentType', selectedStudentType)
-        formDataToSend.append('isUsingSchoolTransport', isUsingSchoolTransport)
-        formDataToSend.append('isUsingSchoolHostel', isUsingSchoolHostel)
-        formDataToSend.append('schoolFeeDiscount', schoolFeeDiscount.toString())
-        formDataToSend.append('transportFeeDiscount', transportFeeDiscount.toString())
-        formDataToSend.append('hostelFeeDiscount', hostelFeeDiscount.toString())
-      }
+      // Always send academic and service fields (for both create and edit)
+      formDataToSend.append('class', selectedClass)
+      formDataToSend.append('section', selectedSection)
+      formDataToSend.append('admissionNo', admissionNo.trim())
+      formDataToSend.append('rollNo', rollNo || '')
+      formDataToSend.append('studentType', selectedStudentType)
+      formDataToSend.append('isUsingSchoolTransport', isUsingSchoolTransport)
+      formDataToSend.append('schoolFeeDiscount', schoolFeeDiscount.toString())
+      formDataToSend.append('transportFeeDiscount', transportFeeDiscount.toString())
+      formDataToSend.append('hostelFeeDiscount', hostelFeeDiscount.toString())
 
       // Handle profile picture
       if (profilePic) {
@@ -546,14 +552,13 @@ export default function CreateStudent({ visible, onClose, studentData: editStude
     removeProfilePic,
     showToast, 
     onClose,
-    // Create mode fields
+    // All fields
     selectedClass,
     selectedSection,
     admissionNo,
     rollNo,
     selectedStudentType,
     isUsingSchoolTransport,
-    isUsingSchoolHostel,
     schoolFeeDiscount,
     transportFeeDiscount,
     hostelFeeDiscount
@@ -577,20 +582,17 @@ export default function CreateStudent({ visible, onClose, studentData: editStude
     setExistingProfilePic(null)
     setRemoveProfilePic(false)
     
-    // Reset create mode fields
-    if (!isEditMode) {
-      setSelectedClass('1')
-      setSelectedSection('A')
-      setSelectedStudentType('DAY_SCHOLAR')
-      setIsUsingSchoolTransport(false)
-      setIsUsingSchoolHostel(false)
-      setSchoolFeeDiscount(0)
-      setTransportFeeDiscount(0)
-      setHostelFeeDiscount(0)
-      setAdmissionNo('')
-      setRollNo('')
-    }
-  }, [isEditMode])
+    // Reset all fields
+    setSelectedClass('1')
+    setSelectedSection('A')
+    setSelectedStudentType('DAY_SCHOLAR')
+    setIsUsingSchoolTransport(false)
+    setSchoolFeeDiscount(0)
+    setTransportFeeDiscount(0)
+    setHostelFeeDiscount(0)
+    setAdmissionNo('')
+    setRollNo('')
+  }, [])
 
   const onDateChange = useCallback((event, selectedDate) => {
     setShowDatePicker(Platform.OS === 'ios')
@@ -915,6 +917,13 @@ export default function CreateStudent({ visible, onClose, studentData: editStude
     modalButtonTextDelete: {
       color: '#FFFFFF',
     },
+    discountContainer: {
+      marginTop: 8,
+      marginBottom: 8,
+      paddingLeft: 16,
+      borderLeftWidth: 2,
+      borderLeftColor: colors.primary + '30',
+    },
   }), [colors])
 
   const handleClose = useCallback(() => {
@@ -980,7 +989,6 @@ export default function CreateStudent({ visible, onClose, studentData: editStude
                   </LinearGradient>
                 </TouchableOpacity>
                 
-                {/* Delete button - only show when there's a profile picture */}
                 {(profilePic || existingProfilePic) && (
                   <TouchableOpacity
                     style={[styles.deletePicButton, { backgroundColor: colors.danger }]}
@@ -997,17 +1005,7 @@ export default function CreateStudent({ visible, onClose, studentData: editStude
               </ThemedText>
             </View>
 
-            {/* READ-ONLY NOTICE FOR EDIT MODE */}
-            {isEditMode && (
-              <View style={styles.readOnlyNotice}>
-                <MaterialIcons name="info" size={16} color={colors.primary} />
-                <ThemedText style={styles.readOnlyNoticeText}>
-                  Academic details (Class, Section, Admission No, etc.) cannot be edited
-                </ThemedText>
-              </View>
-            )}
-
-            {/* PERSONAL DETAILS - Always visible */}
+            {/* PERSONAL DETAILS */}
             <View style={styles.formGroup}>
               <View style={styles.groupTitleContainer}>
                 <View style={styles.groupTitleChip}>
@@ -1077,75 +1075,73 @@ export default function CreateStudent({ visible, onClose, studentData: editStude
               />
             </View>
 
-            {/* CREATE MODE - ACADEMIC DETAILS */}
-            {!isEditMode && (
-              <View style={styles.formGroup}>
-                <View style={styles.groupTitleContainer}>
-                  <View style={styles.groupTitleChip}>
-                    <MaterialIcons name="school" size={22} color={colors.primary} />
-                    <ThemedText type='subtitle' style={styles.groupTitleText}>Academic Details</ThemedText>
-                  </View>
+            {/* ACADEMIC DETAILS - Hide class in edit mode */}
+            <View style={styles.formGroup}>
+              <View style={styles.groupTitleContainer}>
+                <View style={styles.groupTitleChip}>
+                  <MaterialIcons name="school" size={22} color={colors.primary} />
+                  <ThemedText type='subtitle' style={styles.groupTitleText}>Academic Details</ThemedText>
                 </View>
-
-                <ThemedText style={styles.fieldLabel}>Class *</ThemedText>
-                <CustomDropdown
-                  value={selectedClass}
-                  items={classes}
-                  onSelect={setSelectedClass}
-                  placeholder="Select Class"
-                  style={loading ? { opacity: 0.5 } : {}}
-                  editable={!loading}
-                />
-
-                <ThemedText style={styles.fieldLabel}>Section *</ThemedText>
-                <CustomDropdown
-                  value={selectedSection}
-                  items={sections}
-                  onSelect={setSelectedSection}
-                  placeholder="Select Section"
-                  style={loading ? { opacity: 0.5 } : {}}
-                  editable={!loading}
-                />
-
-                <ThemedText style={styles.fieldLabel}>Student Type</ThemedText>
-                <CustomDropdown
-                  value={selectedStudentType}
-                  items={studentTypes}
-                  onSelect={setSelectedStudentType}
-                  placeholder="Select Student Type"
-                  style={loading ? { opacity: 0.5 } : {}}
-                  editable={!loading}
-                />
-
-                <ThemedText style={styles.fieldLabel}>Admission Number *</ThemedText>
-                <View style={styles.inputContainer}>
-                  <AntDesign name="idcard" size={20} style={styles.inputIcon} />
-                  <CustomInput
-                    placeholder="Enter admission number"
-                    value={admissionNo}
-                    onChangeText={setAdmissionNo}
-                    keyboardType="default"
-                    editable={!loading}
-                  />
-                </View>
-
-                <ThemedText style={styles.fieldLabel}>Roll Number</ThemedText>
-                <View style={styles.inputContainer}>
-                  <MaterialIcons name="numbers" size={20} style={styles.inputIcon} />
-                  <CustomInput
-                    placeholder="Enter roll number"
-                    value={rollNo}
-                    onChangeText={setRollNo}
-                    keyboardType="default"
-                    editable={!loading}
-                  />
-                </View>
-
-                <View style={styles.sectionDivider} />
               </View>
-            )}
 
-            {/* ADDRESS DETAILS - Always visible */}
+              {/* Class - Hidden in edit mode */}
+              {!isEditMode && (
+                <>
+                  <ThemedText style={styles.fieldLabel}>Class *</ThemedText>
+                  <CustomDropdown
+                    value={selectedClass}
+                    items={classes}
+                    onSelect={setSelectedClass}
+                    placeholder="Select Class"
+                    style={loading ? { opacity: 0.5 } : {}}
+                    editable={!loading}
+                  />
+                </>
+              )}
+
+              <ThemedText style={styles.fieldLabel}>Section *</ThemedText>
+              <CustomDropdown
+                value={selectedSection}
+                items={sections}
+                onSelect={setSelectedSection}
+                placeholder="Select Section"
+                style={loading ? { opacity: 0.5 } : {}}
+                editable={!loading}
+              />
+
+              {/* Admission Number - Hidden in edit mode */}
+              {!isEditMode && (
+                <>
+                  <ThemedText style={styles.fieldLabel}>Admission Number *</ThemedText>
+                  <View style={styles.inputContainer}>
+                    <AntDesign name="idcard" size={20} style={styles.inputIcon} />
+                    <CustomInput
+                      placeholder="Enter admission number"
+                      value={admissionNo}
+                      onChangeText={setAdmissionNo}
+                      keyboardType="default"
+                      editable={!loading}
+                    />
+                  </View>
+                </>
+              )}
+
+              <ThemedText style={styles.fieldLabel}>Roll Number</ThemedText>
+              <View style={styles.inputContainer}>
+                <MaterialIcons name="numbers" size={20} style={styles.inputIcon} />
+                <CustomInput
+                  placeholder="Enter roll number"
+                  value={rollNo}
+                  onChangeText={setRollNo}
+                  keyboardType="default"
+                  editable={!loading}
+                />
+              </View>
+
+              <View style={styles.sectionDivider} />
+            </View>
+
+            {/* ADDRESS DETAILS */}
             <View style={styles.formGroup}>
               <View style={styles.groupTitleContainer}>
                 <View style={styles.groupTitleChip}>
@@ -1184,7 +1180,7 @@ export default function CreateStudent({ visible, onClose, studentData: editStude
               </View>
             </View>
 
-            {/* PARENT DETAILS - Always visible */}
+            {/* PARENT DETAILS */}
             <View style={styles.formGroup}>
               <View style={styles.groupTitleContainer}>
                 <View style={styles.groupTitleChip}>
@@ -1246,18 +1242,28 @@ export default function CreateStudent({ visible, onClose, studentData: editStude
               </View>
             </View>
 
-            {/* CREATE MODE - SERVICES & DISCOUNTS */}
-            {!isEditMode && (
-              <>
-                {/* SERVICES DETAILS */}
-                <View style={styles.formGroup}>
-                  <View style={styles.groupTitleContainer}>
-                    <View style={styles.groupTitleChip}>
-                      <MaterialIcons name="bus-alert" size={22} color={colors.primary} />
-                      <ThemedText type='subtitle' style={styles.groupTitleText}>Services</ThemedText>
-                    </View>
-                  </View>
+            {/* SERVICES DETAILS - Student Type moved here */}
+            <View style={styles.formGroup}>
+              <View style={styles.groupTitleContainer}>
+                <View style={styles.groupTitleChip}>
+                  <MaterialIcons name="room-service" size={22} color={colors.primary} />
+                  <ThemedText type='subtitle' style={styles.groupTitleText}>Services</ThemedText>
+                </View>
+              </View>
 
+              <ThemedText style={styles.fieldLabel}>Student Type *</ThemedText>
+              <CustomDropdown
+                value={selectedStudentType}
+                items={studentTypes}
+                onSelect={setSelectedStudentType}
+                placeholder="Select Student Type"
+                style={loading ? { opacity: 0.5 } : {}}
+                editable={!loading}
+              />
+
+              {/* Day Scholar specific option */}
+              {selectedStudentType === 'DAY_SCHOLAR' && (
+                <>
                   <ThemedText style={styles.fieldLabel}>Using School Transport?</ThemedText>
                   <CustomDropdown
                     value={isUsingSchoolTransport}
@@ -1267,40 +1273,51 @@ export default function CreateStudent({ visible, onClose, studentData: editStude
                     style={loading ? { opacity: 0.5 } : {}}
                     editable={!loading}
                   />
+                </>
+              )}
 
+              {/* Hosteller specific option */}
+              {selectedStudentType === 'HOSTELLER' && (
+                <>
                   <ThemedText style={styles.fieldLabel}>Using School Hostel?</ThemedText>
-                  <CustomDropdown
-                    value={isUsingSchoolHostel}
-                    items={yesNoOptions}
-                    onSelect={setIsUsingSchoolHostel}
-                    placeholder="Select Yes/No"
-                    style={loading ? { opacity: 0.5 } : {}}
-                    editable={!loading}
-                  />
-                </View>
-
-                {/* DISCOUNTS DETAILS */}
-                <View style={styles.formGroup}>
-                  <View style={styles.groupTitleContainer}>
-                    <View style={styles.groupTitleChip}>
-                      <MaterialIcons name="discount" size={22} color={colors.primary} />
-                      <ThemedText type='subtitle' style={styles.groupTitleText}>Fee Discounts (%)</ThemedText>
-                    </View>
-                  </View>
-
-                  <ThemedText style={styles.fieldLabel}>School Fee Discount</ThemedText>
                   <View style={styles.inputContainer}>
-                    <Feather name="percent" size={20} style={styles.inputIcon} />
+                    <MaterialIcons name="hotel" size={20} style={styles.inputIcon} />
                     <CustomInput
-                      placeholder="Enter school fee discount"
-                      value={schoolFeeDiscount.toString()}
-                      onChangeText={(text) => setSchoolFeeDiscount(parseInt(text) || 0)}
-                      keyboardType="numeric"
-                      editable={!loading}
+                      placeholder="Hostel"
+                      value="Yes (Default)"
+                      editable={false}
+                      style={{ color: colors.primary }}
                     />
                   </View>
+                </>
+              )}
+            </View>
 
-                  <ThemedText style={styles.fieldLabel}>Transport Fee Discount</ThemedText>
+            {/* DISCOUNTS DETAILS - All discounts together */}
+            <View style={styles.formGroup}>
+              <View style={styles.groupTitleContainer}>
+                <View style={styles.groupTitleChip}>
+                  <MaterialIcons name="discount" size={22} color={colors.primary} />
+                  <ThemedText type='subtitle' style={styles.groupTitleText}>Fee Discounts</ThemedText>
+                </View>
+              </View>
+
+              <ThemedText style={styles.fieldLabel}>School Fee Discount (%)</ThemedText>
+              <View style={styles.inputContainer}>
+                <Feather name="percent" size={20} style={styles.inputIcon} />
+                <CustomInput
+                  placeholder="Enter school fee discount"
+                  value={schoolFeeDiscount.toString()}
+                  onChangeText={(text) => setSchoolFeeDiscount(parseInt(text) || 0)}
+                  keyboardType="numeric"
+                  editable={!loading}
+                />
+              </View>
+
+              {/* Transport Discount - Only show if day scholar AND using transport */}
+              {selectedStudentType === 'DAY_SCHOLAR' && isUsingSchoolTransport && (
+                <>
+                  <ThemedText style={styles.fieldLabel}>Transport Fee Discount (%)</ThemedText>
                   <View style={styles.inputContainer}>
                     <Feather name="percent" size={20} style={styles.inputIcon} />
                     <CustomInput
@@ -1311,8 +1328,13 @@ export default function CreateStudent({ visible, onClose, studentData: editStude
                       editable={!loading}
                     />
                   </View>
+                </>
+              )}
 
-                  <ThemedText style={styles.fieldLabel}>Hostel Fee Discount</ThemedText>
+              {/* Hostel Discount - Only show if hosteller */}
+              {selectedStudentType === 'HOSTELLER' && (
+                <>
+                  <ThemedText style={styles.fieldLabel}>Hostel Fee Discount (%)</ThemedText>
                   <View style={styles.inputContainer}>
                     <Feather name="percent" size={20} style={styles.inputIcon} />
                     <CustomInput
@@ -1323,9 +1345,9 @@ export default function CreateStudent({ visible, onClose, studentData: editStude
                       editable={!loading}
                     />
                   </View>
-                </View>
-              </>
-            )}
+                </>
+              )}
+            </View>
           </View>
         </ScrollView>
 

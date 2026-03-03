@@ -8,6 +8,7 @@ import { Provider, useDispatch, useSelector } from 'react-redux'
 import { store } from '@/redux/store'
 import { loadEmployeeFromStorage } from '@/redux/employeeSlice'
 import { GlobalToast } from '@/components/ui/GlobalToast'
+import { PortalProvider } from '@gorhom/portal'
 
 // Fonts
 import PoppinsLight from '../assets/fonts/Poppins-Light.ttf'
@@ -116,8 +117,10 @@ const AppContent = () => {
 export default function RootLayout() {
   return (
     <Provider store={store}>
-      <AppContent />
-      <GlobalToast />
+      <PortalProvider>
+        <AppContent />
+        <GlobalToast />
+      </PortalProvider>
     </Provider>
   )
 }

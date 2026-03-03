@@ -72,6 +72,7 @@ export default function DashboardMenu({ visible, onClose }) {
 
   // Map menu items to component names
   const menuItems = [
+    // School (removed events)
     { 
       id: 1, 
       title: 'School Profile', 
@@ -82,27 +83,31 @@ export default function DashboardMenu({ visible, onClose }) {
     },
     { 
       id: 2, 
-      title: 'Events',
-      icon: 'calendar-star',
-      iconType: 'MaterialCommunityIcons', 
-      gradient: ['#10b981', '#059669'], 
-      componentName: 'events'
-    },
-    { 
-      id: 3, 
       title: 'Stats', 
       icon: 'chart-bar', 
       iconType: 'FontAwesome5', 
       gradient: ['#8b5cf6', '#7c3aed'], 
       componentName: 'schoolStats'
     },
+    
+    // Student Management
     { 
-      id: 4, 
+      id: 3, 
       title: 'Student Management', 
       icon: 'users', 
       iconType: 'FontAwesome5', 
       gradient: ['#06b6d4', '#0891b2'], 
       componentName: 'studentManagement'
+    },
+    
+    // Students Group
+    { 
+      id: 4, 
+      title: 'New Student', 
+      icon: 'user-graduate', 
+      iconType: 'FontAwesome5', 
+      gradient: ['#8b5cf6', '#7c3aed'], 
+      componentName: 'createStudent'
     },
     { 
       id: 5,
@@ -112,6 +117,8 @@ export default function DashboardMenu({ visible, onClose }) {
       gradient: ['#10b981', '#059669'], 
       componentName: 'bulkImportStudents'
     },
+    
+    // Employees Group
     { 
       id: 6, 
       title: 'New Employee', 
@@ -121,28 +128,32 @@ export default function DashboardMenu({ visible, onClose }) {
       componentName: 'createEmployee'
     },
     { 
-      id: 7, 
-      title: 'New Student', 
-      icon: 'user-tie', 
-      iconType: 'FontAwesome5', 
-      gradient: ['#8b5cf6', '#7c3aed'], 
-      componentName: 'createStudent'
-    },
-    { 
-      id: 8,
+      id: 7,
       title: 'Bulk Import Employees', 
       icon: 'users', 
       iconType: 'FontAwesome5', 
       gradient: ['#f59e0b', '#d97706'], 
       componentName: 'bulkImportEmployees'
     },
+    
+    // Student Progress
     { 
-      id: 9, 
+      id: 8, 
       title: 'Promote Students', 
       icon: 'graduation-cap', 
       iconType: 'FontAwesome5', 
       gradient: ['#f97316', '#ea580c'], 
       componentName: 'promote'
+    },
+    
+    // Uploads
+    { 
+      id: 9, 
+      title: 'Upload Marks',
+      icon: 'upload', 
+      iconType: 'Feather', 
+      gradient: ['#8b5cf6', '#7c3aed'], 
+      componentName: 'uploadMarks'
     },
     { 
       id: 10, 
@@ -152,16 +163,10 @@ export default function DashboardMenu({ visible, onClose }) {
       gradient: ['#84cc16', '#65a30d'], 
       componentName: 'attendance'
     },
+    
+    // Fees
     { 
       id: 11, 
-      title: 'Upload Marks',
-      icon: 'upload', 
-      iconType: 'Feather', 
-      gradient: ['#8b5cf6', '#7c3aed'], 
-      componentName: 'uploadMarks'
-    },
-    { 
-      id: 12, 
       title: 'Fee Management', 
       icon: 'cogs', 
       iconType: 'FontAwesome5', 
@@ -169,12 +174,22 @@ export default function DashboardMenu({ visible, onClose }) {
       componentName: 'feeManagement'
     },
     { 
-      id: 13, 
+      id: 12, 
       title: 'Fee Details', 
       icon: 'file-invoice-dollar', 
       iconType: 'FontAwesome5', 
       gradient: ['#3b82f6', '#2563eb'], 
       componentName: 'feeDetails'
+    },
+    
+    // Schedules
+    { 
+      id: 13, 
+      title: 'Events',
+      icon: 'calendar-star',
+      iconType: 'MaterialCommunityIcons', 
+      gradient: ['#10b981', '#059669'], 
+      componentName: 'events'
     },
     { 
       id: 14, 
@@ -189,27 +204,27 @@ export default function DashboardMenu({ visible, onClose }) {
   const sections = [
     {
       title: 'School',
-      data: menuItems.filter(item => [1,2,3].includes(item.id)),
+      data: menuItems.filter(item => [1,2].includes(item.id)),
     },
     {
       title: 'Student Management',
-      data: menuItems.filter(item => [4].includes(item.id)),
+      data: menuItems.filter(item => [3].includes(item.id)),
     },
     {
-      title: 'Add New',
-      data: menuItems.filter(item => [6].includes(item.id)),
+      title: 'Students',
+      data: menuItems.filter(item => [4,5].includes(item.id)),
     },
     {
-      title: 'Bulk Imports',
-      data: menuItems.filter(item => [5,7].includes(item.id)),
+      title: 'Employees',
+      data: menuItems.filter(item => [6,7].includes(item.id)),
     },
     {
       title: 'Student Progress',
-      data: menuItems.filter(item => [8,9].includes(item.id)),
+      data: menuItems.filter(item => [8].includes(item.id)),
     },
     {
       title: 'Uploads',
-      data: menuItems.filter(item => [10].includes(item.id)),
+      data: menuItems.filter(item => [9,10].includes(item.id)),
     },
     {
       title: 'Fees',
@@ -217,7 +232,7 @@ export default function DashboardMenu({ visible, onClose }) {
     },
     {
       title: 'Schedules',
-      data: menuItems.filter(item => [13, 14].includes(item.id)),
+      data: menuItems.filter(item => [13,14].includes(item.id)),
     },
   ]
 

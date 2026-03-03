@@ -1,4 +1,3 @@
-// components/ui/GlobalToast.js
 import React, { useEffect, useRef } from 'react'
 import {
   View,
@@ -8,13 +7,13 @@ import {
   PanResponder,
   TouchableOpacity,
   Platform,
+  Modal,
 } from 'react-native'
 import { useDispatch, useSelector } from 'react-redux'
 import { Ionicons } from '@expo/vector-icons'
 import { ThemedText } from './themed-text'
 import { hideToast } from '@/redux/toastSlice'
 import { useTheme } from '@/hooks/useTheme'
-import { Portal } from '@gorhom/portal'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -34,7 +33,7 @@ export const GlobalToast = () => {
     const positions = {
       'top-left': { top: 50, left: 20, right: undefined },
       'top-right': { top: 50, right: 20, left: undefined },
-      'top-center': { top: 50, left: 20, right: 20, alignItems: 'center' },
+      'top-center': { top: 20, left: 20, right: 20, alignItems: 'center' },
       'bottom-left': { bottom: 20, left: 20, right: undefined },
       'bottom-right': { bottom: 20, right: 20, left: undefined },
       'bottom-center': { bottom: 20, left: 20, right: 20, alignItems: 'center' }
@@ -239,11 +238,16 @@ export const GlobalToast = () => {
     </Animated.View>
   )
 
-  // Use Portal instead of Modal to allow background interaction
+  // Render in a Modal to ensure it appears above everything
   return (
-    <Portal>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={handleClose}
+    >
       {toastContent}
-    </Portal>
+    </Modal>
   )
 }
 

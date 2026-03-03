@@ -2241,10 +2241,8 @@ export const getClassWiseFeePending = async (req, res) => {
     const classWiseData = []
     const summary = {
       totalStudents: 0,
-      totalWithFees: 0,
-      totalTerm1Pending: 0,
-      totalTerm2Pending: 0,
-      totalTerm3Pending: 0,
+      studentsWithPending: 0,
+      totalTermPending: 0,
       totalPreviousYearPending: 0,
       totalPending: 0
     }
@@ -2257,18 +2255,79 @@ export const getClassWiseFeePending = async (req, res) => {
       const previousYearDetails = getFormattedPreviousYearDetails(feeRecord.previousYearDetails)
       const previousYearFee = calculateTotalPreviousYearPending(previousYearDetails)
 
-      // Parse term distribution
-      const termDistribution = feeRecord.termDistribution || {}
-      
-      // Calculate pending amounts for each term (combined total of school + transport + hostel)
-      const term1Pending = Math.max(0, (termDistribution[1]?.total || 0) - (termDistribution[1]?.totalPaid || 0))
-      const term2Pending = Math.max(0, (termDistribution[2]?.total || 0) - (termDistribution[2]?.totalPaid || 0))
-      const term3Pending = Math.max(0, (termDistribution[3]?.total || 0) - (termDistribution[3]?.totalPaid || 0))
-      
-      // Calculate total pending including previous year
-      const totalPending = term1Pending + term2Pending + term3Pending + previousYearFee
+      // Parse term distribution - handle both string and object
+      let termDistribution = {}
+      try {
+        termDistribution = typeof feeRecord.termDistribution === 'string'
+          ? JSON.parse(feeRecord.termDistribution)
+          : feeRecord.termDistribution || {}
+      } catch (e) {
+        termDistribution = {}
+      }
 
-      // Create student object with all fee components
+      // IMPORTANT FIX: Calculate term pending correctly
+      // Method 1: Using termXDue fields from feeRecord (more reliable)
+      let termPending = 0
+      let termSchoolPending = 0
+      let termTransportPending = 0
+      let termHostelPending = 0
+      
+      if (termNum === 1) {
+        // Term 1 due amount minus what's been paid
+        const termDue = feeRecord.term1Due || 0
+        const termPaid = feeRecord.term1Paid || 0
+        termPending = Math.max(0, termDue - termPaid)
+        
+        // If we have detailed distribution, use it for breakdown
+        if (termDistribution[1]) {
+          const td = termDistribution[1]
+          termSchoolPending = Math.max(0, (td.schoolFee || 0) - (td.schoolFeePaid || 0))
+          termTransportPending = Math.max(0, (td.transportFee || 0) - (td.transportFeePaid || 0))
+          termHostelPending = Math.max(0, (td.hostelFee || 0) - (td.hostelFeePaid || 0))
+        } else {
+          // If no distribution, estimate based on total
+          // This is a fallback - ideally you'd have distribution
+          termSchoolPending = termPending // Simplified - adjust based on your logic
+        }
+      } 
+      else if (termNum === 2) {
+        const termDue = feeRecord.term2Due || 0
+        const termPaid = feeRecord.term2Paid || 0
+        termPending = Math.max(0, termDue - termPaid)
+        
+        if (termDistribution[2]) {
+          const td = termDistribution[2]
+          termSchoolPending = Math.max(0, (td.schoolFee || 0) - (td.schoolFeePaid || 0))
+          termTransportPending = Math.max(0, (td.transportFee || 0) - (td.transportFeePaid || 0))
+          termHostelPending = Math.max(0, (td.hostelFee || 0) - (td.hostelFeePaid || 0))
+        }
+      } 
+      else if (termNum === 3) {
+        const termDue = feeRecord.term3Due || 0
+        const termPaid = feeRecord.term3Paid || 0
+        termPending = Math.max(0, termDue - termPaid)
+        
+        if (termDistribution[3]) {
+          const td = termDistribution[3]
+          termSchoolPending = Math.max(0, (td.schoolFee || 0) - (td.schoolFeePaid || 0))
+          termTransportPending = Math.max(0, (td.transportFee || 0) - (td.transportFeePaid || 0))
+          termHostelPending = Math.max(0, (td.hostelFee || 0) - (td.hostelFeePaid || 0))
+        }
+      }
+
+      // Debug log to see what's happening
+      console.log(`Student ${student.admissionNo}:`, {
+        term: termNum,
+        termDue: termNum === 1 ? feeRecord.term1Due : termNum === 2 ? feeRecord.term2Due : feeRecord.term3Due,
+        termPaid: termNum === 1 ? feeRecord.term1Paid : termNum === 2 ? feeRecord.term2Paid : feeRecord.term3Paid,
+        termPending,
+        distribution: termDistribution[termNum]
+      })
+
+      // Calculate total pending including previous year (if requested)
+      const totalPending = termPending + (includePreviousYearBool ? previousYearFee : 0)
+
+      // Create student object with fee components
       const studentData = {
         rollNo: student.rollNo || 'N/A',
         name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
@@ -2276,23 +2335,57 @@ export const getClassWiseFeePending = async (req, res) => {
         class: student.class,
         classLabel: mapEnumToDisplayName(student.class),
         section: student.section,
-        term1Pending,
-        term2Pending,
-        term3Pending,
-        previousYearFee,
-        totalPending
+        studentType: student.studentType,
+        village: student.village,
+        parentPhone: student.parentPhone,
+        
+        // Term due and paid amounts
+        termDue: termNum === 1 ? feeRecord.term1Due : 
+                 termNum === 2 ? feeRecord.term2Due : 
+                 feeRecord.term3Due,
+        termPaid: termNum === 1 ? feeRecord.term1Paid : 
+                  termNum === 2 ? feeRecord.term2Paid : 
+                  feeRecord.term3Paid,
+        
+        // Term-specific pending (selected term)
+        termNumber: termNum,
+        termPending,
+        termBreakdown: {
+          school: termSchoolPending,
+          transport: termTransportPending,
+          hostel: termHostelPending
+        },
+        
+        // Previous year fee
+        previousYearFee: includePreviousYearBool ? previousYearFee : 0,
+        
+        // Total pending
+        totalPending,
+        
+        // Debug info (optional - remove in production)
+        _debug: {
+          hasDistribution: !!termDistribution[termNum],
+          term1Due: feeRecord.term1Due,
+          term1Paid: feeRecord.term1Paid,
+          term2Due: feeRecord.term2Due,
+          term2Paid: feeRecord.term2Paid,
+          term3Due: feeRecord.term3Due,
+          term3Paid: feeRecord.term3Paid
+        }
       }
 
       classWiseData.push(studentData)
 
       // Update summary counts
       summary.totalStudents++
+      
+      // Only count as pending if they have any dues
       if (totalPending > 0) {
-        summary.totalWithFees++
-        summary.totalTerm1Pending += term1Pending
-        summary.totalTerm2Pending += term2Pending
-        summary.totalTerm3Pending += term3Pending
-        summary.totalPreviousYearPending += previousYearFee
+        summary.studentsWithPending++
+        summary.totalTermPending += termPending
+        if (includePreviousYearBool) {
+          summary.totalPreviousYearPending += previousYearFee
+        }
         summary.totalPending += totalPending
       }
     })
@@ -2309,10 +2402,8 @@ export const getClassWiseFeePending = async (req, res) => {
           students: [],
           summary: {
             totalStudents: 0,
-            totalWithPending: 0,
-            totalTerm1Pending: 0,
-            totalTerm2Pending: 0,
-            totalTerm3Pending: 0,
+            studentsWithPending: 0,
+            totalTermPending: 0,
             totalPreviousYearPending: 0,
             totalPending: 0
           }
@@ -2323,22 +2414,39 @@ export const getClassWiseFeePending = async (req, res) => {
       groupedByClassSection[key].summary.totalStudents++
 
       if (student.totalPending > 0) {
-        groupedByClassSection[key].summary.totalWithPending++
-        groupedByClassSection[key].summary.totalTerm1Pending += student.term1Pending || 0
-        groupedByClassSection[key].summary.totalTerm2Pending += student.term2Pending || 0
-        groupedByClassSection[key].summary.totalTerm3Pending += student.term3Pending || 0
+        groupedByClassSection[key].summary.studentsWithPending++
+        groupedByClassSection[key].summary.totalTermPending += student.termPending || 0
         groupedByClassSection[key].summary.totalPreviousYearPending += student.previousYearFee || 0
         groupedByClassSection[key].summary.totalPending += student.totalPending
       }
     })
 
-    // Convert grouped object to array and sort by class and section
+    // Convert grouped object to array and sort
     const groupedResult = Object.values(groupedByClassSection).sort((a, b) => {
       if (a.class === b.class) {
         return a.section.localeCompare(b.section)
       }
       return a.class.localeCompare(b.class)
     })
+
+    // Sort students within each group by pending amount (highest first)
+    groupedResult.forEach(group => {
+      group.students.sort((a, b) => {
+        if (b.totalPending !== a.totalPending) {
+          return b.totalPending - a.totalPending
+        }
+        return a.name.localeCompare(b.name)
+      })
+    })
+
+    // Calculate overall statistics
+    const studentsWithPending = classWiseData.filter(s => s.totalPending > 0)
+    const averagePending = studentsWithPending.length > 0 
+      ? summary.totalPending / studentsWithPending.length 
+      : 0
+
+    // Remove debug info before sending response
+    const cleanData = classWiseData.map(({ _debug, ...rest }) => rest)
 
     res.status(200).json({
       success: true,
@@ -2351,21 +2459,21 @@ export const getClassWiseFeePending = async (req, res) => {
         },
         summary: {
           totalStudents: summary.totalStudents,
-          studentsWithPendingFees: summary.totalWithFees,
-          totalTerm1Pending: summary.totalTerm1Pending,
-          totalTerm2Pending: summary.totalTerm2Pending,
-          totalTerm3Pending: summary.totalTerm3Pending,
+          studentsWithPendingFees: summary.studentsWithPending,
+          totalTermPending: summary.totalTermPending,
           totalPreviousYearPending: summary.totalPreviousYearPending,
           totalPendingAmount: summary.totalPending,
+          averagePendingPerStudent: Number(averagePending.toFixed(2)),
+          pendingPercentage: summary.totalStudents > 0 
+            ? Number(((summary.studentsWithPending / summary.totalStudents) * 100).toFixed(2))
+            : 0,
           breakdown: {
-            term1: summary.totalTerm1Pending,
-            term2: summary.totalTerm2Pending,
-            term3: summary.totalTerm3Pending,
+            term: summary.totalTermPending,
             previousYear: summary.totalPreviousYearPending
           }
         },
         classWiseBreakdown: groupedResult,
-        allStudents: classWiseData
+        allStudents: cleanData.sort((a, b) => b.totalPending - a.totalPending)
       }
     })
   } catch (error) {

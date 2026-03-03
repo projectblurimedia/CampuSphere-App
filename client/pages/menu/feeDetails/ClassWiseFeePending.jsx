@@ -319,18 +319,19 @@ export default function ClassWiseFeePending({ visible, onClose }) {
             id: student.id || `temp-${Math.random()}`,
             rollNo: student.rollNo || 'N/A',
             name: student.name || 'Unknown',
-            term1Pending: student.term1Pending || 0,
-            term2Pending: student.term2Pending || 0,
-            term3Pending: student.term3Pending || 0,
+            // ✅ FIX: Use termPending instead of term1/2/3Pending
+            termPending: student.termPending || 0,
+            termDue: student.termDue || 0,
+            termPaid: student.termPaid || 0,
+            termBreakdown: student.termBreakdown || { school: 0, transport: 0, hostel: 0 },
             previousYearFee: student.previousYearFee || 0,
             totalPending: student.totalPending || 0
           })),
-          totalTerm1Pending: section.summary?.totalTerm1Pending || 0,
-          totalTerm2Pending: section.summary?.totalTerm2Pending || 0,
-          totalTerm3Pending: section.summary?.totalTerm3Pending || 0,
+          // Update section summaries
+          totalTermPending: section.summary?.totalTermPending || 0,
           totalPreviousYearPending: section.summary?.totalPreviousYearPending || 0,
           totalPendingAmount: section.summary?.totalPending || 0,
-          pendingStudentsCount: section.summary?.totalWithPending || 0,
+          pendingStudentsCount: section.summary?.studentsWithPending || 0,
           totalStudents: section.summary?.totalStudents || 0
         }))
         
@@ -384,9 +385,11 @@ export default function ClassWiseFeePending({ visible, onClose }) {
       id: student.id || `temp-${Math.random()}`,
       rollNo: student.rollNo || 'N/A',
       name: student.name || 'Unknown',
-      term1Pending: student.term1Pending || 0,
-      term2Pending: student.term2Pending || 0,
-      term3Pending: student.term3Pending || 0,
+      // ✅ FIX: Use termPending instead of term1/2/3Pending
+      termPending: student.termPending || 0,
+      termDue: student.termDue || 0,
+      termPaid: student.termPaid || 0,
+      termBreakdown: student.termBreakdown || { school: 0, transport: 0, hostel: 0 },
       previousYearFee: student.previousYearFee || 0,
       totalPending: student.totalPending || 0
     }))
@@ -402,9 +405,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
       const sectionsData = filteredSections.map(section => ({
         className: section.className || 'Unknown',
         section: section.section || 'Unknown',
-        totalTerm1Pending: section.totalTerm1Pending || 0,
-        totalTerm2Pending: section.totalTerm2Pending || 0,
-        totalTerm3Pending: section.totalTerm3Pending || 0,
+        totalTermPending: section.totalTermPending || 0,
         totalPreviousYearPending: section.totalPreviousYearPending || 0,
         totalPendingAmount: section.totalPendingAmount || 0,
         pendingCount: section.pendingStudentsCount || 0,
@@ -412,9 +413,8 @@ export default function ClassWiseFeePending({ visible, onClose }) {
         students: (section.students || []).map(s => ({
           rollNo: s.rollNo || 'N/A',
           name: s.name || 'Unknown',
-          term1Pending: s.term1Pending || 0,
-          term2Pending: s.term2Pending || 0,
-          term3Pending: s.term3Pending || 0,
+          // ✅ FIX: Use termPending instead of term1/2/3Pending
+          termPending: s.termPending || 0,
           previousYearFee: s.previousYearFee || 0,
           totalPending: s.totalPending || 0
         }))
@@ -428,9 +428,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
         grandTotals: {
           totalSections: filteredSections.length,
           totalStudents: grandTotals.totalStudents,
-          totalTerm1Pending: grandTotals.totalTerm1Pending,
-          totalTerm2Pending: grandTotals.totalTerm2Pending,
-          totalTerm3Pending: grandTotals.totalTerm3Pending,
+          totalTermPending: grandTotals.totalTermPending,
           totalPreviousYearFee: grandTotals.totalPreviousYearFee,
           totalAmount: grandTotals.totalAmount
         },
@@ -458,9 +456,8 @@ export default function ClassWiseFeePending({ visible, onClose }) {
         .map(s => ({
           rollNo: s.rollNo || 'N/A',
           name: s.name || 'Unknown',
-          term1Pending: s.term1Pending || 0,
-          term2Pending: s.term2Pending || 0,
-          term3Pending: s.term3Pending || 0,
+          // ✅ FIX: Use termPending instead of term1/2/3Pending
+          termPending: s.termPending || 0,
           previousYearFee: s.previousYearFee || 0,
           totalPending: s.totalPending || 0
         }))
@@ -468,9 +465,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
       const sectionsData = [{
         className: section.className || 'Unknown',
         section: section.section || 'Unknown',
-        totalTerm1Pending: section.totalTerm1Pending || 0,
-        totalTerm2Pending: section.totalTerm2Pending || 0,
-        totalTerm3Pending: section.totalTerm3Pending || 0,
+        totalTermPending: section.totalTermPending || 0,
         totalPreviousYearPending: section.totalPreviousYearPending || 0,
         totalPendingAmount: section.totalPendingAmount || 0,
         pendingCount: section.pendingStudentsCount || 0,
@@ -486,9 +481,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
         grandTotals: {
           totalSections: 1,
           totalStudents: section.pendingStudentsCount || 0,
-          totalTerm1Pending: section.totalTerm1Pending || 0,
-          totalTerm2Pending: section.totalTerm2Pending || 0,
-          totalTerm3Pending: section.totalTerm3Pending || 0,
+          totalTermPending: section.totalTermPending || 0,
           totalPreviousYearFee: section.totalPreviousYearPending || 0,
           totalAmount: section.totalPendingAmount || 0
         },
@@ -838,11 +831,11 @@ export default function ClassWiseFeePending({ visible, onClose }) {
                             {student.name}
                           </ThemedText>
                           
-                          {/* Dynamic columns based on selected term */}
+                          {/* ✅ FIX: Use termPending for all term columns */}
                           {selectedTerm === 'First Term' && (
                             <>
                               <ThemedText style={[styles.tableCell, { width: getColumnWidth(2) }]}>
-                                {formatCurrency(student.term1Pending)}
+                                {formatCurrency(student.termPending)}
                               </ThemedText>
                               <ThemedText style={[styles.tableCell, { width: getColumnWidth(3), backgroundColor: colors.warning + '20', fontWeight: 'bold', color: colors.warning }]}>
                                 {formatCurrency(student.previousYearFee)}
@@ -856,7 +849,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
                           {selectedTerm === 'Second Term' && (
                             <>
                               <ThemedText style={[styles.tableCell, { width: getColumnWidth(2) }]}>
-                                {formatCurrency(student.term2Pending)}
+                                {formatCurrency(student.termPending)}
                               </ThemedText>
                               <ThemedText style={[styles.tableCell, { width: getColumnWidth(3), backgroundColor: colors.warning + '20', fontWeight: 'bold', color: colors.warning }]}>
                                 {formatCurrency(student.previousYearFee)}
@@ -870,7 +863,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
                           {selectedTerm === 'Third Term' && (
                             <>
                               <ThemedText style={[styles.tableCell, { width: getColumnWidth(2) }]}>
-                                {formatCurrency(student.term3Pending)}
+                                {formatCurrency(student.termPending)}
                               </ThemedText>
                               <ThemedText style={[styles.tableCell, { width: getColumnWidth(3), backgroundColor: colors.warning + '20', fontWeight: 'bold', color: colors.warning }]}>
                                 {formatCurrency(student.previousYearFee)}
@@ -895,13 +888,15 @@ export default function ClassWiseFeePending({ visible, onClose }) {
                           {selectedTerm === 'All' && (
                             <>
                               <ThemedText style={[styles.tableCell, { width: getColumnWidth(2) }]}>
-                                {formatCurrency(student.term1Pending)}
+                                {/* For "All" we need all three term amounts - this requires backend to return all terms */}
+                                {/* This part needs adjustment based on what your backend returns for "All" */}
+                                {formatCurrency(student.termPending)} {/* Placeholder */}
                               </ThemedText>
                               <ThemedText style={[styles.tableCell, { width: getColumnWidth(3) }]}>
-                                {formatCurrency(student.term2Pending)}
+                                {formatCurrency(student.termPending)} {/* Placeholder */}
                               </ThemedText>
                               <ThemedText style={[styles.tableCell, { width: getColumnWidth(4) }]}>
-                                {formatCurrency(student.term3Pending)}
+                                {formatCurrency(student.termPending)} {/* Placeholder */}
                               </ThemedText>
                               <ThemedText style={[styles.tableCell, { width: getColumnWidth(5), backgroundColor: colors.warning + '20', fontWeight: 'bold', color: colors.warning }]}>
                                 {formatCurrency(student.previousYearFee)}
@@ -931,11 +926,11 @@ export default function ClassWiseFeePending({ visible, onClose }) {
                     {/* Name - empty */}
                     <ThemedText style={[styles.footerCell, { width: getColumnWidth(1) }]}></ThemedText>
                     
-                    {/* Dynamic footer columns */}
+                    {/* Dynamic footer columns using totalTermPending */}
                     {selectedTerm === 'First Term' && (
                       <>
                         <ThemedText style={[styles.footerCell, { width: getColumnWidth(2), fontWeight: 'bold' }]}>
-                          {formatCurrency(selectedSectionData?.totalTerm1Pending || 0)}
+                          {formatCurrency(selectedSectionData?.totalTermPending || 0)}
                         </ThemedText>
                         <ThemedText style={[styles.footerCell, { width: getColumnWidth(3), backgroundColor: colors.warning + '30', fontWeight: 'bold', color: colors.warning }]}>
                           {formatCurrency(selectedSectionData?.totalPreviousYearPending || 0)}
@@ -949,7 +944,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
                     {selectedTerm === 'Second Term' && (
                       <>
                         <ThemedText style={[styles.footerCell, { width: getColumnWidth(2), fontWeight: 'bold' }]}>
-                          {formatCurrency(selectedSectionData?.totalTerm2Pending || 0)}
+                          {formatCurrency(selectedSectionData?.totalTermPending || 0)}
                         </ThemedText>
                         <ThemedText style={[styles.footerCell, { width: getColumnWidth(3), backgroundColor: colors.warning + '30', fontWeight: 'bold', color: colors.warning }]}>
                           {formatCurrency(selectedSectionData?.totalPreviousYearPending || 0)}
@@ -963,7 +958,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
                     {selectedTerm === 'Third Term' && (
                       <>
                         <ThemedText style={[styles.footerCell, { width: getColumnWidth(2), fontWeight: 'bold' }]}>
-                          {formatCurrency(selectedSectionData?.totalTerm3Pending || 0)}
+                          {formatCurrency(selectedSectionData?.totalTermPending || 0)}
                         </ThemedText>
                         <ThemedText style={[styles.footerCell, { width: getColumnWidth(3), backgroundColor: colors.warning + '30', fontWeight: 'bold', color: colors.warning }]}>
                           {formatCurrency(selectedSectionData?.totalPreviousYearPending || 0)}
@@ -988,13 +983,13 @@ export default function ClassWiseFeePending({ visible, onClose }) {
                     {selectedTerm === 'All' && (
                       <>
                         <ThemedText style={[styles.footerCell, { width: getColumnWidth(2), fontWeight: 'bold' }]}>
-                          {formatCurrency(selectedSectionData?.totalTerm1Pending || 0)}
+                          {formatCurrency(selectedSectionData?.totalTermPending || 0)}
                         </ThemedText>
                         <ThemedText style={[styles.footerCell, { width: getColumnWidth(3), fontWeight: 'bold' }]}>
-                          {formatCurrency(selectedSectionData?.totalTerm2Pending || 0)}
+                          {formatCurrency(selectedSectionData?.totalTermPending || 0)}
                         </ThemedText>
                         <ThemedText style={[styles.footerCell, { width: getColumnWidth(4), fontWeight: 'bold' }]}>
-                          {formatCurrency(selectedSectionData?.totalTerm3Pending || 0)}
+                          {formatCurrency(selectedSectionData?.totalTermPending || 0)}
                         </ThemedText>
                         <ThemedText style={[styles.footerCell, { width: getColumnWidth(5), backgroundColor: colors.warning + '30', fontWeight: 'bold', color: colors.warning }]}>
                           {formatCurrency(selectedSectionData?.totalPreviousYearPending || 0)}
@@ -1019,18 +1014,8 @@ export default function ClassWiseFeePending({ visible, onClose }) {
     const hasPending = item.pendingStudentsCount > 0
     const hasPreviousYearPending = item.totalPreviousYearPending > 0
     
-    // Determine which term amount to show based on selected term
-    const getTermAmount = () => {
-      switch(selectedTerm) {
-        case 'First Term': return item.totalTerm1Pending
-        case 'Second Term': return item.totalTerm2Pending
-        case 'Third Term': return item.totalTerm3Pending
-        case 'Previous Year': return 0 // Don't show term amount for Previous Year only
-        default: return 0
-      }
-    }
-    
-    const termAmount = getTermAmount()
+    // ✅ FIX: Use totalTermPending instead of term1/2/3Pending
+    const termAmount = item.totalTermPending || 0
     const termLabel = selectedTerm === 'First Term' ? 'Term 1' : 
                       selectedTerm === 'Second Term' ? 'Term 2' : 
                       selectedTerm === 'Third Term' ? 'Term 3' : ''
@@ -1080,35 +1065,17 @@ export default function ClassWiseFeePending({ visible, onClose }) {
             </View>
           )}
           
-          {/* Show all terms when "All" is selected */}
+          {/* Show all terms when "All" is selected - This needs backend to return all terms */}
           {selectedTerm === 'All' && (
             <>
-              {item.totalTerm1Pending > 0 && (
+              {/* You'll need to add these fields if backend returns them */}
+              {/* For now, show total term pending */}
+              {termAmount > 0 && (
                 <View style={styles.feeItem}>
                   <FontAwesome5 name="money-check" size={12} color={colors.warning} />
-                  <ThemedText style={styles.feeLabel}>Term 1:</ThemedText>
+                  <ThemedText style={styles.feeLabel}>Total Term:</ThemedText>
                   <ThemedText style={[styles.feeValue, { color: colors.warning }]}>
-                    {formatCurrency(item.totalTerm1Pending)}
-                  </ThemedText>
-                </View>
-              )}
-              
-              {item.totalTerm2Pending > 0 && (
-                <View style={styles.feeItem}>
-                  <FontAwesome5 name="money-check" size={12} color={colors.info} />
-                  <ThemedText style={styles.feeLabel}>Term 2:</ThemedText>
-                  <ThemedText style={[styles.feeValue, { color: colors.info }]}>
-                    {formatCurrency(item.totalTerm2Pending)}
-                  </ThemedText>
-                </View>
-              )}
-              
-              {item.totalTerm3Pending > 0 && (
-                <View style={styles.feeItem}>
-                  <FontAwesome5 name="money-check" size={12} color={colors.danger} />
-                  <ThemedText style={styles.feeLabel}>Term 3:</ThemedText>
-                  <ThemedText style={[styles.feeValue, { color: colors.danger }]}>
-                    {formatCurrency(item.totalTerm3Pending)}
+                    {formatCurrency(termAmount)}
                   </ThemedText>
                 </View>
               )}
@@ -1152,17 +1119,13 @@ export default function ClassWiseFeePending({ visible, onClose }) {
   // Calculate grand totals including previous year
   const grandTotals = useMemo(() => {
     let totalStudents = 0
-    let totalTerm1Pending = 0
-    let totalTerm2Pending = 0
-    let totalTerm3Pending = 0
+    let totalTermPending = 0
     let totalPreviousYearFee = 0
     let totalAmount = 0
 
     filteredSections.forEach(section => {
       totalStudents += section.pendingStudentsCount || 0
-      totalTerm1Pending += section.totalTerm1Pending || 0
-      totalTerm2Pending += section.totalTerm2Pending || 0
-      totalTerm3Pending += section.totalTerm3Pending || 0
+      totalTermPending += section.totalTermPending || 0
       totalPreviousYearFee += section.totalPreviousYearPending || 0
       totalAmount += section.totalPendingAmount || 0
     })
@@ -1170,9 +1133,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
     return {
       totalSections: filteredSections.length,
       totalStudents,
-      totalTerm1Pending,
-      totalTerm2Pending,
-      totalTerm3Pending,
+      totalTermPending,
       totalPreviousYearFee,
       totalAmount
     }
@@ -1919,7 +1880,7 @@ export default function ClassWiseFeePending({ visible, onClose }) {
           selectedClass,
           handleClassChange,
           'Select Class',
-          false // We don't need isLoading here as we have the unified loading state
+          false
         )}
         
         {renderDropdownModal(

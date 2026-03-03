@@ -537,3 +537,32 @@ model CashFlow {
   @@index([type, date, amount])
   @@index([categoryId, date, amount])
 }
+
+// ================= TIMETABLE MODEL =================
+
+enum Day {
+  Monday
+  Tuesday
+  Wednesday
+  Thursday
+  Friday
+  Saturday
+  Sunday
+}
+
+model Timetable {
+  id              String        @id @default(uuid())
+  day             Day
+  
+  slots           Json          @default("[]") 
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  class           Class        
+  section         Section     
+
+  @@index([day])
+  @@unique([class, section, day])
+  @@index([class, section])
+}

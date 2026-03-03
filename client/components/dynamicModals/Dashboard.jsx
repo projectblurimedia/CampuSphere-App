@@ -15,7 +15,7 @@ const componentMap = {
   'uploadMarks': () => import('@/pages/menu/uploadMarks/UploadMarks'),
   'feeManagement': () => import('@/pages/menu/feeManagement/FeeManagement'),
   'feeDetails': () => import('@/pages/menu/feeDetails/FeeDetails'),
-  'timeTables': () => import('@/pages/menu/timeTables/TimeTables'),
+  'timetable': () => import('@/pages/menu/timetable/Timetable'),
   
   // New Student Management component
   'studentManagement': () => import('@/pages/menu/studentManagement/StudentManagement'),

@@ -14,6 +14,7 @@ import employeeRoutes from './routes/employeeRoutes.js'
 import feeStructureRoutes from './routes/feeStructureRoutes.js'
 import feeRoutes from './routes/feeRoutes.js'
 import cashflowRoutes from './routes/cashflowRoutes.js'
+import timetableRoutes from './routes/timetableRoutes.js'
 
 dotenv.config()
 const app = express()
@@ -61,6 +62,7 @@ app.use('/api/employees', employeeRoutes)
 app.use('/api/fee-structure', feeStructureRoutes)
 app.use('/api/fees', feeRoutes)
 app.use('/api/cashflow', cashflowRoutes)
+app.use('/api/timetable', timetableRoutes)
 
 app.use((error, req, res, next) => {
   const errorStatus = error.status || 500

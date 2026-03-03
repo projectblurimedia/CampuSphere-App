@@ -178,11 +178,11 @@ export default function DashboardMenu({ visible, onClose }) {
     },
     { 
       id: 14, 
-      title: 'Time Tables',
+      title: 'Timetable',
       icon: 'calendar-clock',
       iconType: 'MaterialCommunityIcons', 
       gradient: ['#ec4899', '#d946ef'], 
-      componentName: 'timeTables'
+      componentName: 'timetable'
     },
   ]
 
@@ -217,7 +217,7 @@ export default function DashboardMenu({ visible, onClose }) {
     },
     {
       title: 'Schedules',
-      data: menuItems.filter(item => [13].includes(item.id)),
+      data: menuItems.filter(item => [13, 14].includes(item.id)),
     },
   ]
 

@@ -566,3 +566,18 @@ model Timetable {
   @@unique([class, section, day])
   @@index([class, section])
 }
+
+model Event {
+  id          String    @id @default(uuid())
+  title       String    @db.VarChar(100)
+  date        DateTime
+  description String    @db.Text
+  images      Json      @default("[]") // Format: [{ "url": "https://...", "publicId": "...", "uploadedAt": "2024-01-01T00:00:00.000Z" }]
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([date])
+  @@index([createdAt])
+  @@index([date, createdAt])
+}

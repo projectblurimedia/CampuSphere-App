@@ -12,7 +12,7 @@ import {
   MaterialCommunityIcons,
 } from '@expo/vector-icons'
 
-const EventCard = ({ event, tab, onView, onEdit, onDelete, colors, weekdayColors, renderImageGrid }) => {
+const EventCard = ({ event, tab, onView, onEdit, onDelete, colors, weekdayColors, renderImageGrid, actionLoading }) => {
   const dayIndex = new Date(event.date).getDay()
   const borderColor = weekdayColors[dayIndex]
   const hasImages = event.images && event.images.length > 0
@@ -124,6 +124,9 @@ const EventCard = ({ event, tab, onView, onEdit, onDelete, colors, weekdayColors
       fontSize: 14,
       fontWeight: '600',
     },
+    disabledAction: {
+      opacity: 0.5,
+    },
   })
 
   return (
@@ -131,6 +134,7 @@ const EventCard = ({ event, tab, onView, onEdit, onDelete, colors, weekdayColors
       style={styles.eventCard}
       onPress={() => onView(event)}
       activeOpacity={0.9}
+      disabled={actionLoading}
     >
       {/* Event Header */}
       <LinearGradient
@@ -162,15 +166,17 @@ const EventCard = ({ event, tab, onView, onEdit, onDelete, colors, weekdayColors
       <View style={styles.eventFooter}>
         <View style={styles.eventActions}>
           <TouchableOpacity
-            style={[styles.actionBtn, styles.editAction]}
+            style={[styles.actionBtn, styles.editAction, actionLoading && styles.disabledAction]}
             onPress={() => onEdit(event)}
+            disabled={actionLoading}
           >
             <Feather name="edit-2" size={16} color="#FFFFFF" />
             <ThemedText style={styles.actionText}>Edit</ThemedText>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.actionBtn, styles.deleteAction]}
-            onPress={() => onDelete(event._id)}
+            style={[styles.actionBtn, styles.deleteAction, actionLoading && styles.disabledAction]}
+            onPress={() => onDelete(event.id)} // Changed from event._id to event.id
+            disabled={actionLoading}
           >
             <Feather name="trash-2" size={16} color="#FFFFFF" />
             <ThemedText style={styles.actionText}>Delete</ThemedText>

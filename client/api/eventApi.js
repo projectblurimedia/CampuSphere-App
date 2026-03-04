@@ -1,11 +1,11 @@
-import axios from 'axios'
+import axiosApi from "@/utils/axiosApi"
 
-const API_URL = 'http://192.168.31.232:8000/server/events'
-
-// Get all events
-export const getAllEvents = async () => {
+// Get all events with pagination
+export const getAllEvents = async (page = 1, limit = 20) => {
     try {
-        const response = await axios.get(API_URL)
+        const response = await axiosApi.get('/events', {
+            params: { page, limit }
+        })
         return response.data
     } catch (error) {
         console.error('Get all events error:', error.message)
@@ -13,10 +13,12 @@ export const getAllEvents = async () => {
     }
 }
 
-// Get today's events
-export const getTodaysEvents = async () => {
+// Get today's events with pagination
+export const getTodaysEvents = async (page = 1, limit = 20) => {
     try {
-        const response = await axios.get(`${API_URL}/today`)
+        const response = await axiosApi.get(`events/today`, {
+            params: { page, limit }
+        })
         return response.data
     } catch (error) {
         console.error('Get today\'s events error:', error.message)
@@ -24,10 +26,12 @@ export const getTodaysEvents = async () => {
     }
 }
 
-// Get upcoming events
-export const getUpcomingEvents = async () => {
+// Get upcoming events with pagination
+export const getUpcomingEvents = async (page = 1, limit = 20) => {
     try {
-        const response = await axios.get(`${API_URL}/upcoming`)
+        const response = await axiosApi.get(`events/upcoming`, {
+            params: { page, limit }
+        })
         return response.data
     } catch (error) {
         console.error('Get upcoming events error:', error.message)
@@ -35,10 +39,12 @@ export const getUpcomingEvents = async () => {
     }
 }
 
-// Get past events
-export const getPastEvents = async () => {
+// Get past events with pagination
+export const getPastEvents = async (page = 1, limit = 20) => {
     try {
-        const response = await axios.get(`${API_URL}/past`)
+        const response = await axiosApi.get(`events/past`, {
+            params: { page, limit }
+        })
         return response.data
     } catch (error) {
         console.error('Get past events error:', error.message)
@@ -46,10 +52,47 @@ export const getPastEvents = async () => {
     }
 }
 
+// Search events
+export const searchEvents = async (query, page = 1, limit = 20) => {
+    try {
+        const response = await axiosApi.get(`events/search`, {
+            params: { query, page, limit }
+        })
+        return response.data
+    } catch (error) {
+        console.error('Search events error:', error.message)
+        throw error.response?.data || { message: 'Network error' }
+    }
+}
+
+// Get events by date range
+export const getEventsByDateRange = async (startDate, endDate, page = 1, limit = 20) => {
+    try {
+        const response = await axiosApi.get(`events/date-range`, {
+            params: { startDate, endDate, page, limit }
+        })
+        return response.data
+    } catch (error) {
+        console.error('Get events by date range error:', error.message)
+        throw error.response?.data || { message: 'Network error' }
+    }
+}
+
+// Get event statistics
+export const getEventStatistics = async () => {
+    try {
+        const response = await axiosApi.get(`events/statistics`)
+        return response.data
+    } catch (error) {
+        console.error('Get event statistics error:', error.message)
+        throw error.response?.data || { message: 'Network error' }
+    }
+}
+
 // Get single event
 export const getEventById = async (id) => {
     try {
-        const response = await axios.get(`${API_URL}/${id}`)
+        const response = await axiosApi.get(`events/${id}`)
         return response.data
     } catch (error) {
         console.error('Get event by ID error:', error.message)
@@ -71,20 +114,30 @@ export const createEvent = async (eventData, images = []) => {
         images.forEach((image, index) => {
             if (image.uri) {
                 // Extract filename from URI
-                const filename = image.uri.split('/').pop()
+                const filename = image.uri.split('/').pop() || `event-image-${Date.now()}-${index}.jpg`
                 // Get file extension
-                const fileExtension = filename.split('.').pop()
-                const type = `image/${fileExtension === 'jpg' ? 'jpeg' : fileExtension}`
+                const fileExtension = filename.split('.').pop().toLowerCase()
+                let mimeType = 'image/jpeg'
+                
+                if (fileExtension === 'png') {
+                    mimeType = 'image/png'
+                } else if (fileExtension === 'gif') {
+                    mimeType = 'image/gif'
+                } else if (fileExtension === 'webp') {
+                    mimeType = 'image/webp'
+                }
                 
                 formData.append('images', {
                     uri: image.uri,
-                    type: type,
-                    name: filename || `event-image-${Date.now()}-${index}.jpg`
+                    type: mimeType,
+                    name: filename
                 })
             }
         })
         
-        const response = await axios.post(API_URL, formData, {
+        console.log('Creating event with images:', images.length)
+        
+        const response = await axiosApi.post('/events', formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
@@ -97,8 +150,13 @@ export const createEvent = async (eventData, images = []) => {
             message: error.message,
             response: error.response?.data,
             status: error.response?.status,
-            url: API_URL
+            url: '/events'
         })
+        
+        if (error.code === 'ECONNABORTED') {
+            throw { message: 'Request timeout. Please try again.' }
+        }
+        
         throw error.response?.data || { 
             message: error.message || 'Network error',
             details: 'Check server connection and CORS configuration'
@@ -119,10 +177,12 @@ export const updateEvent = async (id, eventData, newImages = [], imagesToRemove 
         // Add images to remove if any
         if (imagesToRemove.length > 0) {
             formData.append('imagesToRemove', JSON.stringify(imagesToRemove))
+            console.log('Images to remove:', imagesToRemove)
         }
         
         // Add new images
         if (newImages.length > 0) {
+            console.log('Adding new images:', newImages.length)
             newImages.forEach((image, index) => {
                 if (image.uri) {
                     // Extract filename from URI
@@ -133,13 +193,15 @@ export const updateEvent = async (id, eventData, newImages = [], imagesToRemove 
                     
                     // Get file extension
                     const fileExtension = filename.split('.').pop().toLowerCase()
-                    const mimeType = fileExtension === 'jpg' || fileExtension === 'jpeg' 
-                        ? 'image/jpeg' 
-                        : fileExtension === 'png' 
-                            ? 'image/png' 
-                            : fileExtension === 'gif'
-                                ? 'image/gif'
-                                : 'image/jpeg'
+                    let mimeType = 'image/jpeg'
+                    
+                    if (fileExtension === 'png') {
+                        mimeType = 'image/png'
+                    } else if (fileExtension === 'gif') {
+                        mimeType = 'image/gif'
+                    } else if (fileExtension === 'webp') {
+                        mimeType = 'image/webp'
+                    }
                     
                     // Create file object
                     const fileObject = {
@@ -153,14 +215,20 @@ export const updateEvent = async (id, eventData, newImages = [], imagesToRemove 
             })
         }
         
+        // Log form data contents for debugging
+        console.log('Update request - ID:', id)
+        console.log('Update request - Title:', eventData.title)
+        console.log('Update request - New images:', newImages.length)
+        console.log('Update request - Images to remove:', imagesToRemove.length)
         
-        const response = await axios.put(`${API_URL}/${id}`, formData, {
+        const response = await axiosApi.put(`events/${id}`, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
             timeout: 60000, // 60 second timeout for large images
         })
         
+        console.log('Update response:', response.data)
         return response.data
     } catch (error) {
         console.error('=== Update event failed ===')
@@ -168,10 +236,23 @@ export const updateEvent = async (id, eventData, newImages = [], imagesToRemove 
         console.error('Error code:', error.code)
         console.error('Error response:', error.response?.data)
         console.error('Error status:', error.response?.status)
-        console.error('Request URL:', `${API_URL}/${id}`)
+        console.error('Request URL:', `events/${id}`)
         
         if (error.code === 'ECONNABORTED') {
             throw { message: 'Request timeout. Please try again.' }
+        }
+        
+        // Handle validation errors
+        if (error.response?.status === 400) {
+            throw error.response.data || { 
+                message: 'Validation error. Please check your input.',
+                details: error.response.data?.errorDetails
+            }
+        }
+        
+        // Handle not found errors
+        if (error.response?.status === 404) {
+            throw { message: 'Event not found' }
         }
         
         throw error.response?.data || { 
@@ -185,21 +266,99 @@ export const updateEvent = async (id, eventData, newImages = [], imagesToRemove 
 // Delete event
 export const deleteEvent = async (id) => {
     try {
-        const response = await axios.delete(`${API_URL}/${id}`)
+        const response = await axiosApi.delete(`events/${id}`)
         return response.data
     } catch (error) {
         console.error('Delete event error:', error.message)
+        
+        if (error.response?.status === 404) {
+            throw { message: 'Event not found' }
+        }
+        
         throw error.response?.data || { message: 'Network error' }
     }
 }
 
+// Add images to existing event
+export const addEventImages = async (id, images = []) => {
+    try {
+        const formData = new FormData()
+        
+        // Add images
+        images.forEach((image, index) => {
+            if (image.uri) {
+                const filename = image.uri.split('/').pop() || `event-image-${Date.now()}-${index}.jpg`
+                const fileExtension = filename.split('.').pop().toLowerCase()
+                let mimeType = 'image/jpeg'
+                
+                if (fileExtension === 'png') {
+                    mimeType = 'image/png'
+                } else if (fileExtension === 'gif') {
+                    mimeType = 'image/gif'
+                } else if (fileExtension === 'webp') {
+                    mimeType = 'image/webp'
+                }
+                
+                formData.append('images', {
+                    uri: image.uri,
+                    type: mimeType,
+                    name: filename
+                })
+            }
+        })
+        
+        const response = await axiosApi.post(`events/${id}/images`, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+            timeout: 30000,
+        })
+        
+        return response.data
+    } catch (error) {
+        console.error('Add event images error:', error.message)
+        
+        if (error.code === 'ECONNABORTED') {
+            throw { message: 'Request timeout. Please try again.' }
+        }
+        
+        if (error.response?.status === 404) {
+            throw { message: 'Event not found' }
+        }
+        
+        throw error.response?.data || { message: 'Network error' }
+    }
+}
+
+// Remove image from event
+export const removeEventImage = async (eventId, imageId) => {
+    try {
+        const response = await axiosApi.delete(`events/${eventId}/images/${imageId}`)
+        return response.data
+    } catch (error) {
+        console.error('Remove event image error:', error.message)
+        
+        if (error.response?.status === 404) {
+            throw { message: 'Event or image not found' }
+        }
+        
+        throw error.response?.data || { message: 'Network error' }
+    }
+}
+
+// Export all functions as a single object
 export default {
     getAllEvents,
     getTodaysEvents,
     getUpcomingEvents,
     getPastEvents,
+    searchEvents,
+    getEventsByDateRange,
+    getEventStatistics,
     getEventById,
     createEvent,
     updateEvent,
-    deleteEvent
+    deleteEvent,
+    addEventImages,
+    removeEventImage
 }

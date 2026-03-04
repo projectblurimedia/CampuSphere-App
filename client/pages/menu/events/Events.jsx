@@ -7,7 +7,6 @@ import {
   Modal,
   Image,
   Dimensions,
-  Alert,
   FlatList,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -24,6 +23,7 @@ import GalleryModal from './GalleryModal'
 import EventCard from './EventCard'
 import EventForm from './EventForm'
 import EventDetails from './EventDetails'
+import ConfirmationModal from '@/components/ui/ConfirmationModal'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import eventApi from '@/api/eventApi'
@@ -44,12 +44,23 @@ export default function Events({ visible, onClose }) {
   const [editModalVisible, setEditModalVisible] = useState(false)
   const [viewModalVisible, setViewModalVisible] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState(null)
+  
+  // Delete Confirmation Modal
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false)
+  const [eventToDeleteId, setEventToDeleteId] = useState(null)
 
   // API States
   const [calendarEvents, setCalendarEvents] = useState([])
   const [loading, setLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
   const [toast, setToast] = useState(null)
+  const [pagination, setPagination] = useState({
+    current: 1,
+    totalPages: 1,
+    hasNext: false,
+    hasPrev: false,
+    total: 0
+  })
 
   // Tab configuration
   const tabs = [
@@ -186,7 +197,6 @@ export default function Events({ visible, onClose }) {
       color: colors.textSecondary,
       textAlign: 'center',
     },
-    // Image Grid Styles
     imageGrid: {
       marginTop: 8,
     },
@@ -215,6 +225,30 @@ export default function Events({ visible, onClose }) {
       fontSize: 16,
       fontWeight: 'bold',
     },
+    paginationContainer: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingVertical: 16,
+      gap: 16,
+    },
+    paginationButton: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 8,
+      backgroundColor: colors.primary + '20',
+    },
+    paginationText: {
+      color: colors.primary,
+      fontSize: 14,
+    },
+    paginationDisabled: {
+      opacity: 0.3,
+    },
+    pageInfo: {
+      fontSize: 14,
+      color: colors.textSecondary,
+    },
   }), [colors])
 
   // Show toast notification
@@ -228,25 +262,33 @@ export default function Events({ visible, onClose }) {
   }
 
   // Fetch events for current tab from API
-  const fetchEventsForTab = async (tabKey) => {
+  const fetchEventsForTab = async (tabKey, page = 1) => {
     try {
       setLoading(true)
       let response
       switch (tabKey) {
         case 'today':
-          response = await eventApi.getTodaysEvents()
+          response = await eventApi.getTodaysEvents(page)
           break
         case 'upcoming':
-          response = await eventApi.getUpcomingEvents()
+          response = await eventApi.getUpcomingEvents(page)
           break
         case 'past':
-          response = await eventApi.getPastEvents()
+          response = await eventApi.getPastEvents(page)
           break
         default:
-          response = await eventApi.getAllEvents()
+          response = await eventApi.getAllEvents(page)
       }
+      
       if (response.success) {
         setCalendarEvents(response.data)
+        setPagination({
+          current: response.pagination?.current || 1,
+          totalPages: response.pagination?.totalPages || 1,
+          hasNext: response.pagination?.hasNext || false,
+          hasPrev: response.pagination?.hasPrev || false,
+          total: response.total || response.data.length
+        })
       } else {
         showToast(response.message || 'Failed to load events', 'error')
       }
@@ -281,6 +323,19 @@ export default function Events({ visible, onClose }) {
       fetchEventsForTab(activeTab)
     }
   }, [activeTab])
+
+  // Handle pagination
+  const handleNextPage = () => {
+    if (pagination.hasNext && !loading) {
+      fetchEventsForTab(activeTab, pagination.current + 1)
+    }
+  }
+
+  const handlePrevPage = () => {
+    if (pagination.hasPrev && !loading) {
+      fetchEventsForTab(activeTab, pagination.current - 1)
+    }
+  }
 
   // Event handlers
   const handleAddEvent = (newEventData, images) => {
@@ -346,43 +401,46 @@ export default function Events({ visible, onClose }) {
       })
   }
 
-  const handleDeleteEvent = (id) => {
-    Alert.alert('Confirm Delete', 'Are you sure you want to delete this event?', [
-      { text: 'Cancel', style: 'cancel' },
-      { 
-        text: 'Delete', 
-        style: 'destructive', 
-        onPress: () => {
-          setActionLoading(true)
-          eventApi.deleteEvent(id)
-            .then(response => {
-              if (response.success) {
-                showToast('Event deleted successfully!', 'success')
-                fetchEventsForTab(activeTab)
-              } else {
-                showToast(response.message || 'Failed to delete event', 'error')
-              }
-            })
-            .catch(error => {
-              console.error('Delete event error:', error)
-              let errorMessage = 'Failed to delete event'
-              
-              if (error.response) {
-                errorMessage = error.response.data?.message || error.response.data?.error || 'Server error occurred'
-              } else if (error.request) {
-                errorMessage = 'No response from server. Check your internet connection.'
-              } else {
-                errorMessage = error.message || 'Failed to delete event'
-              }
-              
-              showToast(errorMessage, 'error')
-            })
-            .finally(() => {
-              setActionLoading(false)
-            })
+  // Open delete confirmation modal
+  const openDeleteConfirmation = (event) => {
+    setEventToDeleteId(event)
+    setDeleteModalVisible(true)
+  }
+
+  // Handle delete confirmation
+  const handleDeleteConfirm = () => {
+    if (!eventToDeleteId) return
+    
+    setActionLoading(true)
+    setDeleteModalVisible(false)
+    
+    eventApi.deleteEvent(eventToDeleteId)
+    .then(response => {
+        if (response.success) {
+          showToast('Event deleted successfully!', 'success')
+          fetchEventsForTab(activeTab)
+        } else {
+          showToast(response.message || 'Failed to delete event', 'error')
         }
-      }
-    ])
+      })
+      .catch(error => {
+        console.error('Delete event error:', error)
+        let errorMessage = 'Failed to delete event'
+        
+        if (error.response) {
+          errorMessage = error.response.data?.message || error.response.data?.error || 'Server error occurred'
+        } else if (error.request) {
+          errorMessage = 'No response from server. Check your internet connection.'
+        } else {
+          errorMessage = error.message || 'Failed to delete event'
+        }
+        
+        showToast(errorMessage, 'error')
+      })
+      .finally(() => {
+        setActionLoading(false)
+        setEventToDeleteId(null)
+      })
   }
 
   const openViewEvent = (event) => {
@@ -447,7 +505,7 @@ export default function Events({ visible, onClose }) {
 
   // Render event list
   const renderEventList = () => {
-    if (loading) {
+    if (loading && calendarEvents.length === 0) {
       return (
         <View style={styles.loadingContainer}>
           <LoadingSpinner size={40} color={colors.primary} message="Loading events..." />
@@ -473,27 +531,54 @@ export default function Events({ visible, onClose }) {
     }
 
     return (
-      <FlatList
-        data={calendarEvents}
-        renderItem={({ item }) => (
-          <EventCard
-            event={item}
-            tab={activeTab}
-            onView={openViewEvent}
-            onEdit={openEditEvent}
-            onDelete={handleDeleteEvent}
-            colors={colors}
-            weekdayColors={weekdayColors}
-            renderImageGrid={renderImageGrid}
-            actionLoading={actionLoading}
-          />
+      <>
+        <FlatList
+          data={calendarEvents}
+          renderItem={({ item }) => (
+            <EventCard
+              event={item}
+              tab={activeTab}
+              onView={openViewEvent}
+              onEdit={openEditEvent}
+              onDelete={openDeleteConfirmation}
+              colors={colors}
+              weekdayColors={weekdayColors}
+              renderImageGrid={renderImageGrid}
+              actionLoading={actionLoading}
+            />
+          )}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshing={loading}
+          onRefresh={() => fetchEventsForTab(activeTab)}
+        />
+        
+        {/* Pagination Controls */}
+        {pagination.totalPages > 1 && (
+          <View style={styles.paginationContainer}>
+            <TouchableOpacity
+              style={[styles.paginationButton, !pagination.hasPrev && styles.paginationDisabled]}
+              onPress={handlePrevPage}
+              disabled={!pagination.hasPrev || loading}
+            >
+              <ThemedText style={styles.paginationText}>Previous</ThemedText>
+            </TouchableOpacity>
+            
+            <ThemedText style={styles.pageInfo}>
+              Page {pagination.current} of {pagination.totalPages}
+            </ThemedText>
+            
+            <TouchableOpacity
+              style={[styles.paginationButton, !pagination.hasNext && styles.paginationDisabled]}
+              onPress={handleNextPage}
+              disabled={!pagination.hasNext || loading}
+            >
+              <ThemedText style={styles.paginationText}>Next</ThemedText>
+            </TouchableOpacity>
+          </View>
         )}
-        keyExtractor={item => item._id}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshing={loading}
-        onRefresh={() => fetchEventsForTab(activeTab)}
-      />
+      </>
     )
   }
 
@@ -539,7 +624,7 @@ export default function Events({ visible, onClose }) {
     )
   }
 
-  // Weekday colors (defined here for use in EventCard)
+  // Weekday colors
   const weekdayColors = [
     '#FF6B6B', // Sunday
     '#4ECDC4', // Monday
@@ -557,6 +642,8 @@ export default function Events({ visible, onClose }) {
       setAddModalVisible(false)
       setEditModalVisible(false)
       setViewModalVisible(false)
+      setDeleteModalVisible(false)
+      setEventToDeleteId(null)
       onClose()
     }
   }
@@ -609,7 +696,6 @@ export default function Events({ visible, onClose }) {
             {renderEventList()}
           </View>
 
-          {/* Toast Notification - INSIDE the main modal but with absolute positioning */}
           <ToastNotification
             visible={!!toast}
             type={toast?.type}
@@ -631,6 +717,22 @@ export default function Events({ visible, onClose }) {
         onImageIndexChange={setSelectedImageIndex}
         initialViewMode={initialViewMode}
         headerTitle={galleryTitle || 'Event Gallery'}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        visible={deleteModalVisible}
+        onClose={() => {
+          setDeleteModalVisible(false)
+          setEventToDeleteId(null)
+        }}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Event"
+        message={`Are you sure you want to delete "${eventToDeleteId?.title || 'this event'}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+        loading={actionLoading}
       />
 
       {/* Add Event Modal */}

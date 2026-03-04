@@ -162,7 +162,7 @@ const EventDetails = ({ visible, event, onClose, colors, weekdayColors, renderIm
               <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                 <MaterialCommunityIcons name="calendar" size={16} color={borderColor} />
                 <ThemedText style={[styles.viewEventDate, { color: borderColor, marginLeft: 8 }]}>
-                  {event.formattedDate || event.date.split('T')[0]}
+                  {event.formattedDate || new Date(event.date).toISOString().split('T')[0]}
                 </ThemedText>
               </View>
             </View>

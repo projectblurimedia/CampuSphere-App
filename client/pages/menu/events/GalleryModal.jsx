@@ -16,6 +16,7 @@ import { FontAwesome5, Feather, Ionicons } from '@expo/vector-icons'
 import { ThemedText } from '@/components/ui/themed-text'
 import { useTheme } from '@/hooks/useTheme'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import ConfirmationModal from '@/components/ui/ConfirmationModal'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 const GRID_SPACING = 4
@@ -35,6 +36,10 @@ const GalleryModal = ({
   const [viewMode, setViewMode] = useState(initialViewMode)
   const [currentIndex, setCurrentIndex] = useState(selectedImageIndex)
   const [isChangingMode, setIsChangingMode] = useState(false)
+  const [imageLoadErrors, setImageLoadErrors] = useState({})
+  const [imageToDelete, setImageToDelete] = useState(null)
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false)
+  const [showDeleteOption, setShowDeleteOption] = useState(false)
   const scrollViewRef = useRef(null)
   const flatListRef = useRef(null)
 
@@ -64,6 +69,7 @@ const GalleryModal = ({
   useEffect(() => {
     if (visible) {
       setViewMode(initialViewMode)
+      setImageLoadErrors({})
     }
   }, [visible, initialViewMode])
 
@@ -101,7 +107,6 @@ const GalleryModal = ({
           flex: 1,
           backgroundColor: colors.background,
         },
-        // Updated Header - absolutely positioned
         header: {
           position: 'absolute',
           top: 0,
@@ -130,6 +135,16 @@ const GalleryModal = ({
           borderWidth: 1,
           borderColor: 'rgba(255, 255, 255, 0.4)',
         },
+        deleteButton: {
+          width: 44,
+          height: 44,
+          borderRadius: 22,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: 'rgba(255, 255, 255, 0.18)',
+          borderWidth: 1,
+          borderColor: 'rgba(255, 255, 255, 0.4)',
+        },
         titleContainer: {
           position: 'absolute',
           left: 0,
@@ -147,12 +162,9 @@ const GalleryModal = ({
           fontSize: 12,
           color: 'rgba(255,255,255,0.9)',
         },
-        // Hidden placeholder for layout balance
         emptySpace: {
           width: 44,
         },
-
-        // Grid View - starts below header
         gridContainer: {
           flexGrow: 1,
           paddingTop: Platform.OS === 'ios' ? 140 : 120,
@@ -177,8 +189,11 @@ const GalleryModal = ({
           width: '100%',
           height: '100%',
         },
-
-        // Single Image View - FIXED: Full screen black background with proper centering
+        gridImageError: {
+          backgroundColor: '#f0f0f0',
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
         singleImageFullContainer: {
           flex: 1,
           backgroundColor: '#000000',
@@ -203,7 +218,23 @@ const GalleryModal = ({
           height: '100%',
           resizeMode: 'contain',
         },
-
+        singleImageError: {
+          backgroundColor: '#1a1a1a',
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+        errorPlaceholder: {
+          width: '100%',
+          height: '100%',
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: '#f0f0f0',
+        },
+        errorText: {
+          color: '#666',
+          fontSize: 14,
+          marginTop: 8,
+        },
         bottomControlsWrapper: {
           position: 'absolute',
           left: 0,
@@ -264,6 +295,10 @@ const GalleryModal = ({
     [colors, gridItemSize]
   )
 
+  const handleImageError = useCallback((imageId) => {
+    setImageLoadErrors(prev => ({ ...prev, [imageId]: true }))
+  }, [])
+
   const handleGridImagePress = useCallback(
     (index) => {
       if (isChangingMode || pics.length === 0 || index >= pics.length) return
@@ -271,6 +306,7 @@ const GalleryModal = ({
       setIsChangingMode(true)
       setCurrentIndex(clampedIndex)
       setViewMode('single')
+      setShowDeleteOption(false)
       if (onImageIndexChange) onImageIndexChange(clampedIndex)
       setTimeout(() => setIsChangingMode(false), 300)
     },
@@ -322,6 +358,7 @@ const GalleryModal = ({
     if (viewMode === 'single') {
       setIsChangingMode(true)
       setViewMode('grid')
+      setShowDeleteOption(false)
       setTimeout(() => setIsChangingMode(false), 300)
     } else {
       if (onClose) onClose()
@@ -341,6 +378,29 @@ const GalleryModal = ({
     },
     [pics.length, onImageIndexChange]
   )
+
+  const toggleDeleteOption = useCallback(() => {
+    setShowDeleteOption(!showDeleteOption)
+  }, [showDeleteOption])
+
+  const openDeleteImageConfirmation = useCallback(() => {
+    if (pics.length > 0 && currentIndex >= 0) {
+      setImageToDelete({
+        index: currentIndex,
+        image: pics[currentIndex]
+      })
+      setDeleteModalVisible(true)
+    }
+  }, [pics, currentIndex])
+
+  const handleDeleteImageConfirm = useCallback(() => {
+    // This is just a placeholder - actual delete logic would be handled by parent
+    // For now, we'll just close the modal
+    setDeleteModalVisible(false)
+    setImageToDelete(null)
+    setShowDeleteOption(false)
+    // You can add a callback prop here to notify parent about delete
+  }, [])
 
   // Compute windowed dots
   const getWindowedDots = () => {
@@ -425,7 +485,21 @@ const GalleryModal = ({
             </ThemedText>
           </View>
 
-          <View style={styles.emptySpace} />
+          {viewMode === 'single' ? (
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={toggleDeleteOption}
+              disabled={isChangingMode}
+            >
+              <Feather
+                name="more-vertical"
+                size={20}
+                color="#FFFFFF"
+              />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.emptySpace} />
+          )}
         </View>
       </SafeAreaView>
     </LinearGradient>
@@ -448,7 +522,6 @@ const GalleryModal = ({
       gridData.push(pics.slice(i, i + GRID_COLUMNS))
     }
 
-    // Calculate the number of items in the last row
     const lastRowIndex = gridData.length - 1
     const lastRowItems = gridData[lastRowIndex] || []
     const remainingSpots = GRID_COLUMNS - lastRowItems.length
@@ -464,6 +537,8 @@ const GalleryModal = ({
           <View style={styles.gridRow}>
             {row.map((item, colIndex) => {
               const absoluteIndex = rowIndex * GRID_COLUMNS + colIndex
+              const imageId = item.id || item.publicId || `image-${absoluteIndex}`
+              const hasError = imageLoadErrors[imageId]
 
               return (
                 <TouchableOpacity
@@ -475,7 +550,18 @@ const GalleryModal = ({
                   onPress={() => handleGridImagePress(absoluteIndex)}
                   activeOpacity={0.9}
                 >
-                  <Image source={{ uri: item.url }} style={styles.gridImage} contentFit="cover" />
+                  {hasError ? (
+                    <View style={[styles.gridImage, styles.gridImageError]}>
+                      <Feather name="image" size={24} color="#999" />
+                    </View>
+                  ) : (
+                    <Image 
+                      source={{ uri: item.url }} 
+                      style={styles.gridImage} 
+                      contentFit="cover"
+                      onError={() => handleImageError(imageId)}
+                    />
+                  )}
                 </TouchableOpacity>
               )
             })}
@@ -541,13 +627,30 @@ const GalleryModal = ({
           scrollEventThrottle={16}
           decelerationRate="fast"
         >
-          {pics.map((pic, index) => (
-            <View key={index} style={styles.singleImagePage}>
-              <View style={styles.singleImageWrapper}>
-                <Image source={{ uri: pic.url }} style={styles.singleImage} contentFit="contain" />
+          {pics.map((pic, index) => {
+            const imageId = pic.id || pic.publicId || `image-${index}`
+            const hasError = imageLoadErrors[imageId]
+
+            return (
+              <View key={index} style={styles.singleImagePage}>
+                <View style={styles.singleImageWrapper}>
+                  {hasError ? (
+                    <View style={[styles.singleImageWrapper, styles.singleImageError]}>
+                      <Feather name="image" size={48} color="#666" />
+                      <ThemedText style={styles.errorText}>Failed to load image</ThemedText>
+                    </View>
+                  ) : (
+                    <Image 
+                      source={{ uri: pic.url }} 
+                      style={styles.singleImage} 
+                      contentFit="contain"
+                      onError={() => handleImageError(imageId)}
+                    />
+                  )}
+                </View>
               </View>
-            </View>
-          ))}
+            )
+          })}
         </ScrollView>
 
         {pics.length > 1 && (
@@ -597,6 +700,38 @@ const GalleryModal = ({
             </View>
           </View>
         )}
+
+        {/* Delete option menu */}
+        {showDeleteOption && (
+          <View style={{
+            position: 'absolute',
+            top: Platform.OS === 'ios' ? 140 : 120,
+            right: 20,
+            backgroundColor: colors.cardBackground,
+            borderRadius: 12,
+            padding: 8,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 4,
+            elevation: 5,
+            zIndex: 200,
+          }}>
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+              }}
+              onPress={openDeleteImageConfirmation}
+            >
+              <Feather name="trash-2" size={18} color="#EF4444" />
+              <ThemedText style={{ color: '#EF4444', fontSize: 16 }}>Delete Image</ThemedText>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     )
   }
@@ -604,13 +739,30 @@ const GalleryModal = ({
   if (!visible) return null
 
   return (
-    <Modal visible={visible} animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      <View style={styles.modalContainer}>
-        <Header />
-        {viewMode === 'grid' ? <GridView /> : <SingleImageView />}
-      </View>
-    </Modal>
+    <>
+      <Modal visible={visible} animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <View style={styles.modalContainer}>
+          <Header />
+          {viewMode === 'grid' ? <GridView /> : <SingleImageView />}
+        </View>
+      </Modal>
+
+      {/* Delete Image Confirmation Modal */}
+      <ConfirmationModal
+        visible={deleteModalVisible}
+        onClose={() => {
+          setDeleteModalVisible(false)
+          setImageToDelete(null)
+        }}
+        onConfirm={handleDeleteImageConfirm}
+        title="Delete Image"
+        message="Are you sure you want to delete this image? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+      />
+    </>
   )
 }
 

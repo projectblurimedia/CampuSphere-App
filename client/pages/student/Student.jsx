@@ -11,12 +11,13 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
-  Dimensions
+  Dimensions,
+  Modal
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
-import { FontAwesome5, Ionicons, Feather, MaterialIcons, MaterialCommunityIcons, Entypo, AntDesign } from '@expo/vector-icons'
+import { FontAwesome5, Ionicons, Feather, MaterialIcons, MaterialCommunityIcons, Entypo, AntDesign, FontAwesome6 } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import axiosApi from '@/utils/axiosApi'
@@ -26,7 +27,188 @@ import StudentFeeDetails from '@/pages/menu/feeDetails/StudentFeeDetails'
 import StudentAttendance from './StudentAttendance'
 import StudentMarks from './StudentMarks'
 
-const { width } = Dimensions.get('window')
+const { width, height } = Dimensions.get('window')
+
+// ========== CONFIRMATION MODAL COMPONENT ==========
+const ConfirmationModal = ({ 
+  visible, 
+  onConfirm, 
+  onCancel, 
+  student,
+  actionType,
+  isProcessing = false
+}) => {
+  const { colors } = useTheme()
+  const scaleAnim = useRef(new Animated.Value(0.8)).current
+  const fadeAnim = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 8,
+          tension: 65,
+          useNativeDriver: true,
+        })
+      ]).start()
+    } else {
+      fadeAnim.setValue(0)
+      scaleAnim.setValue(0.8)
+    }
+  }, [visible])
+
+  const getActionDetails = () => {
+    switch(actionType) {
+      case 'inactive':
+        return {
+          title: 'Inactivate Student',
+          icon: 'minus-circle',
+          color: '#EF4444',
+          message: `Mark ${student?.name || 'this student'} as inactive?`,
+          warning: 'This will clear current year fee and marks'
+        }
+      default:
+        return {
+          title: 'Confirm Action',
+          icon: 'help-circle',
+          color: colors.primary,
+          message: 'Are you sure?'
+        }
+    }
+  }
+
+  const details = getActionDetails()
+  const backdropOpacity = fadeAnim
+  const modalScale = scaleAnim
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="none"
+      onRequestClose={onCancel}
+      statusBarTranslucent
+    >
+      <Animated.View style={[styles.modalOverlayCentered, { opacity: backdropOpacity }]}>
+        <TouchableOpacity 
+          style={StyleSheet.absoluteFill} 
+          onPress={onCancel}
+          activeOpacity={1}
+          disabled={isProcessing}
+        />
+        <Animated.View 
+          style={[
+            styles.confirmModalContainerCentered,
+            { 
+              backgroundColor: colors.cardBackground,
+              transform: [{ scale: modalScale }]
+            }
+          ]}
+        >
+          <View style={styles.confirmModalIconContainer}>
+            <LinearGradient
+              colors={[details.color + '20', details.color + '10']}
+              style={styles.confirmModalIcon}
+            >
+              {isProcessing ? (
+                <ActivityIndicator size="large" color={details.color} />
+              ) : (
+                <MaterialCommunityIcons name={details.icon} size={48} color={details.color} />
+              )}
+            </LinearGradient>
+          </View>
+
+          <ThemedText style={[styles.confirmModalTitle, { color: colors.text }]}>
+            {isProcessing ? 'Processing...' : details.title}
+          </ThemedText>
+
+          {!isProcessing && (
+            <>
+              <ThemedText style={[styles.confirmModalMessage, { color: colors.textSecondary }]}>
+                {details.message}
+              </ThemedText>
+
+              {student && (
+                <View style={[styles.confirmDetailsCard, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                  <View style={styles.confirmStudentRow}>
+                    <View style={[styles.confirmStudentAvatar, { backgroundColor: details.color + '20' }]}>
+                      <ThemedText style={[styles.confirmStudentAvatarText, { color: details.color }]}>
+                        {student.name?.charAt(0) || student.firstName?.charAt(0) || 'S'}
+                      </ThemedText>
+                    </View>
+                    <View style={styles.confirmStudentInfo}>
+                      <ThemedText style={[styles.confirmStudentName, { color: colors.text }]}>
+                        {student.name || `${student.firstName || ''} ${student.lastName || ''}`.trim()}
+                      </ThemedText>
+                      <ThemedText style={[styles.confirmStudentClass, { color: colors.textSecondary }]}>
+                        {student.displayClass || student.class} - {student.section} | Roll: {student.rollNo || 'N/A'}
+                      </ThemedText>
+                    </View>
+                  </View>
+
+                  <View style={styles.confirmDivider} />
+
+                  {actionType === 'inactive' && (
+                    <View style={styles.confirmWarningContainer}>
+                      <Feather name="alert-triangle" size={14} color="#EF4444" />
+                      <ThemedText style={[styles.confirmWarningText, { color: '#EF4444' }]}>
+                        {details.warning}
+                      </ThemedText>
+                    </View>
+                  )}
+                </View>
+              )}
+            </>
+          )}
+
+          <View style={styles.confirmModalButtons}>
+            {!isProcessing && (
+              <TouchableOpacity
+                style={[styles.confirmCancelButton, { borderColor: colors.border }]}
+                onPress={onCancel}
+                activeOpacity={0.7}
+              >
+                <ThemedText style={[styles.confirmCancelButtonText, { color: colors.textSecondary }]}>
+                  Cancel
+                </ThemedText>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={[
+                styles.confirmActionButton, 
+                { backgroundColor: details.color },
+                isProcessing && styles.confirmActionButtonDisabled
+              ]}
+              onPress={onConfirm}
+              disabled={isProcessing}
+              activeOpacity={0.7}
+            >
+              {isProcessing ? (
+                <View style={styles.confirmProcessingContainer}>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ThemedText style={[styles.confirmActionButtonText]}>
+                    Processing...
+                  </ThemedText>
+                </View>
+              ) : (
+                <ThemedText style={[styles.confirmActionButtonText]}>
+                  Inactivate
+                </ThemedText>
+              )}
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </Animated.View>
+    </Modal>
+  )
+}
 
 export default function Student({ student, onClose }) {
   const { colors } = useTheme()
@@ -40,6 +222,10 @@ export default function Student({ student, onClose }) {
   const [showFeeDetails, setShowFeeDetails] = useState(false)
   const [showAttendanceModal, setShowAttendanceModal] = useState(false)
   const [showMarksModal, setShowMarksModal] = useState(false)
+  
+  // Inactive state
+  const [showInactiveConfirmModal, setShowInactiveConfirmModal] = useState(false)
+  const [isProcessingInactive, setIsProcessingInactive] = useState(false)
   
   // Toast state
   const [toast, setToast] = useState(null)
@@ -137,22 +323,60 @@ export default function Student({ student, onClose }) {
     setShowFeeDetails(true)
   }
 
-  const handleDelete = () => {
+  const handleInactiveClick = () => {
     setShowMoreMenu(false)
-    Alert.alert(
-      'Delete Student',
-      'Are you sure you want to delete this student? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: () => {
-            showToast('Delete feature coming soon!', 'info')
-          }
-        }
-      ]
-    )
+    setShowInactiveConfirmModal(true)
+  }
+
+  const handleInactiveConfirm = async () => {
+    if (!studentData && !student) return
+
+    setIsProcessingInactive(true)
+
+    try {
+      const studentId = studentData?.id || student?.id
+      const response = await axiosApi.post(`/fees/inactivate/${studentId}`, {
+        updatedBy: 'Admin', // This should come from your auth context
+        reason: 'Student marked inactive',
+        note: 'Student inactivated from profile',
+        archiveData: true
+      })
+
+      if (response.data.success) {
+        // Close the confirmation modal and show success toast
+        setShowInactiveConfirmModal(false)
+        showToast('Student inactivated successfully', 'success')
+        
+        // Refresh student data
+        await fetchStudentData()
+        
+        // Close the student modal after successful inactivation
+        setTimeout(() => {
+          onClose()
+        }, 1500) // Small delay to show the success toast
+      } else {
+        setShowInactiveConfirmModal(false)
+        showToast(response.data.message || 'Failed to inactivate student', 'error')
+      }
+    } catch (error) {
+      console.error('Inactive error:', error)
+      
+      let errorMessage = 'Failed to inactivate student'
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      setShowInactiveConfirmModal(false)
+      showToast(errorMessage, 'error')
+    } finally {
+      setIsProcessingInactive(false)
+    }
+  }
+
+  const handleInactiveCancel = () => {
+    setShowInactiveConfirmModal(false)
   }
 
   const moreActions = [
@@ -166,7 +390,7 @@ export default function Student({ student, onClose }) {
     } },
     { id: 3, icon: 'currency-inr', iconSet: MaterialCommunityIcons, label: 'Fee Details', color: '#FF9800', action: 'fees', handler: handleFeeDetails },
     { id: 4, icon: 'edit', iconSet: MaterialIcons, label: 'Edit Student', color: colors.primary, action: 'edit', handler: handleEdit },
-    { id: 6, icon: 'delete', iconSet: MaterialIcons, label: 'Inactive Student', color: '#F44336', action: 'delete', handler: handleDelete },
+    { id: 6, icon: 'delete', iconSet: MaterialIcons, label: 'Inactive Student', color: '#F44336', action: 'inactive', handler: handleInactiveClick },
   ]
 
   const handleMoreAction = (action) => {
@@ -321,7 +545,7 @@ export default function Student({ student, onClose }) {
         </LinearGradient>
         
         <View style={styles.loadingContainer}>
-          <View style={[styles.loadingCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+          <View style={[styles.loadingCard]}>
             <ActivityIndicator size="large" color={colors.tint} />
             <ThemedText style={[styles.loadingText, { color: colors.textSecondary }]}>
               Loading student details...
@@ -411,31 +635,26 @@ export default function Student({ student, onClose }) {
           ]}
         >
           {/* Profile Card - Simplified with only class-section */}
-          <LinearGradient
-            colors={[colors?.gradientStart, colors?.gradientEnd]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.profileCard}
-          >
+          <View style={[styles.profileCard, { borderColor: colors.border, backgroundColor: colors?.cardBackground }]}>
             <View style={styles.profileContent}>
               {renderAvatar()}
               
               <View style={styles.profileInfo}>
-                <ThemedText type='subtitle' style={styles.profileName}>
+                <ThemedText type='subtitle' style={[styles.profileName, { color: colors?.text }]}>
                   {displayName}
                 </ThemedText>
                 
                 <View style={styles.classSectionContainer}>
-                  <View style={styles.classSectionBadge}>
-                    <Ionicons name="school-outline" size={14} color="#FFFFFF" />
-                    <ThemedText style={styles.classSectionText}>
+                  <View style={[styles.classSectionBadge, { backgroundColor: colors?.inputBackground }]}>
+                    <Ionicons name="school-outline" size={14} color={colors?.text} />
+                    <ThemedText style={[styles.classSectionText, {color: colors?.textSecondary }]}>
                       {displayClass} - {displaySection}
                     </ThemedText>
                   </View>
                 </View>
               </View>
             </View>
-          </LinearGradient>
+          </View>
 
           {/* Quick Actions - Redesigned */}
           <View style={styles.quickActions}>
@@ -497,7 +716,7 @@ export default function Student({ student, onClose }) {
               <View style={styles.rowContainer}>
                 {renderDetailCard(
                   displayGender === 'MALE' ? 'male' : displayGender === 'FEMALE' ? 'female' : 'genderless',
-                  Ionicons,
+                  FontAwesome5,
                   'Gender',
                   displayGender?.charAt(0) + displayGender?.slice(1).toLowerCase(),
                   displayGender === 'MALE' ? '#2196F3' : displayGender === 'FEMALE' ? '#E91E63' : '#757575',
@@ -719,6 +938,16 @@ export default function Student({ student, onClose }) {
         />
       )}
 
+      {/* Inactive Confirmation Modal */}
+      <ConfirmationModal
+        visible={showInactiveConfirmModal}
+        onConfirm={handleInactiveConfirm}
+        onCancel={handleInactiveCancel}
+        student={studentData || student}
+        actionType="inactive"
+        isProcessing={isProcessingInactive}
+      />
+
       {/* Toast Notification */}
       <ToastNotification
         visible={!!toast}
@@ -807,11 +1036,12 @@ const styles = StyleSheet.create({
   profileCard: {
     borderRadius: 20,
     padding: 16,
+    borderWidth: 1,
   },
   profileContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 12,
   },
   studentAvatar: {
     width: 70,
@@ -828,11 +1058,10 @@ const styles = StyleSheet.create({
   },
   profileInfo: {
     flex: 1,
-    gap: 6,
+    gap: 4,
   },
   profileName: {
     fontSize: 18,
-    color: '#FFFFFF',
     letterSpacing: 0.3,
   },
   classSectionContainer: {
@@ -845,13 +1074,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.15)',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 16,
   },
   classSectionText: {
-    color: '#FFFFFF',
     fontSize: 13,
   },
   quickActions: {
@@ -970,12 +1197,12 @@ const styles = StyleSheet.create({
   loadingCard: {
     padding: 30,
     borderRadius: 20,
-    borderWidth: 1,
     alignItems: 'center',
     gap: 16,
   },
   loadingText: {
     fontSize: 14,
+    fontFamily: 'Poppins-Medium',
   },
   moreMenu: {
     position: 'absolute',
@@ -1012,5 +1239,146 @@ const styles = StyleSheet.create({
   },
   menuItemText: {
     fontSize: 14,
+  },
+  // Modal Styles
+  modalOverlayCentered: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmModalContainerCentered: {
+    width: width * 0.9,
+    maxWidth: 400,
+    borderRadius: 30,
+    padding: 24,
+    alignItems: 'center',
+  },
+  confirmModalIconContainer: {
+    marginBottom: 16,
+  },
+  confirmModalIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmModalTitle: {
+    fontSize: 22,
+    marginBottom: 8,
+    textAlign: 'center',
+    fontFamily: 'Poppins-Bold',
+  },
+  confirmModalMessage: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+    fontFamily: 'Poppins-Medium',
+  },
+  confirmDetailsCard: {
+    width: '100%',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  confirmStudentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  confirmStudentAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmStudentAvatarText: {
+    fontSize: 18,
+    fontFamily: 'Poppins-SemiBold',
+  },
+  confirmStudentInfo: {
+    flex: 1,
+  },
+  confirmStudentName: {
+    fontSize: 16,
+    marginBottom: 2,
+    fontFamily: 'Poppins-SemiBold',
+  },
+  confirmStudentClass: {
+    fontSize: 13,
+    fontFamily: 'Poppins-Medium',
+  },
+  confirmDivider: {
+    height: 1,
+    backgroundColor: '#E5E5E5',
+    marginVertical: 12,
+  },
+  confirmDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  confirmDetailLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+  },
+  confirmDetailValue: {
+    fontSize: 14,
+    fontFamily: 'Poppins-SemiBold',
+  },
+  confirmWarningContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginTop: 8,
+  },
+  confirmWarningText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: 'Poppins-Medium',
+  },
+  confirmModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  confirmCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  confirmCancelButtonText: {
+    fontSize: 15,
+    fontFamily: 'Poppins-SemiBold',
+  },
+  confirmActionButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  confirmActionButtonDisabled: {
+    opacity: 0.5,
+  },
+  confirmActionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'Poppins-SemiBold',
+  },
+  confirmProcessingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 })

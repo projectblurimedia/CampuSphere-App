@@ -368,7 +368,7 @@ export default function Employee({ employee, onClose }) {
         </LinearGradient>
         
         <View style={styles.loadingContainer}>
-          <View style={[styles.loadingCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+          <View style={[styles.loadingCard]}>
             <ActivityIndicator size="large" color={colors.tint} />
             <ThemedText style={[styles.loadingText, { color: colors.textSecondary }]}>
               Loading employee details...
@@ -458,24 +458,19 @@ export default function Employee({ employee, onClose }) {
           ]}
         >
           {/* Profile Card */}
-          <LinearGradient
-            colors={[colors?.gradientStart, colors?.gradientEnd]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.profileCard}
-          >
+          <View style={[styles.profileCard, { borderColor: colors.border, backgroundColor: colors?.cardBackground }]}>
             <View style={styles.profileContent}>
               {renderAvatar()}
               
               <View style={styles.profileInfo}>
-                <ThemedText type='subtitle' style={styles.profileName}>
+                <ThemedText type='subtitle' style={[styles.profileName, { color: colors?.text }]}>
                   {displayName}
                 </ThemedText>
                 
                 <View style={styles.designationContainer}>
-                  <View style={styles.designationBadge}>
-                    <Ionicons name="briefcase-outline" size={14} color="#FFFFFF" />
-                    <ThemedText style={styles.designationText}>
+                  <View style={[styles.designationBadge, { backgroundColor: colors?.inputBackground }]}>
+                    <Ionicons name="briefcase-outline" size={14} color={colors?.textSecondary} />
+                    <ThemedText style={[styles.designationText, { color: colors?.textSecondary }]}>
                       {displayDesignationDisplay}
                     </ThemedText>
                   </View>
@@ -489,7 +484,7 @@ export default function Employee({ employee, onClose }) {
                 </View>
               </View>
             </View>
-          </LinearGradient>
+          </View>
 
           {/* Personal Details Section */}
           <View style={[styles.sectionCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
@@ -801,11 +796,12 @@ const styles = StyleSheet.create({
   profileCard: {
     borderRadius: 20,
     padding: 16,
+    borderWidth: 1,
   },
   profileContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 12,
   },
   employeeAvatar: {
     width: 70,
@@ -823,7 +819,7 @@ const styles = StyleSheet.create({
   },
   profileInfo: {
     flex: 1,
-    gap: 8,
+    gap: 4,
   },
   profileName: {
     fontSize: 18,
@@ -944,13 +940,12 @@ const styles = StyleSheet.create({
   loadingCard: {
     padding: 30,
     borderRadius: 20,
-    borderWidth: 1,
     alignItems: 'center',
     gap: 16,
   },
   loadingText: {
     fontSize: 14,
-    fontFamily: 'Poppins-Regular',
+    fontFamily: 'Poppins-Medium',
   },
   moreMenu: {
     position: 'absolute',

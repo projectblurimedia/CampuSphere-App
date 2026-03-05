@@ -91,11 +91,11 @@ const ConfirmationModal = ({
     <Modal
       visible={visible}
       transparent={true}
-      animationType="none"
+      animationType="fade"
       onRequestClose={onCancel}
       statusBarTranslucent
     >
-      <Animated.View style={[styles.modalOverlayCentered, { opacity: backdropOpacity }]}>
+      <Animated.View style={[styles.modalOverlay, { opacity: backdropOpacity }]}>
         <TouchableOpacity 
           style={StyleSheet.absoluteFill} 
           onPress={onCancel}
@@ -104,33 +104,28 @@ const ConfirmationModal = ({
         />
         <Animated.View 
           style={[
-            styles.confirmModalContainerCentered,
+            styles.modalContent,
             { 
               backgroundColor: colors.cardBackground,
               transform: [{ scale: modalScale }]
             }
           ]}
         >
-          <View style={styles.confirmModalIconContainer}>
-            <LinearGradient
-              colors={[details.color + '20', details.color + '10']}
-              style={styles.confirmModalIcon}
-            >
-              {isProcessing ? (
-                <ActivityIndicator size="large" color={details.color} />
-              ) : (
-                <MaterialCommunityIcons name={details.icon} size={48} color={details.color} />
-              )}
-            </LinearGradient>
+          <View style={[styles.modalIcon, { backgroundColor: `${details.color}20` }]}>
+            {isProcessing ? (
+              <ActivityIndicator size="large" color={details.color} />
+            ) : (
+              <MaterialCommunityIcons name={details.icon} size={48} color={details.color} />
+            )}
           </View>
-
-          <ThemedText style={[styles.confirmModalTitle, { color: colors.text }]}>
+          
+          <ThemedText style={[styles.modalTitle, { color: colors.text }]}>
             {isProcessing ? 'Processing...' : details.title}
           </ThemedText>
-
+          
           {!isProcessing && (
             <>
-              <ThemedText style={[styles.confirmModalMessage, { color: colors.textSecondary }]}>
+              <ThemedText style={[styles.modalMessage, { color: colors.textSecondary }]}>
                 {details.message}
               </ThemedText>
 
@@ -167,14 +162,14 @@ const ConfirmationModal = ({
             </>
           )}
 
-          <View style={styles.confirmModalButtons}>
+          <View style={styles.modalButtons}>
             {!isProcessing && (
               <TouchableOpacity
-                style={[styles.confirmCancelButton, { borderColor: colors.border }]}
+                style={[styles.modalButton, styles.modalButtonCancel, { borderColor: colors.border }]}
                 onPress={onCancel}
                 activeOpacity={0.7}
               >
-                <ThemedText style={[styles.confirmCancelButtonText, { color: colors.textSecondary }]}>
+                <ThemedText style={[styles.modalButtonText, { color: colors.textSecondary }]}>
                   Cancel
                 </ThemedText>
               </TouchableOpacity>
@@ -182,23 +177,24 @@ const ConfirmationModal = ({
 
             <TouchableOpacity
               style={[
-                styles.confirmActionButton, 
+                styles.modalButton, 
+                styles.modalButtonDelete, 
                 { backgroundColor: details.color },
-                isProcessing && styles.confirmActionButtonDisabled
+                isProcessing && styles.modalButtonDisabled
               ]}
               onPress={onConfirm}
               disabled={isProcessing}
               activeOpacity={0.7}
             >
               {isProcessing ? (
-                <View style={styles.confirmProcessingContainer}>
+                <View style={styles.modalProcessingContainer}>
                   <ActivityIndicator size="small" color="#FFFFFF" />
-                  <ThemedText style={[styles.confirmActionButtonText]}>
+                  <ThemedText style={styles.modalButtonTextDelete}>
                     Processing...
                   </ThemedText>
                 </View>
               ) : (
-                <ThemedText style={[styles.confirmActionButtonText]}>
+                <ThemedText style={styles.modalButtonTextDelete}>
                   Inactivate
                 </ThemedText>
               )}
@@ -336,24 +332,21 @@ export default function Student({ student, onClose }) {
     try {
       const studentId = studentData?.id || student?.id
       const response = await axiosApi.post(`/fees/inactivate/${studentId}`, {
-        updatedBy: 'Admin', // This should come from your auth context
+        updatedBy: 'Admin',
         reason: 'Student marked inactive',
         note: 'Student inactivated from profile',
         archiveData: true
       })
 
       if (response.data.success) {
-        // Close the confirmation modal and show success toast
         setShowInactiveConfirmModal(false)
         showToast('Student inactivated successfully', 'success')
         
-        // Refresh student data
         await fetchStudentData()
         
-        // Close the student modal after successful inactivation
         setTimeout(() => {
           onClose()
-        }, 1500) // Small delay to show the success toast
+        }, 1500)
       } else {
         setShowInactiveConfirmModal(false)
         showToast(response.data.message || 'Failed to inactivate student', 'error')
@@ -412,7 +405,6 @@ export default function Student({ student, onClose }) {
       )
     }
     
-    // Generate consistent gradient based on name
     const gradients = [
       ['#4158D0', '#C850C0'],
       ['#FF512F', '#F09819'],
@@ -634,7 +626,7 @@ export default function Student({ student, onClose }) {
             }
           ]}
         >
-          {/* Profile Card - Simplified with only class-section */}
+          {/* Profile Card */}
           <View style={[styles.profileCard, { borderColor: colors.border, backgroundColor: colors?.cardBackground }]}>
             <View style={styles.profileContent}>
               {renderAvatar()}
@@ -656,7 +648,7 @@ export default function Student({ student, onClose }) {
             </View>
           </View>
 
-          {/* Quick Actions - Redesigned */}
+          {/* Quick Actions */}
           <View style={styles.quickActions}>
             <TouchableOpacity 
               style={[styles.quickAction, { backgroundColor: `${colors.primary}08`, borderColor: `${colors.primary}20` }]}
@@ -1240,41 +1232,80 @@ const styles = StyleSheet.create({
   menuItemText: {
     fontSize: 14,
   },
-  // Modal Styles
-  modalOverlayCentered: {
+  // Confirmation Modal Styles - Matching Employee Delete Modal
+  modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  confirmModalContainerCentered: {
+  modalContent: {
     width: width * 0.9,
     maxWidth: 400,
     borderRadius: 30,
     padding: 24,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  confirmModalIconContainer: {
-    marginBottom: 16,
-  },
-  confirmModalIcon: {
+  modalIcon: {
     width: 80,
     height: 80,
     borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 16,
   },
-  confirmModalTitle: {
+  modalTitle: {
     fontSize: 22,
-    marginBottom: 8,
-    textAlign: 'center',
     fontFamily: 'Poppins-Bold',
+    marginBottom: 8,
   },
-  confirmModalMessage: {
+  modalMessage: {
     fontSize: 14,
+    fontFamily: 'Poppins-Medium',
     textAlign: 'center',
     marginBottom: 20,
-    fontFamily: 'Poppins-Medium',
+    lineHeight: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+  },
+  modalButtonDelete: {
+    backgroundColor: '#F44336',
+  },
+  modalButtonDisabled: {
+    opacity: 0.5,
+  },
+  modalButtonText: {
+    fontSize: 15,
+    fontFamily: 'Poppins-SemiBold',
+  },
+  modalButtonTextDelete: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'Poppins-SemiBold',
+  },
+  modalProcessingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   confirmDetailsCard: {
     width: '100%',
@@ -1316,21 +1347,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E5E5',
     marginVertical: 12,
   },
-  confirmDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
-  },
-  confirmDetailLabel: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: 'Poppins-Medium',
-  },
-  confirmDetailValue: {
-    fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
-  },
   confirmWarningContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1339,46 +1355,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
-    marginTop: 8,
   },
   confirmWarningText: {
     flex: 1,
     fontSize: 12,
     fontFamily: 'Poppins-Medium',
-  },
-  confirmModalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-  },
-  confirmCancelButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  confirmCancelButtonText: {
-    fontSize: 15,
-    fontFamily: 'Poppins-SemiBold',
-  },
-  confirmActionButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  confirmActionButtonDisabled: {
-    opacity: 0.5,
-  },
-  confirmActionButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontFamily: 'Poppins-SemiBold',
-  },
-  confirmProcessingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
   },
 })

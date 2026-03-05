@@ -265,6 +265,7 @@ export default function Employees() {
     scrollContent: {
       paddingHorizontal: 12,
       paddingTop: 4,
+      paddingBottom: 200,
     },
     resultsHeader: {
       flexDirection: 'row',

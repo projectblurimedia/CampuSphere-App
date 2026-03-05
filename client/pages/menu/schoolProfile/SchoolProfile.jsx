@@ -7,6 +7,7 @@ import {
   StatusBar,
   Modal,
   BackHandler,
+  ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -19,7 +20,6 @@ import {
 } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 import { ToastNotification } from '@/components/ui/ToastNotification'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import ConfirmationModal from '@/components/ui/ConfirmationModal'
 import SchoolInfo from './SchoolInfo'
 import SchoolImages from './SchoolImages'
@@ -700,7 +700,7 @@ export default function SchoolProfile({ visible, onClose }) {
             disabled={actionLoading}
           >
             {actionLoading ? (
-              <LoadingSpinner size={20} color="#FFFFFF" />
+              <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
               <Feather name="check" size={20} color="#FFFFFF" />
             )}
@@ -778,7 +778,10 @@ export default function SchoolProfile({ visible, onClose }) {
         <View style={styles.contentContainer}>
           {loading ? (
             <View style={styles.loadingContainer}>
-              <LoadingSpinner size={40} color={colors.primary} message="Loading school profile..." />
+              <ActivityIndicator size="large" color={colors.primary} />
+              <ThemedText style={{ marginTop: 12, color: colors.textSecondary }}>
+                Loading school profile...
+              </ThemedText>
             </View>
           ) : (
             renderContent()

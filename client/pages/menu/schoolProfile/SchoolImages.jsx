@@ -8,6 +8,7 @@ import {
   Modal,
   Dimensions,
   Platform,
+  ActivityIndicator,
 } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import { ThemedText } from '@/components/ui/themed-text'
@@ -16,7 +17,6 @@ import {
   FontAwesome5,
 } from '@expo/vector-icons'
 import ConfirmationModal from '@/components/ui/ConfirmationModal'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import axiosApi from '@/utils/axiosApi'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
@@ -166,8 +166,8 @@ const SchoolImages = ({
       right: 20,
       zIndex: 100,
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
+      justifyContent: 'space-between',
     },
     backButton: {
       width: 44,
@@ -190,17 +190,20 @@ const SchoolImages = ({
       borderColor: 'rgba(255, 255, 255, 0.4)',
     },
     titleContainer: {
-      flex: 1,
-      alignItems: 'center',
+      position: 'absolute',
+      left: '50%',
+      transform: [{ translateX: '-50%' }],
     },
     title: {
       fontSize: 20,
       color: '#FFFFFF',
+      fontWeight: '600',
     },
     subtitle: {
       marginTop: 4,
       fontSize: 12,
-      color: 'rgba(255,255,255,0.9)',
+      color: 'rgba(255,255,255,0.8)',
+      textAlign: 'center',
     },
     imageModalImage: {
       width: SCREEN_WIDTH,
@@ -615,7 +618,7 @@ const SchoolImages = ({
           disabled={uploadLoading || loading}
         >
           {uploadLoading ? (
-            <LoadingSpinner size={24} color={colors.primary} />
+            <ActivityIndicator size="small" color={colors.primary} />
           ) : (
             <>
               <Ionicons name="add-circle" size={32} color={colors.primary} />
@@ -648,7 +651,8 @@ const SchoolImages = ({
           </ThemedText>
           {uploadLoading && (
             <View style={{ marginTop: 20 }}>
-              <LoadingSpinner size={30} color={colors.primary} message="Uploading..." />
+              <ActivityIndicator size="small" color={colors.primary} />
+              <ThemedText style={{ marginTop: 8, color: colors.textSecondary }}>Uploading...</ThemedText>
             </View>
           )}
         </View>
@@ -712,7 +716,7 @@ const SchoolImages = ({
               disabled={uploadLoading || loading}
             >
               {uploadLoading ? (
-                <LoadingSpinner size={20} color={colors.primary} />
+                <ActivityIndicator size="small" color={colors.primary} />
               ) : (
                 <>
                   <Ionicons name="add-circle" size={20} color={colors.primary} />
@@ -795,7 +799,7 @@ const SchoolImages = ({
                     disabled={uploadLoading || loading}
                   >
                     {uploadLoading ? (
-                      <LoadingSpinner size={20} color="#FFFFFF" />
+                      <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
                       <ThemedText style={styles.uploadButtonText}>
                         Upload {tempSelectedImages.length} {tempSelectedImages.length === 1 ? 'Image' : 'Images'}
@@ -813,7 +817,7 @@ const SchoolImages = ({
         </View>
       </Modal>
 
-      {/* Image Modal */}
+      {/* Image Modal with Fixed Centered Title */}
       <Modal
         statusBarTranslucent
         visible={showImageModal}
@@ -830,14 +834,18 @@ const SchoolImages = ({
             >
               <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
             </TouchableOpacity>
+            
             <View style={styles.titleContainer}>
-              <ThemedText style={[styles.title, { color: '#FFFFFF' }]}>
+              <ThemedText style={styles.title}>
                 School Images
               </ThemedText>
-              <ThemedText style={[styles.subtitle, { color: 'rgba(255,255,255,0.8)' }]}>
-                {selectedImageIndex !== null ? `${selectedImageIndex + 1} of ${localImages.length}` : ''}
-              </ThemedText>
+              {selectedImageIndex !== null && (
+                <ThemedText style={styles.subtitle}>
+                  {selectedImageIndex + 1} of {localImages.length}
+                </ThemedText>
+              )}
             </View>
+
             {isEditing && (
               <TouchableOpacity 
                 style={styles.deleteButton}

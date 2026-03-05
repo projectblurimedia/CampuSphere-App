@@ -8,6 +8,7 @@ import {
   TextInput,
   Platform,
   KeyboardAvoidingView,
+  ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -18,7 +19,6 @@ import {
   Feather,
   MaterialCommunityIcons,
 } from '@expo/vector-icons'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
 const CreateSchool = ({ visible, onClose, onSubmit, loading, colors, showToast }) => {
   const [formData, setFormData] = useState({
@@ -738,7 +738,7 @@ const CreateSchool = ({ visible, onClose, onSubmit, loading, colors, showToast }
               disabled={loading}
             >
               {loading ? (
-                <LoadingSpinner size={20} color="#FFFFFF" />
+                <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <>
                   <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />

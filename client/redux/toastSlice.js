@@ -20,13 +20,10 @@ const toastSlice = createSlice({
       state.message = action.payload.message
       state.duration = action.payload.duration || 3000
       state.position = action.payload.position || 'top-center'
-      
-      console.log('Toast reducer - showToast:', JSON.stringify(state))
     },
     hideToast: (state) => {
       state.visible = false
       state.message = ''
-      console.log('Toast reducer - hideToast')
     }
   }
 })

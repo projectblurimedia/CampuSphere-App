@@ -7,6 +7,7 @@ import {
   Modal,
   TextInput,
   Platform,
+  ActivityIndicator,
 } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import {
@@ -15,7 +16,6 @@ import {
   Feather,
 } from '@expo/vector-icons'
 import ConfirmationModal from '@/components/ui/ConfirmationModal'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import axiosApi from '@/utils/axiosApi'
 
 const BusDetails = ({ 
@@ -276,7 +276,7 @@ const BusDetails = ({
       backgroundColor: colors.background,
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
-      maxHeight: '80%',
+      maxHeight: '100%',
     },
     modalHeader: {
       flexDirection: 'row',
@@ -309,7 +309,7 @@ const BusDetails = ({
     modalScrollContent: {
       flexGrow: 1,
       paddingHorizontal: 20,
-      paddingBottom: 20,
+      paddingBottom: 200,
     },
     modalInputContainer: {
       flexDirection: 'row',
@@ -397,10 +397,16 @@ const BusDetails = ({
       padding: 4,
     },
     modalActions: {
+      position: 'absolute',
+      bottom: 0,
       flexDirection: 'row',
       gap: 12,
       paddingHorizontal: 20,
-      paddingBottom: 20,
+      paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      backgroundColor: colors.background,
     },
     modalCancelButton: {
       flex: 1,
@@ -706,7 +712,7 @@ const BusDetails = ({
                 disabled={saveLoading || loading}
               >
                 {saveLoading ? (
-                  <LoadingSpinner size={20} color={colors.primary} />
+                  <ActivityIndicator size={'small'} color={colors.primary} />
                 ) : (
                   <>
                     <Ionicons name="add-circle" size={20} color={colors.primary} />
@@ -757,7 +763,6 @@ const BusDetails = ({
         <TouchableOpacity 
           style={styles.modalOverlay}
           activeOpacity={1}
-          onPress={() => !saveLoading && setShowBusModal(false)}
         >
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
@@ -778,7 +783,7 @@ const BusDetails = ({
             </View>
 
             <ScrollView 
-              style={{ maxHeight: '70%' }} 
+              style={{ maxHeight: '80%' }} 
               contentContainerStyle={styles.modalScrollContent}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
@@ -912,7 +917,7 @@ const BusDetails = ({
                 disabled={saveLoading}
               >
                 {saveLoading ? (
-                  <LoadingSpinner size={20} color="#FFFFFF" />
+                  <ActivityIndicator size={'small'} color={'#ffffff'} />
                 ) : (
                   <ThemedText style={styles.modalSaveText}>
                     {editingBus ? 'Update Bus' : 'Add Bus'}

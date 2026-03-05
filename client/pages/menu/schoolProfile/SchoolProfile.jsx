@@ -421,6 +421,7 @@ export default function SchoolProfile({ visible, onClose }) {
       paddingVertical: 14,
       borderRadius: 12,
       gap: 8,
+      height: 50, // Fixed height to prevent size changes during loading
       ...Platform.select({
         ios: {
           shadowColor: '#000',
@@ -542,7 +543,7 @@ export default function SchoolProfile({ visible, onClose }) {
   ]
 
   const renderContent = () => {
-    if (!schoolExists) {
+    if (!schoolExists && !loading) {
       return (
         <View style={styles.emptyStateContainer}>
           <FontAwesome5 name="school" size={80} color={colors.primary + '40'} style={styles.emptyIcon} />
@@ -741,7 +742,7 @@ export default function SchoolProfile({ visible, onClose }) {
                   {schoolExists ? 'Manage school information' : 'Set up your school'}
                 </ThemedText>
               </View>
-              {schoolExists ? (
+              {!loading && schoolExists ? (
                 <TouchableOpacity
                   style={[styles.editButton, actionLoading && styles.disabledButton]}
                   onPress={() => toggleEditMode(activeTab)}
@@ -753,7 +754,7 @@ export default function SchoolProfile({ visible, onClose }) {
                     color="#FFFFFF"
                   />
                 </TouchableOpacity>
-              ) : (
+              ) : !loading && !schoolExists ? (
                 <TouchableOpacity
                   style={[styles.createButton, actionLoading && styles.disabledButton]}
                   onPress={() => setShowCreateModal(true)}
@@ -761,6 +762,8 @@ export default function SchoolProfile({ visible, onClose }) {
                 >
                   <Ionicons name="add" size={24} color="#FFFFFF" />
                 </TouchableOpacity>
+              ) : (
+                <View style={{ width: 44, height: 44 }} /> // Empty view for spacing while loading
               )}
             </View>
           </SafeAreaView>

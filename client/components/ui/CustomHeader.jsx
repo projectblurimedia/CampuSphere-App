@@ -10,6 +10,7 @@ import StudentsMenu from '@/components/students/students-menu'
 import EmployeeMenu from '@/components/employee/employee-menu'
 import CashflowMenu from '@/components/cashflow/cashflow-menu'
 import ProfileMenu from '@/components/profile/profile-menu'
+import { schoolDetails } from '@/schoolDetails'
 
 export default function CustomHeader({ title, showBackButton = false, iconName = 'school', currentRoute = 'index' }) {
   const navigation = useNavigation()
@@ -47,22 +48,6 @@ export default function CustomHeader({ title, showBackButton = false, iconName =
     }
   }
 
-  // Dashboard menu colors
-  const dashboardColors = {
-    cardBg: isDark ? '#1e293b' : '#ffffff',
-    border: isDark ? '#334155' : '#e9ecef',
-    success: isDark ? '#34d399' : '#10b981',
-    warning: isDark ? '#fbbf24' : '#f59e0b',
-    info: isDark ? '#60a5fa' : '#3b82f6',
-    danger: isDark ? '#f87171' : '#ef4444',
-    purple: isDark ? '#a78bfa' : '#8b5cf6',
-    cyan: isDark ? '#22d3ee' : '#06b6d4',
-    green: isDark ? '#34d399' : '#10b981',
-    orange: isDark ? '#fb923c' : '#f97316',
-    pink: isDark ? '#f472b6' : '#ec4899',
-    teal: isDark ? '#2dd4bf' : '#14b8a6',
-  }
-
   // Render appropriate menu based on current route
   const renderMenu = () => {
     switch(currentRoute) {
@@ -71,7 +56,6 @@ export default function CustomHeader({ title, showBackButton = false, iconName =
           <DashboardMenu
             visible={menuVisible}
             onClose={handleCloseMenu}
-            dashboardColors={dashboardColors}
           />
         )
       case 'students':
@@ -107,7 +91,6 @@ export default function CustomHeader({ title, showBackButton = false, iconName =
           <DashboardMenu
             visible={menuVisible}
             onClose={handleCloseMenu}
-            dashboardColors={dashboardColors}
           />
         )
     }
@@ -144,7 +127,7 @@ export default function CustomHeader({ title, showBackButton = false, iconName =
 
           <View style={styles.centerSection}>
             <ThemedText style={styles.title}>{title}</ThemedText>
-            <ThemedText style={styles.schoolName}>Bluri High School</ThemedText>
+            <ThemedText style={styles.schoolName}>{schoolDetails?.name}</ThemedText>
           </View>
 
           {/* Right section: Only 3 bars menu button */}
@@ -238,7 +221,7 @@ const styles = StyleSheet.create({
   },
   schoolName: {
     color: 'rgba(255, 255, 255, 0.85)',
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: 'Poppins-Medium',
     textAlign: 'center',
     marginTop: 2,

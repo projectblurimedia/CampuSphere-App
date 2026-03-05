@@ -9,13 +9,16 @@ import {
   getClassWiseStats,
   getGenderBreakdown,
   getFeeStats,
-  getAllStats
+  getAllStats,
+  getDashboardStats
 } from '../controllers/statsController.js'
 
 const router = express.Router()
 
 // Main stats endpoint (aggregates all stats)
 router.get('/', getAllStats)
+
+router.get('/dashboard', getDashboardStats)
 
 // Individual stat endpoints
 router.get('/school', getSchoolStats)

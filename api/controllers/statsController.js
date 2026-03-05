@@ -920,3 +920,209 @@ export const getFeeStats = async (req, res) => {
     res.status(500).json({ success: false, message: error.message })
   }
 }
+
+/**
+ * @desc    Get dashboard stats for StatsGrid component
+ * @route   GET /api/stats/dashboard
+ * @access  Public/Private
+ */
+export const getDashboardStats = async (req, res) => {
+  try {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+    const startOfNextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1)
+    
+    // Run queries in parallel for efficiency
+    const [
+      totalStudents,
+      totalStaff,
+      monthlyIncome,
+      monthlyExpenses,
+      dailyAttendanceStats,
+      totalActiveStudents
+    ] = await Promise.all([
+      // Total active students
+      prisma.student.count({ where: { isActive: true } }),
+      
+      // Total active staff (all employees)
+      prisma.employee.count({ where: { isActive: true } }),
+      
+      // Monthly income (INCOME type)
+      prisma.cashFlow.aggregate({
+        where: {
+          type: 'INCOME',
+          date: {
+            gte: startOfMonth,
+            lt: startOfNextMonth
+          }
+        },
+        _sum: { amount: true }
+      }),
+      
+      // Monthly expenses (EXPENSE type)
+      prisma.cashFlow.aggregate({
+        where: {
+          type: 'EXPENSE',
+          date: {
+            gte: startOfMonth,
+            lt: startOfNextMonth
+          }
+        },
+        _sum: { amount: true }
+      }),
+      
+      // Get all attendance records grouped by date
+      prisma.attendance.groupBy({
+        by: ['date'],
+        where: {
+          date: {
+            // For current month (you can adjust this period as needed)
+            gte: startOfMonth,
+            lt: startOfNextMonth
+          }
+        },
+        _count: {
+          _all: true
+        }
+      }),
+      
+      // Total active students for reference
+      prisma.student.count({ where: { isActive: true } })
+    ])
+
+    // Calculate monthly revenue (income - expenses)
+    const incomeAmount = monthlyIncome._sum?.amount || 0
+    const expenseAmount = monthlyExpenses._sum?.amount || 0
+    const monthlyRevenueAmount = incomeAmount - expenseAmount
+
+    // Format monthly revenue
+    const formattedRevenue = monthlyRevenueAmount >= 100000 
+      ? `₹${(monthlyRevenueAmount / 100000).toFixed(2)}L`
+      : monthlyRevenueAmount >= 1000 
+        ? `₹${(monthlyRevenueAmount / 1000).toFixed(1)}K`
+        : `₹${monthlyRevenueAmount}`
+
+    // Calculate average attendance percentage across all days
+    let averageAttendance = 0
+    let totalDaysWithAttendance = 0
+    let totalAttendancePercentage = 0
+
+    if (dailyAttendanceStats.length > 0) {
+      // For each day, fetch the detailed attendance records to calculate daily percentage
+      const attendancePromises = dailyAttendanceStats.map(async (day) => {
+        const attendanceRecords = await prisma.attendance.findMany({
+          where: {
+            date: day.date
+          },
+          select: {
+            morning: true,
+            afternoon: true
+          }
+        })
+
+        let presentSessions = 0
+        let totalMarkedSessions = 0
+
+        attendanceRecords.forEach(record => {
+          // Count morning session if marked
+          if (record.morning !== null) {
+            totalMarkedSessions++
+            if (record.morning === true) presentSessions++
+          }
+          
+          // Count afternoon session if marked
+          if (record.afternoon !== null) {
+            totalMarkedSessions++
+            if (record.afternoon === true) presentSessions++
+          }
+        })
+
+        // Calculate daily percentage
+        const dailyPercentage = totalMarkedSessions > 0 
+          ? (presentSessions / totalMarkedSessions) * 100 
+          : 0
+
+        return {
+          date: day.date,
+          percentage: dailyPercentage,
+          presentSessions,
+          totalMarkedSessions
+        }
+      })
+
+      const dailyResults = await Promise.all(attendancePromises)
+      
+      // Sum up all daily percentages
+      totalAttendancePercentage = dailyResults.reduce((sum, day) => sum + day.percentage, 0)
+      totalDaysWithAttendance = dailyResults.length
+      
+      // Calculate average
+      averageAttendance = totalDaysWithAttendance > 0 
+        ? (totalAttendancePercentage / totalDaysWithAttendance).toFixed(1)
+        : 0
+
+      // Log for debugging (remove in production)
+      console.log('Daily attendance breakdown:', dailyResults.map(d => ({
+        date: d.date.toISOString().split('T')[0],
+        percentage: d.percentage.toFixed(1) + '%',
+        sessions: `${d.presentSessions}/${d.totalMarkedSessions}`
+      })))
+    }
+
+    const dashboardStats = [
+      {
+        title: 'Total Students',
+        value: totalStudents.toLocaleString(),
+        icon: 'users',
+        iconFamily: 'FontAwesome6',
+        color: '#3b82f6',
+        gradient: ['#3b82f6', '#1d4ed8'],
+      },
+      {
+        title: 'Total Staff',
+        value: totalStaff.toString(),
+        icon: 'chalkboard-teacher',
+        iconFamily: 'FontAwesome5',
+        color: '#8b5cf6',
+        gradient: ['#8b5cf6', '#7c3aed'],
+      },
+      {
+        title: 'Monthly Revenue',
+        value: formattedRevenue,
+        subtitle: `Income: ₹${incomeAmount.toLocaleString()}`,
+        subtitle2: `Expenses: ₹${expenseAmount.toLocaleString()}`,
+        icon: 'attach-money',
+        iconFamily: 'MaterialIcons',
+        color: monthlyRevenueAmount >= 0 ? '#10b981' : '#ef4444',
+        gradient: monthlyRevenueAmount >= 0 
+          ? ['#10b981', '#059669']
+          : ['#ef4444', '#dc2626'],
+      },
+      {
+        title: 'Attendance',
+        value: `${averageAttendance}%`,
+        subtitle: totalDaysWithAttendance > 0
+          ? `Average across ${totalDaysWithAttendance} days this month`
+          : 'No attendance data this month',
+        icon: 'clipboard-check',
+        iconFamily: 'FontAwesome6',
+        color: '#f97316',
+        gradient: ['#f97316', '#ea580c'],
+      },
+    ]
+
+    res.status(200).json({
+      success: true,
+      data: dashboardStats
+    })
+  } catch (error) {
+    console.error('Get dashboard stats error:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch dashboard statistics',
+      errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    })
+  }
+}

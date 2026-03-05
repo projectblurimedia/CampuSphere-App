@@ -22,9 +22,10 @@ import {
 import ThemeModal from '@/components/theme/ThemeModal'
 import { useTheme } from '@/hooks/useTheme'
 import Dashboard from '@/components/dynamicModals/Dashboard'
-import { useDispatch, useSelector } from 'react-redux'
+import { useDispatch } from 'react-redux'
 import { useRouter } from 'expo-router'
 import { logoutEmployee } from '@/redux/employeeSlice'
+import { schoolDetails } from '@/schoolDetails'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
@@ -380,10 +381,10 @@ export default function DashboardMenu({ visible, onClose }) {
             >
               <View style={styles.headerRow}>
                 <View style={styles.headerLeft}>
-                  <FontAwesome5 name="school" size={28} color="#FFFFFF" />
+                  <FontAwesome5 name="school" size={32} color="#FFFFFF" />
                   <View style={styles.headerText}>
-                    <ThemedText type='subtitle' style={styles.schoolName}>
-                      Bluri High School
+                    <ThemedText type='subtitle' style={styles.schoolName} numberOfLines={1} >
+                      {schoolDetails?.name}
                     </ThemedText>
                     <ThemedText style={styles.menuTitle}>
                       Dashboard Menu
@@ -552,7 +553,6 @@ const styles = StyleSheet.create({
   schoolName: {
     fontSize: 20,
     color: '#FFFFFF',
-    marginBottom: 2,
   },
   menuTitle: {
     fontSize: 12,

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import {
   View,
   StyleSheet,
@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
-  Alert,
   Platform,
 } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
@@ -15,19 +14,41 @@ import {
   FontAwesome5,
   Feather,
 } from '@expo/vector-icons'
+import ConfirmationModal from '@/components/ui/ConfirmationModal'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import axiosApi from '@/utils/axiosApi'
 
-const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
+const BusDetails = ({ 
+  buses = [], 
+  isEditing, 
+  onBusesUpdate, 
+  showToast, 
+  colors, 
+  loading, 
+  setActionLoading,
+  schoolExists 
+}) => {
   const [editingBus, setEditingBus] = useState(null)
   const [showBusModal, setShowBusModal] = useState(false)
   const [newRouteInput, setNewRouteInput] = useState('')
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false)
+  const [busToDelete, setBusToDelete] = useState(null)
+  const [saveLoading, setSaveLoading] = useState(false)
+  const [formErrors, setFormErrors] = useState({})
+  const [localBuses, setLocalBuses] = useState([])
+  
   const [busFormData, setBusFormData] = useState({
     name: '',
     busNumber: '',
     driverName: '',
     driverPhone: '',
-    routes: ['']
+    routes: []
   })
+
+  // Sync local buses with props
+  useEffect(() => {
+    setLocalBuses(Array.isArray(buses) ? buses : [])
+  }, [buses])
 
   const styles = useMemo(() => StyleSheet.create({
     container: {
@@ -212,7 +233,7 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
     emptyState: {
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: 60,
+      paddingVertical: 40,
     },
     emptyIcon: {
       marginBottom: 16,
@@ -228,6 +249,24 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
       color: colors.textSecondary + '80',
       textAlign: 'center',
     },
+    addFirstButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      marginTop: 24,
+      paddingHorizontal: 24,
+      paddingVertical: 14,
+      borderRadius: 12,
+      backgroundColor: colors.primary + '15',
+      borderWidth: 1,
+      borderColor: colors.primary,
+    },
+    addFirstText: {
+      fontSize: 16,
+      color: colors.primary,
+      fontWeight: '600',
+    },
     modalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -238,21 +277,18 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
       maxHeight: '80%',
-      minHeight: '60%',
-      flex: 1,
     },
     modalHeader: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'space-between',
       paddingHorizontal: 20,
       paddingTop: 20,
       paddingBottom: 16,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
-      gap: 12,
     },
     modalTitleContainer: {
-      flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
@@ -281,7 +317,7 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: 10,
-      marginBottom: 12,
+      marginBottom: 16,
       paddingHorizontal: 14,
       height: 50,
       backgroundColor: colors.inputBackground,
@@ -293,6 +329,18 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
       color: colors.text,
       paddingVertical: 0,
       paddingHorizontal: 0,
+      fontFamily: 'Poppins-Medium',
+    },
+    inputError: {
+      borderColor: '#ef4444',
+      borderWidth: 1.5,
+    },
+    errorText: {
+      color: '#ef4444',
+      fontSize: 12,
+      marginTop: -12,
+      marginBottom: 12,
+      marginLeft: 14,
     },
     routesContainer: {
       marginBottom: 16,
@@ -317,6 +365,7 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
       paddingVertical: 10,
       backgroundColor: colors.inputBackground,
       color: colors.text,
+      fontFamily: 'Poppins-Medium',
     },
     addRouteButton: {
       backgroundColor: colors.primary,
@@ -350,7 +399,6 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
     modalActions: {
       flexDirection: 'row',
       gap: 12,
-      marginTop: 24,
       paddingHorizontal: 20,
       paddingBottom: 20,
     },
@@ -358,9 +406,7 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
       flex: 1,
       paddingVertical: 14,
       borderRadius: 12,
-      borderWidth: 1,
       alignItems: 'center',
-      borderColor: colors.border,
       backgroundColor: '#ef4444',
     },
     modalCancelText: {
@@ -390,7 +436,32 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
       textTransform: 'uppercase',
       letterSpacing: 0.5,
     },
+    disabledButton: {
+      opacity: 0.5,
+    },
   }), [colors])
+
+  const validateForm = () => {
+    const errors = {}
+    
+    if (!busFormData.name.trim()) {
+      errors.name = 'Bus name is required'
+    }
+    if (!busFormData.busNumber.trim()) {
+      errors.busNumber = 'Bus number is required'
+    }
+    if (!busFormData.driverName.trim()) {
+      errors.driverName = 'Driver name is required'
+    }
+    if (!busFormData.driverPhone.trim()) {
+      errors.driverPhone = 'Driver phone is required'
+    } else if (!/^\d{10}$/.test(busFormData.driverPhone.replace(/\D/g, ''))) {
+      errors.driverPhone = 'Phone number must be 10 digits'
+    }
+    
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
 
   const openAddBusModal = () => {
     setEditingBus(null)
@@ -399,8 +470,9 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
       busNumber: '',
       driverName: '',
       driverPhone: '',
-      routes: ['']
+      routes: []
     })
+    setFormErrors({})
     setNewRouteInput('')
     setShowBusModal(true)
   }
@@ -408,12 +480,13 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
   const openEditBusModal = (bus) => {
     setEditingBus(bus)
     setBusFormData({
-      name: bus.name,
-      busNumber: bus.busNumber,
-      driverName: bus.driverName,
-      driverPhone: bus.driverPhone,
-      routes: [...bus.routes]
+      name: bus.name || '',
+      busNumber: bus.busNumber || '',
+      driverName: bus.driverName || '',
+      driverPhone: bus.driverPhone || '',
+      routes: Array.isArray(bus.routes) ? [...bus.routes] : []
     })
+    setFormErrors({})
     setNewRouteInput('')
     setShowBusModal(true)
   }
@@ -423,6 +496,9 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
       ...prev,
       [field]: value
     }))
+    if (formErrors[field]) {
+      setFormErrors(prev => ({ ...prev, [field]: null }))
+    }
   }
 
   const addRoute = () => {
@@ -443,16 +519,19 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
   }
 
   const saveBus = async () => {
-    if (!busFormData.name || !busFormData.busNumber || !busFormData.driverName || !busFormData.driverPhone) {
-      showToast('Please fill all required fields', 'error')
+    if (!validateForm()) {
+      showToast('Please fill all required fields correctly', 'warning')
       return
     }
 
     try {
+      setSaveLoading(true)
+      setActionLoading(true)
+      
       let response
       
       if (editingBus) {
-        response = await axiosApi.put(`/school/buses/${editingBus._id}`, busFormData)
+        response = await axiosApi.put(`/school/buses/${editingBus.id}`, busFormData)
       } else {
         response = await axiosApi.post('/school/buses', busFormData)
       }
@@ -461,116 +540,146 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
         setShowBusModal(false)
         showToast(response.data.message, 'success')
         
+        // Refresh buses
         const updatedResponse = await axiosApi.get('/school')
         if (updatedResponse.data.success) {
-          onBusesUpdate(updatedResponse.data.data.buses)
+          const newBuses = Array.isArray(updatedResponse.data.data.buses) 
+            ? updatedResponse.data.data.buses 
+            : []
+          onBusesUpdate(newBuses)
+          setLocalBuses(newBuses)
         }
       } else {
         showToast(response.data.message || 'Failed to save bus', 'error')
       }
     } catch (error) {
       console.error('Save bus error:', error)
-      showToast(error.response?.data?.message || 'Failed to save bus', 'error')
+      
+      if (error.response?.status === 400 && error.response?.data?.message?.includes('already exists')) {
+        setFormErrors(prev => ({ ...prev, busNumber: 'Bus number already exists' }))
+        showToast('Bus number already exists', 'error')
+      } else {
+        showToast(error.response?.data?.message || 'Failed to save bus', 'error')
+      }
+    } finally {
+      setSaveLoading(false)
+      setActionLoading(false)
     }
   }
 
-  const deleteBus = async (busId) => {
-    Alert.alert(
-      'Delete Bus',
-      'Are you sure you want to delete this bus?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await axiosApi.delete(`/school/buses/${busId}`)
-              if (response.data.success) {
-                showToast('Bus deleted successfully!', 'success')
-                
-                const updatedResponse = await axiosApi.get('/school')
-                if (updatedResponse.data.success) {
-                  onBusesUpdate(updatedResponse.data.data.buses)
-                }
-              } else {
-                showToast(response.data.message || 'Failed to delete bus', 'error')
-              }
-            } catch (error) {
-              console.error('Delete bus error:', error)
-              showToast(error.response?.data?.message || 'Failed to delete bus', 'error')
-            }
-          }
-        }
-      ]
-    )
+  const openDeleteConfirmation = (bus) => {
+    setBusToDelete(bus)
+    setDeleteModalVisible(true)
   }
 
-  const renderBusCard = (bus, index) => (
-    <View key={bus._id} style={styles.busCard}>
-      <View style={styles.busHeader}>
-        <View style={styles.busNumberBadge}>
-          <View style={styles.busNumberCircle}>
-            <ThemedText style={styles.busNumberCircleText}>
-              {index + 1}
+  const handleDeleteConfirm = async () => {
+    if (!busToDelete) return
+
+    try {
+      setDeleteModalVisible(false)
+      setActionLoading(true)
+
+      const response = await axiosApi.delete(`/school/buses/${busToDelete.id}`)
+      if (response.data.success) {
+        showToast('Bus deleted successfully!', 'success')
+        
+        const updatedResponse = await axiosApi.get('/school')
+        if (updatedResponse.data.success) {
+          const newBuses = Array.isArray(updatedResponse.data.data.buses) 
+            ? updatedResponse.data.data.buses 
+            : []
+          onBusesUpdate(newBuses)
+          setLocalBuses(newBuses)
+        }
+      } else {
+        showToast(response.data.message || 'Failed to delete bus', 'error')
+      }
+    } catch (error) {
+      console.error('Delete bus error:', error)
+      showToast(error.response?.data?.message || 'Failed to delete bus', 'error')
+    } finally {
+      setActionLoading(false)
+      setBusToDelete(null)
+    }
+  }
+
+  const renderBusCard = useCallback((bus, index) => {
+    if (!bus || !bus.id) return null
+    
+    return (
+      <View key={bus.id} style={styles.busCard}>
+        <View style={styles.busHeader}>
+          <View style={styles.busNumberBadge}>
+            <View style={styles.busNumberCircle}>
+              <ThemedText style={styles.busNumberCircleText}>
+                {index + 1}
+              </ThemedText>
+            </View>
+            <ThemedText style={styles.busName}>
+              {bus.name || 'Unnamed Bus'}
             </ThemedText>
           </View>
-          <ThemedText style={styles.busName}>
-            {bus.name}
-          </ThemedText>
-        </View>
-        <View style={styles.busPlate}>
-          <ThemedText style={styles.busPlateText}>
-            {bus.busNumber}
-          </ThemedText>
-        </View>
-      </View>
-      
-      <View style={styles.busRoutesContainer}>
-        <ThemedText style={styles.busRoutesLabel}>Routes</ThemedText>
-        <View style={styles.busRoutesList}>
-          {bus.routes.map((route, routeIndex) => (
-            <View key={routeIndex} style={styles.routeTag}>
-              <ThemedText style={styles.routeTagText}>{route}</ThemedText>
-            </View>
-          ))}
-        </View>
-      </View>
-      
-      <View style={styles.busInfoItem}>
-        <ThemedText style={styles.busInfoLabel}>Driver</ThemedText>
-        <ThemedText style={styles.busInfoValue}>{bus.driverName}</ThemedText>
-      </View>
-      
-      <View style={styles.busInfoItem}>
-        <ThemedText style={styles.busInfoLabel}>Contact</ThemedText>
-        <ThemedText style={styles.busInfoValue}>{bus.driverPhone}</ThemedText>
-      </View>
-      
-      {isEditing && (
-        <View style={styles.busActions}>
-          <TouchableOpacity 
-            style={[styles.busActionButton, styles.busEditButton]}
-            onPress={() => openEditBusModal(bus)}
-          >
-            <Feather name="edit" size={14} color={colors.primary} />
-            <ThemedText style={{ color: colors.primary, fontSize: 13 }}>
-              Edit
+          <View style={styles.busPlate}>
+            <ThemedText style={styles.busPlateText}>
+              {bus.busNumber || 'N/A'}
             </ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.busActionButton, styles.busDeleteButton]}
-            onPress={() => deleteBus(bus._id)}
-          >
-            <Ionicons name="trash-outline" size={14} color="#ef4444" />
-            <ThemedText style={{ color: '#ef4444', fontSize: 13 }}>
-              Delete
-            </ThemedText>
-          </TouchableOpacity>
+          </View>
         </View>
-      )}
-    </View>
-  )
+        
+        <View style={styles.busRoutesContainer}>
+          <ThemedText style={styles.busRoutesLabel}>Routes</ThemedText>
+          <View style={styles.busRoutesList}>
+            {Array.isArray(bus.routes) && bus.routes.length > 0 ? (
+              bus.routes.map((route, routeIndex) => (
+                <View key={routeIndex} style={styles.routeTag}>
+                  <ThemedText style={styles.routeTagText}>{route}</ThemedText>
+                </View>
+              ))
+            ) : (
+              <View style={styles.routeTag}>
+                <ThemedText style={styles.routeTagText}>No routes specified</ThemedText>
+              </View>
+            )}
+          </View>
+        </View>
+        
+        <View style={styles.busInfoItem}>
+          <ThemedText style={styles.busInfoLabel}>Driver</ThemedText>
+          <ThemedText style={styles.busInfoValue}>{bus.driverName || 'Not specified'}</ThemedText>
+        </View>
+        
+        <View style={styles.busInfoItem}>
+          <ThemedText style={styles.busInfoLabel}>Contact</ThemedText>
+          <ThemedText style={styles.busInfoValue}>{bus.driverPhone || 'Not specified'}</ThemedText>
+        </View>
+        
+        {isEditing && (
+          <View style={styles.busActions}>
+            <TouchableOpacity 
+              style={[styles.busActionButton, styles.busEditButton, loading && styles.disabledButton]}
+              onPress={() => openEditBusModal(bus)}
+              disabled={loading}
+            >
+              <Feather name="edit" size={14} color={colors.primary} />
+              <ThemedText style={{ color: colors.primary, fontSize: 13 }}>
+                Edit
+              </ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.busActionButton, styles.busDeleteButton, loading && styles.disabledButton]}
+              onPress={() => openDeleteConfirmation(bus)}
+              disabled={loading}
+            >
+              <Ionicons name="trash-outline" size={14} color="#ef4444" />
+              <ThemedText style={{ color: '#ef4444', fontSize: 13 }}>
+                Delete
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    )
+  }, [isEditing, loading])
 
   return (
     <>
@@ -583,50 +692,74 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
           School transportation details
         </ThemedText>
         
-        {buses.length === 0 ? (
-          <View style={styles.emptyState}>
-            <FontAwesome5 name="bus" size={64} color={colors.textSecondary + '40'} style={styles.emptyIcon} />
-            <ThemedText style={styles.emptyText}>No buses registered yet</ThemedText>
-            <ThemedText style={styles.emptySubtext}>
-              {isEditing ? 'Add buses to manage transportation' : 'No transportation available'}
-            </ThemedText>
-          </View>
+        {localBuses.length === 0 ? (
+          isEditing ? (
+            <View style={styles.emptyState}>
+              <FontAwesome5 name="bus" size={64} color={colors.textSecondary + '40'} style={styles.emptyIcon} />
+              <ThemedText style={styles.emptyText}>No buses registered yet</ThemedText>
+              <ThemedText style={styles.emptySubtext}>
+                Add your first bus to manage transportation
+              </ThemedText>
+              <TouchableOpacity
+                style={[styles.addFirstButton, (saveLoading || loading) && styles.disabledButton]}
+                onPress={openAddBusModal}
+                disabled={saveLoading || loading}
+              >
+                {saveLoading ? (
+                  <LoadingSpinner size={20} color={colors.primary} />
+                ) : (
+                  <>
+                    <Ionicons name="add-circle" size={20} color={colors.primary} />
+                    <ThemedText style={styles.addFirstText}>Add First Bus</ThemedText>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <FontAwesome5 name="bus" size={64} color={colors.textSecondary + '40'} style={styles.emptyIcon} />
+              <ThemedText style={styles.emptyText}>No buses registered yet</ThemedText>
+              <ThemedText style={styles.emptySubtext}>
+                Ask administrator to add bus information
+              </ThemedText>
+            </View>
+          )
         ) : (
-          <View style={styles.busList}>
-            {buses.map((bus, index) => renderBusCard(bus, index))}
-          </View>
-        )}
-        
-        {isEditing && (
-          <TouchableOpacity
-            style={styles.addBusButton}
-            onPress={openAddBusModal}
-          >
-            <Ionicons name="add-circle" size={22} color={colors.primary} />
-            <ThemedText style={styles.addBusText}>
-              Add New Bus
-            </ThemedText>
-          </TouchableOpacity>
+          <>
+            <View style={styles.busList}>
+              {localBuses.map((bus, index) => renderBusCard(bus, index))}
+            </View>
+            
+            {isEditing && (
+              <TouchableOpacity
+                style={[styles.addBusButton, (saveLoading || loading) && styles.disabledButton]}
+                onPress={openAddBusModal}
+                disabled={saveLoading || loading}
+              >
+                <Ionicons name="add-circle" size={22} color={colors.primary} />
+                <ThemedText style={styles.addBusText}>
+                  Add Another Bus
+                </ThemedText>
+              </TouchableOpacity>
+            )}
+          </>
         )}
       </ScrollView>
 
       {/* Bus Modal */}
       <Modal
+        statusBarTranslucent
         visible={showBusModal}
         transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowBusModal(false)}
+        animationType="fade"
+        onRequestClose={() => !saveLoading && setShowBusModal(false)}
       >
         <TouchableOpacity 
           style={styles.modalOverlay}
           activeOpacity={1}
-          onPress={() => setShowBusModal(false)}
+          onPress={() => !saveLoading && setShowBusModal(false)}
         >
-          <TouchableOpacity 
-            activeOpacity={1}
-            onPress={() => {}}
-            style={styles.modalContainer}
-          >
+          <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <View style={styles.modalTitleContainer}>
                 <View style={styles.modalTitleIcon}>
@@ -636,13 +769,16 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
                   {editingBus ? 'Edit Bus' : 'Add New Bus'}
                 </ThemedText>
               </View>
-              <TouchableOpacity onPress={() => setShowBusModal(false)}>
+              <TouchableOpacity 
+                onPress={() => !saveLoading && setShowBusModal(false)}
+                disabled={saveLoading}
+              >
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
 
             <ScrollView 
-              style={{ flex: 1 }} 
+              style={{ maxHeight: '70%' }} 
               contentContainerStyle={styles.modalScrollContent}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
@@ -650,7 +786,7 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
               <ThemedText style={styles.fieldLabel}>
                 Bus Name <ThemedText style={styles.requiredStar}>*</ThemedText>
               </ThemedText>
-              <View style={styles.modalInputContainer}>
+              <View style={[styles.modalInputContainer, formErrors.name && styles.inputError]}>
                 <FontAwesome5 name="bus" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
                 <TextInput
                   style={styles.modalInput}
@@ -658,13 +794,17 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
                   placeholderTextColor={colors.textSecondary}
                   value={busFormData.name}
                   onChangeText={(text) => handleBusInputChange('name', text)}
+                  editable={!saveLoading}
                 />
               </View>
+              {formErrors.name && (
+                <ThemedText style={styles.errorText}>{formErrors.name}</ThemedText>
+              )}
 
               <ThemedText style={styles.fieldLabel}>
                 Bus Number <ThemedText style={styles.requiredStar}>*</ThemedText>
               </ThemedText>
-              <View style={styles.modalInputContainer}>
+              <View style={[styles.modalInputContainer, formErrors.busNumber && styles.inputError]}>
                 <FontAwesome5 name="hashtag" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
                 <TextInput
                   style={styles.modalInput}
@@ -672,13 +812,17 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
                   placeholderTextColor={colors.textSecondary}
                   value={busFormData.busNumber}
                   onChangeText={(text) => handleBusInputChange('busNumber', text)}
+                  editable={!saveLoading}
                 />
               </View>
+              {formErrors.busNumber && (
+                <ThemedText style={styles.errorText}>{formErrors.busNumber}</ThemedText>
+              )}
 
               <ThemedText style={styles.fieldLabel}>
                 Driver Name <ThemedText style={styles.requiredStar}>*</ThemedText>
               </ThemedText>
-              <View style={styles.modalInputContainer}>
+              <View style={[styles.modalInputContainer, formErrors.driverName && styles.inputError]}>
                 <FontAwesome5 name="user-tie" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
                 <TextInput
                   style={styles.modalInput}
@@ -686,23 +830,31 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
                   placeholderTextColor={colors.textSecondary}
                   value={busFormData.driverName}
                   onChangeText={(text) => handleBusInputChange('driverName', text)}
+                  editable={!saveLoading}
                 />
               </View>
+              {formErrors.driverName && (
+                <ThemedText style={styles.errorText}>{formErrors.driverName}</ThemedText>
+              )}
 
               <ThemedText style={styles.fieldLabel}>
                 Driver Phone <ThemedText style={styles.requiredStar}>*</ThemedText>
               </ThemedText>
-              <View style={styles.modalInputContainer}>
+              <View style={[styles.modalInputContainer, formErrors.driverPhone && styles.inputError]}>
                 <Feather name="phone" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
                 <TextInput
                   style={styles.modalInput}
-                  placeholder="Enter driver phone number"
+                  placeholder="Enter 10-digit phone number"
                   placeholderTextColor={colors.textSecondary}
                   value={busFormData.driverPhone}
                   onChangeText={(text) => handleBusInputChange('driverPhone', text)}
                   keyboardType="phone-pad"
+                  editable={!saveLoading}
                 />
               </View>
+              {formErrors.driverPhone && (
+                <ThemedText style={styles.errorText}>{formErrors.driverPhone}</ThemedText>
+              )}
 
               <View style={styles.routesContainer}>
                 <View style={styles.routesHeader}>
@@ -717,10 +869,12 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
                     placeholderTextColor={colors.textSecondary}
                     value={newRouteInput}
                     onChangeText={setNewRouteInput}
+                    editable={!saveLoading}
                   />
                   <TouchableOpacity
-                    style={styles.addRouteButton}
+                    style={[styles.addRouteButton, saveLoading && styles.disabledButton]}
                     onPress={addRoute}
+                    disabled={saveLoading}
                   >
                     <Ionicons name="add" size={20} color="#FFFFFF" />
                   </TouchableOpacity>
@@ -730,8 +884,9 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
                     <View key={index} style={styles.routeItem}>
                       <ThemedText style={styles.routeText}>{route}</ThemedText>
                       <TouchableOpacity
-                        style={styles.deleteRouteButton}
+                        style={[styles.deleteRouteButton, saveLoading && styles.disabledButton]}
                         onPress={() => deleteRoute(index)}
+                        disabled={saveLoading}
                       >
                         <Ionicons name="close-circle" size={20} color="#ef4444" />
                       </TouchableOpacity>
@@ -743,25 +898,47 @@ const BusDetails = ({ buses, isEditing, onBusesUpdate, showToast, colors }) => {
 
             <View style={styles.modalActions}>
               <TouchableOpacity
-                style={styles.modalCancelButton}
+                style={[styles.modalCancelButton, saveLoading && styles.disabledButton]}
                 onPress={() => setShowBusModal(false)}
+                disabled={saveLoading}
               >
                 <ThemedText style={styles.modalCancelText}>
                   Cancel
                 </ThemedText>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.modalSaveButton}
+                style={[styles.modalSaveButton, saveLoading && styles.disabledButton]}
                 onPress={saveBus}
+                disabled={saveLoading}
               >
-                <ThemedText style={styles.modalSaveText}>
-                  {editingBus ? 'Update Bus' : 'Add Bus'}
-                </ThemedText>
+                {saveLoading ? (
+                  <LoadingSpinner size={20} color="#FFFFFF" />
+                ) : (
+                  <ThemedText style={styles.modalSaveText}>
+                    {editingBus ? 'Update Bus' : 'Add Bus'}
+                  </ThemedText>
+                )}
               </TouchableOpacity>
             </View>
-          </TouchableOpacity>
+          </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Delete Bus Confirmation Modal */}
+      <ConfirmationModal
+        visible={deleteModalVisible}
+        onClose={() => {
+          setDeleteModalVisible(false)
+          setBusToDelete(null)
+        }}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Bus"
+        message={`Are you sure you want to delete the bus "${busToDelete?.name || 'this bus'}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+        loading={loading}
+      />
     </>
   )
 }

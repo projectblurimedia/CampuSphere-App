@@ -24,7 +24,7 @@ const sectionColors = [
   '#f63bd7', // Vision - Pink
 ]
 
-const SchoolInfo = ({ schoolInfo, isEditing, onInputChange, colors }) => {
+const SchoolInfo = ({ schoolInfo, isEditing, onInputChange, colors, loading }) => {
   const sections = [
     {
       title: 'Basic Information',
@@ -126,7 +126,7 @@ const SchoolInfo = ({ schoolInfo, isEditing, onInputChange, colors }) => {
           value: schoolInfo.address,
           key: 'address',
           icon: <Feather name="map-pin" size={16} color={sectionColors[2]} />,
-          type: 'multiline'
+          multiline: true
         },
         {
           label: 'Email',
@@ -189,7 +189,7 @@ const SchoolInfo = ({ schoolInfo, isEditing, onInputChange, colors }) => {
           value: schoolInfo.facilities,
           key: 'facilities',
           icon: <MaterialCommunityIcons name="home-group" size={16} color={sectionColors[4]} />,
-          type: 'multiline'
+          multiline: true
         }
       ]
     },
@@ -202,7 +202,7 @@ const SchoolInfo = ({ schoolInfo, isEditing, onInputChange, colors }) => {
           label: '',
           value: schoolInfo.mission,
           key: 'mission',
-          type: 'multiline'
+          multiline: true
         }
       ]
     },
@@ -215,7 +215,7 @@ const SchoolInfo = ({ schoolInfo, isEditing, onInputChange, colors }) => {
           label: '',
           value: schoolInfo.vision,
           key: 'vision',
-          type: 'multiline'
+          multiline: true
         }
       ]
     },
@@ -409,14 +409,15 @@ const SchoolInfo = ({ schoolInfo, isEditing, onInputChange, colors }) => {
       fontWeight: '500',
       textAlign: 'center',
     },
+    disabledInput: {
+      opacity: 0.7,
+    },
   }), [colors])
 
   const renderDisplayField = (fieldConfig, sectionColor) => {
-    const { label, value, key, icon: fieldIcon, type = 'text' } = fieldConfig
+    const { label, value, key, icon: fieldIcon, multiline = false } = fieldConfig
     
-    if (!value && value !== 0) {
-      return null
-    }
+    if (!value && value !== 0) return null
 
     const fieldIconElement = fieldIcon ? React.cloneElement(fieldIcon, { color: 'white' }) : null
     const displayStyle = {
@@ -424,8 +425,8 @@ const SchoolInfo = ({ schoolInfo, isEditing, onInputChange, colors }) => {
       backgroundColor: sectionColor + '08',
     }
 
-    if (type === 'multiline' && label === 'Available Facilities') {
-      const facilities = value.split(', ').map(facility => facility.trim())
+    if (multiline && label === 'Available Facilities') {
+      const facilities = value.split(',').map(facility => facility.trim())
       return (
         <View key={key} style={[styles.displayCard, displayStyle, { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 16 }]}>
           {fieldIconElement && (
@@ -449,7 +450,7 @@ const SchoolInfo = ({ schoolInfo, isEditing, onInputChange, colors }) => {
       )
     }
 
-    if (type === 'multiline') {
+    if (multiline) {
       return (
         <View key={key} style={[styles.displayCard, displayStyle, { flexDirection: 'row', alignItems: 'flex-start' }]}>
           {fieldIconElement && (
@@ -485,12 +486,8 @@ const SchoolInfo = ({ schoolInfo, isEditing, onInputChange, colors }) => {
   }
 
   const renderEditField = (fieldConfig, sectionColor) => {
-    const { label, value, key, icon: fieldIcon, type = 'text' } = fieldConfig
+    const { label, value, key, icon: fieldIcon, multiline = false } = fieldConfig
     
-    if (!value && value !== 0) {
-      return null
-    }
-
     const fieldIconElement = fieldIcon ? React.cloneElement(fieldIcon, { color: sectionColor }) : null
     const fieldLabelRow = label ? (
       <View style={styles.fieldLabelRow}>
@@ -511,19 +508,21 @@ const SchoolInfo = ({ schoolInfo, isEditing, onInputChange, colors }) => {
         <ThemedInput
           value={value}
           onChangeText={(text) => onInputChange(key, text)}
-          multiline={type === 'multiline'}
-          numberOfLines={type === 'multiline' ? 3 : 1}
+          multiline={multiline}
+          numberOfLines={multiline ? 3 : 1}
           style={[
             styles.fieldInput,
-            type === 'multiline' && styles.multilineInput,
+            multiline && styles.multilineInput,
             { 
               color: colors.text,
               backgroundColor: colors.inputBackground,
               borderColor: colors.border,
               borderWidth: 1,
             },
+            loading && styles.disabledInput,
           ]}
           placeholderTextColor={colors.textSecondary}
+          editable={!loading}
         />
       </View>
     )

@@ -581,3 +581,71 @@ model Event {
   @@index([createdAt])
   @@index([date, createdAt])
 }
+
+model School {
+  id                    String    @id @default(uuid())
+  name                  String    @default("")
+  establishedYear       String    @default("")
+  affiliation           String    @default("")
+  board                 String    @default("")
+
+  // Principal Details
+  principal             String    @default("")
+  principalEmail        String    @default("")
+  principalPhone        String    @default("")
+  vicePrincipal         String    @default("")
+  vicePrincipalEmail    String    @default("")
+  vicePrincipalPhone    String    @default("")
+
+  // Contact Details
+  address               String    @default("")
+  email                 String    @default("")
+  phone                 String    @default("")
+  website               String    @default("")
+
+  // Timings
+  schoolHours           String    @default("")
+  officeHours           String    @default("")
+  workingDays           String    @default("")
+  assemblyTime          String    @default("")
+
+  // Other Info
+  facilities            String    @default("")
+  mission               String    @default("")
+  vision                String    @default("")
+  motto                 String    @default("")
+  campusArea            String    @default("")
+  libraryBooks          String    @default("")
+  computerSystems       String    @default("")
+
+  // Images stored as JSON array of strings
+  images                Json      @default("[]")
+
+  // Relations
+  buses                 Bus[]
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Ensure only one school record exists (singleton pattern)
+  @@unique([id])
+}
+
+model Bus {
+  id                    String    @id @default(uuid())
+  schoolId              String
+  school                School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  
+  name                  String
+  busNumber             String
+  driverName            String
+  driverPhone           String
+  routes                Json      @default("[]") // Array of strings stored as JSON
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Indexes for performance
+  @@index([schoolId])
+  @@index([busNumber])
+}

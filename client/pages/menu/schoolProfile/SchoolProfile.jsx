@@ -1,12 +1,12 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import {
   View,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   Platform,
   StatusBar,
   Modal,
+  BackHandler,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -20,9 +20,11 @@ import {
 import { useTheme } from '@/hooks/useTheme'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import ConfirmationModal from '@/components/ui/ConfirmationModal'
 import SchoolInfo from './SchoolInfo'
 import SchoolImages from './SchoolImages'
 import BusDetails from './BusDetails'
+import CreateSchool from './CreateSchool'
 import axiosApi from '@/utils/axiosApi'
 
 export default function SchoolProfile({ visible, onClose }) {
@@ -34,9 +36,17 @@ export default function SchoolProfile({ visible, onClose }) {
     buses: false
   })
   const [loading, setLoading] = useState(false)
+  const [actionLoading, setActionLoading] = useState(false)
   const [toast, setToast] = useState(null)
+  const [discardModalVisible, setDiscardModalVisible] = useState(false)
+  const [cancelEditModalVisible, setCancelEditModalVisible] = useState(false)
+  const [pendingTabChange, setPendingTabChange] = useState(null)
+  const [schoolExists, setSchoolExists] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createLoading, setCreateLoading] = useState(false)
   
   const [schoolInfo, setSchoolInfo] = useState({
+    id: null,
     name: '',
     establishedYear: '',
     affiliation: '',
@@ -66,20 +76,78 @@ export default function SchoolProfile({ visible, onClose }) {
     buses: []
   })
 
+  // Track if there are unsaved changes
+  const hasUnsavedChanges = Object.values(editModes).some(mode => mode === true)
+
   useEffect(() => {
     if (visible) {
-      fetchSchoolProfile()
+      checkSchoolExists()
     }
   }, [visible])
+
+  // Handle back button on Android
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (visible) {
+        handleBackPress()
+        return true
+      }
+      return false
+    })
+
+    return () => backHandler.remove()
+  }, [visible, hasUnsavedChanges, schoolExists, showCreateModal])
+
+  const checkSchoolExists = async () => {
+    try {
+      setLoading(true)
+      const response = await axiosApi.get('/school')
+      if (response.data.success && response.data.data) {
+        const data = response.data.data
+        // Ensure arrays exist
+        const processedData = {
+          ...data,
+          images: Array.isArray(data.images) ? data.images : [],
+          buses: Array.isArray(data.buses) ? data.buses : []
+        }
+        
+        // Check if school has any data (not just default empty values)
+        const hasData = processedData.name || processedData.establishedYear || 
+                       processedData.principal || processedData.address
+        setSchoolExists(hasData)
+        if (hasData) {
+          setSchoolInfo(processedData)
+        }
+      } else {
+        setSchoolExists(false)
+        // Reset to empty state with arrays
+        setSchoolInfo(prev => ({
+          ...prev,
+          images: [],
+          buses: []
+        }))
+      }
+    } catch (error) {
+      console.error('Check school exists error:', error)
+      setSchoolExists(false)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const fetchSchoolProfile = async () => {
     try {
       setLoading(true)
       const response = await axiosApi.get('/school')
-      if (response.data.success) {
-        setSchoolInfo(response.data.data)
-      } else {
-        showToast('Failed to load school profile', 'error')
+      if (response.data.success && response.data.data) {
+        const data = response.data.data
+        const processedData = {
+          ...data,
+          images: Array.isArray(data.images) ? data.images : [],
+          buses: Array.isArray(data.buses) ? data.buses : []
+        }
+        setSchoolInfo(processedData)
+        setSchoolExists(true)
       }
     } catch (error) {
       console.error('Fetch school profile error:', error)
@@ -89,69 +157,114 @@ export default function SchoolProfile({ visible, onClose }) {
     }
   }
 
+  const handleCreateSchool = async (schoolData) => {
+    try {
+      setCreateLoading(true)
+      
+      const response = await axiosApi.post('/school', schoolData)
+      
+      if (response.data.success) {
+        setShowCreateModal(false)
+        const data = response.data.data
+        const processedData = {
+          ...data,
+          images: Array.isArray(data.images) ? data.images : [],
+          buses: Array.isArray(data.buses) ? data.buses : []
+        }
+        setSchoolInfo(processedData)
+        setSchoolExists(true)
+        showToast('School profile created successfully!', 'success')
+      } else {
+        showToast(response.data.message || 'Failed to create school profile', 'error')
+      }
+    } catch (error) {
+      console.error('Create school error:', error)
+      showToast(error.response?.data?.message || 'Failed to create school profile', 'error')
+    } finally {
+      setCreateLoading(false)
+    }
+  }
+
   const showToast = (message, type = 'error') => {
     setToast({ message, type })
   }
 
-  const handleClose = () => {
-    const hasUnsavedChanges = Object.values(editModes).some(mode => mode === true)
-    if (hasUnsavedChanges) {
-      Alert.alert(
-        'Discard Changes',
-        'You have unsaved changes. Are you sure you want to discard them?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Discard',
-            style: 'destructive',
-            onPress: () => {
-              setEditModes({ info: false, images: false, buses: false })
-              onClose()
-              fetchSchoolProfile()
-            }
-          }
-        ]
-      )
+  const handleBackPress = () => {
+    if (showCreateModal) {
+      setShowCreateModal(false)
+    } else if (hasUnsavedChanges) {
+      setDiscardModalVisible(true)
     } else {
       onClose()
     }
   }
 
+  const handleClose = () => {
+    if (hasUnsavedChanges) {
+      setDiscardModalVisible(true)
+    } else {
+      onClose()
+    }
+  }
+
+  const handleDiscardConfirm = () => {
+    setDiscardModalVisible(false)
+    setEditModes({ info: false, images: false, buses: false })
+    fetchSchoolProfile()
+    onClose()
+  }
+
   const toggleEditMode = (tab) => {
-    setEditModes(prev => ({
-      ...prev,
-      [tab]: !prev[tab]
-    }))
+    if (editModes[tab]) {
+      // Turning off edit mode - check for unsaved changes
+      if (tab === 'info') {
+        // For info tab, we need to check if there are actual changes
+        const hasChanges = JSON.stringify(schoolInfo) !== JSON.stringify(originalSchoolInfo)
+        if (hasChanges) {
+          setPendingTabChange(tab)
+          setCancelEditModalVisible(true)
+          return
+        }
+      }
+      setEditModes(prev => ({ ...prev, [tab]: false }))
+    } else {
+      // Turning on edit mode - save original data for comparison
+      if (tab === 'info') {
+        setOriginalSchoolInfo({ ...schoolInfo })
+      }
+      setEditModes(prev => ({ ...prev, [tab]: true }))
+    }
+  }
+
+  const [originalSchoolInfo, setOriginalSchoolInfo] = useState(null)
+
+  const handleCancelEditConfirm = () => {
+    setCancelEditModalVisible(false)
+    if (pendingTabChange === 'info') {
+      // Restore original data
+      if (originalSchoolInfo) {
+        setSchoolInfo(originalSchoolInfo)
+      }
+    }
+    setEditModes(prev => ({ ...prev, [pendingTabChange]: false }))
+    setPendingTabChange(null)
+    setOriginalSchoolInfo(null)
   }
 
   const cancelEdit = (tab) => {
-    Alert.alert(
-      'Discard Changes',
-      'Are you sure you want to discard all changes?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Discard',
-          style: 'destructive',
-          onPress: () => {
-            setEditModes(prev => ({ ...prev, [tab]: false }))
-            if (tab === 'info') {
-              fetchSchoolProfile()
-            }
-          }
-        }
-      ]
-    )
+    setPendingTabChange(tab)
+    setCancelEditModalVisible(true)
   }
 
   const saveSchoolInfo = async () => {
     try {
-      setLoading(true)
+      setActionLoading(true)
       const { buses, images, ...schoolData } = schoolInfo
       
       const response = await axiosApi.put('/school', schoolData)
       if (response.data.success) {
         setEditModes(prev => ({ ...prev, info: false }))
+        setOriginalSchoolInfo(null)
         showToast('School profile updated successfully!', 'success')
       } else {
         showToast(response.data.message || 'Failed to update school profile', 'error')
@@ -160,30 +273,30 @@ export default function SchoolProfile({ visible, onClose }) {
       console.error('Update school profile error:', error)
       showToast(error.response?.data?.message || 'Failed to update school profile', 'error')
     } finally {
-      setLoading(false)
+      setActionLoading(false)
     }
   }
 
-  const updateImages = (newImages) => {
+  const updateImages = useCallback((newImages) => {
     setSchoolInfo(prev => ({
       ...prev,
-      images: newImages
+      images: Array.isArray(newImages) ? newImages : []
     }))
-  }
+  }, [])
 
-  const updateBuses = (newBuses) => {
+  const updateBuses = useCallback((newBuses) => {
     setSchoolInfo(prev => ({
       ...prev,
-      buses: newBuses
+      buses: Array.isArray(newBuses) ? newBuses : []
     }))
-  }
+  }, [])
 
-  const handleInputChange = (field, value) => {
+  const handleInputChange = useCallback((field, value) => {
     setSchoolInfo(prev => ({
       ...prev,
       [field]: value
     }))
-  }
+  }, [])
 
   const styles = useMemo(() => StyleSheet.create({
     container: {
@@ -235,6 +348,16 @@ export default function SchoolProfile({ visible, onClose }) {
       borderWidth: 1,
       borderColor: 'rgba(255, 255, 255, 0.4)',
     },
+    createButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'rgba(255, 255, 255, 0.18)',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.4)',
+    },
     tabContainer: {
       flexDirection: 'row',
       paddingHorizontal: 10,
@@ -254,9 +377,6 @@ export default function SchoolProfile({ visible, onClose }) {
       marginHorizontal: 6,
       paddingVertical: 8,
     },
-    activeTab: {
-      // Border color will be set dynamically based on active tab
-    },
     tabIconContainer: {
       width: 36,
       height: 36,
@@ -268,9 +388,7 @@ export default function SchoolProfile({ visible, onClose }) {
       fontSize: 12,
       fontWeight: '600',
     },
-    activeTabText: {
-      // Color will be set dynamically based on active tab
-    },
+    activeTabText: {},
     inactiveTabText: {
       color: colors.textSecondary,
     },
@@ -316,9 +434,10 @@ export default function SchoolProfile({ visible, onClose }) {
       }),
     },
     discardButton: {
-      borderWidth: 1,
+      backgroundColor: '#ef4444',
     },
     saveButton: {
+      backgroundColor: colors.tint || '#3b82f6',
       ...Platform.select({
         ios: {
           shadowColor: '#1d9bf0',
@@ -334,6 +453,7 @@ export default function SchoolProfile({ visible, onClose }) {
     buttonText: {
       fontSize: 16,
       fontWeight: '500',
+      color: '#FFFFFF',
     },
     loadingContainer: {
       flex: 1,
@@ -341,25 +461,56 @@ export default function SchoolProfile({ visible, onClose }) {
       alignItems: 'center',
       backgroundColor: colors.background,
     },
-    toastContainer: {
-      position: 'absolute',
-      zIndex: 10000,
-    },
     editModeBadge: {
       position: 'absolute',
       top: 4,
       right: 4,
       width: 12,
       height: 12,
-      borderRadius: 8,
+      borderRadius: 6,
       backgroundColor: '#ef4444',
+      borderWidth: 2,
+      borderColor: '#FFFFFF',
+    },
+    disabledButton: {
+      opacity: 0.5,
+    },
+    emptyStateContainer: {
+      flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
+      paddingHorizontal: 32,
     },
-    editModeBadgeText: {
+    emptyIcon: {
+      marginBottom: 24,
+    },
+    emptyTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: colors.text,
+      textAlign: 'center',
+      marginBottom: 12,
+    },
+    emptyDescription: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      marginBottom: 32,
+      lineHeight: 20,
+    },
+    createNowButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 24,
+      paddingVertical: 16,
+      borderRadius: 16,
+      backgroundColor: colors.primary,
+    },
+    createNowText: {
+      fontSize: 16,
+      fontWeight: '600',
       color: '#FFFFFF',
-      fontSize: 10,
-      fontWeight: 'bold',
     },
   }), [colors])
 
@@ -391,6 +542,34 @@ export default function SchoolProfile({ visible, onClose }) {
   ]
 
   const renderContent = () => {
+    if (!schoolExists) {
+      return (
+        <View style={styles.emptyStateContainer}>
+          <FontAwesome5 name="school" size={80} color={colors.primary + '40'} style={styles.emptyIcon} />
+          <ThemedText style={styles.emptyTitle}>
+            No School Profile Yet
+          </ThemedText>
+          <ThemedText style={styles.emptyDescription}>
+            Create your school profile to manage information, images, and transportation details all in one place.
+          </ThemedText>
+          <TouchableOpacity
+            style={styles.createNowButton}
+            onPress={() => setShowCreateModal(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="add-circle" size={24} color="#FFFFFF" />
+            <ThemedText style={styles.createNowText}>
+              Create School Profile
+            </ThemedText>
+          </TouchableOpacity>
+        </View>
+      )
+    }
+
+    // Ensure arrays exist before passing to components
+    const safeImages = Array.isArray(schoolInfo.images) ? schoolInfo.images : []
+    const safeBuses = Array.isArray(schoolInfo.buses) ? schoolInfo.buses : []
+
     switch (activeTab) {
       case 'info':
         return (
@@ -399,26 +578,33 @@ export default function SchoolProfile({ visible, onClose }) {
             isEditing={editModes.info}
             onInputChange={handleInputChange}
             colors={colors}
+            loading={actionLoading}
           />
         )
       case 'images':
         return (
           <SchoolImages
-            images={schoolInfo.images}
+            images={safeImages}
             isEditing={editModes.images}
             onImagesUpdate={updateImages}
             showToast={showToast}
             colors={colors}
+            loading={actionLoading}
+            setActionLoading={setActionLoading}
+            schoolExists={schoolExists}
           />
         )
       case 'buses':
         return (
           <BusDetails
-            buses={schoolInfo.buses}
+            buses={safeBuses}
             isEditing={editModes.buses}
             onBusesUpdate={updateBuses}
             showToast={showToast}
             colors={colors}
+            loading={actionLoading}
+            setActionLoading={setActionLoading}
+            schoolExists={schoolExists}
           />
         )
       default:
@@ -440,6 +626,8 @@ export default function SchoolProfile({ visible, onClose }) {
     const isActive = activeTab === tab.key
     const isEditing = editModes[tab.key]
     
+    if (!schoolExists) return null
+    
     return (
       <TouchableOpacity
         key={tab.key}
@@ -452,6 +640,7 @@ export default function SchoolProfile({ visible, onClose }) {
           }
         ]}
         onPress={() => setActiveTab(tab.key)}
+        disabled={actionLoading}
       >
         <View style={styles.tabIconContainer}>
           <IconComponent
@@ -459,11 +648,7 @@ export default function SchoolProfile({ visible, onClose }) {
             size={20}
             color={isActive ? tab.iconColor : colors.textSecondary}
           />
-          {isEditing && (
-            <View style={styles.editModeBadge}>
-              <ThemedText style={styles.editModeBadgeText}></ThemedText>
-            </View>
-          )}
+          {isEditing && <View style={styles.editModeBadge} />}
         </View>
         <ThemedText
           type='subtitle'
@@ -479,6 +664,8 @@ export default function SchoolProfile({ visible, onClose }) {
   }
 
   const renderActionButtons = () => {
+    if (!schoolExists) return null
+    
     const currentEditMode = editModes[activeTab]
     
     if (!currentEditMode) return null
@@ -496,22 +683,28 @@ export default function SchoolProfile({ visible, onClose }) {
       <View style={styles.actionButtonsContainer}>
         <View style={styles.actionButtons}>
           <TouchableOpacity
-            style={[styles.button, styles.discardButton, { borderColor: colors.border, backgroundColor: colors?.danger || '#ef4444' }]}
+            style={[styles.button, styles.discardButton, actionLoading && styles.disabledButton]}
             onPress={() => cancelEdit(activeTab)}
+            disabled={actionLoading}
           >
-            <Ionicons name="trash-outline" size={20} color={'#FFFFFF'} />
-            <ThemedText style={[styles.buttonText, { color: '#FFFFFF' }]}>
+            <Ionicons name="close-outline" size={20} color="#FFFFFF" />
+            <ThemedText style={styles.buttonText}>
               Discard
             </ThemedText>
           </TouchableOpacity>
        
           <TouchableOpacity
-            style={[styles.button, styles.saveButton, { backgroundColor: colors.tint || '#3b82f6' }]}
+            style={[styles.button, styles.saveButton, actionLoading && styles.disabledButton]}
             onPress={handleSave}
+            disabled={actionLoading}
           >
-            <Feather name="save" size={20} color="#FFFFFF" />
-            <ThemedText style={[styles.buttonText, { color: '#FFFFFF' }]}>
-              Save Changes
+            {actionLoading ? (
+              <LoadingSpinner size={20} color="#FFFFFF" />
+            ) : (
+              <Feather name="check" size={20} color="#FFFFFF" />
+            )}
+            <ThemedText style={styles.buttonText}>
+              {actionLoading ? 'Saving...' : 'Save Changes'}
             </ThemedText>
           </TouchableOpacity>
         </View>
@@ -523,7 +716,7 @@ export default function SchoolProfile({ visible, onClose }) {
     <Modal
       visible={visible}
       animationType="fade"
-      onRequestClose={handleClose}
+      onRequestClose={handleBackPress}
       statusBarTranslucent
     >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -535,35 +728,54 @@ export default function SchoolProfile({ visible, onClose }) {
         >
           <SafeAreaView edges={['top']}>
             <View style={styles.headerRow}>
-              <TouchableOpacity style={styles.backButton} onPress={handleClose}>
+              <TouchableOpacity 
+                style={[styles.backButton, actionLoading && styles.disabledButton]} 
+                onPress={handleBackPress}
+                disabled={actionLoading}
+              >
                 <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
               </TouchableOpacity>
               <View style={styles.titleContainer}>
                 <ThemedText type='subtitle' style={styles.title}>Campus Profile</ThemedText>
-                <ThemedText style={styles.subtitle}>Manage school information</ThemedText>
+                <ThemedText style={styles.subtitle}>
+                  {schoolExists ? 'Manage school information' : 'Set up your school'}
+                </ThemedText>
               </View>
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={() => toggleEditMode(activeTab)}
-              >
-                <Feather
-                  name={editModes[activeTab] ? "x" : "edit-2"}
-                  size={20}
-                  color="#FFFFFF"
-                />
-              </TouchableOpacity>
+              {schoolExists ? (
+                <TouchableOpacity
+                  style={[styles.editButton, actionLoading && styles.disabledButton]}
+                  onPress={() => toggleEditMode(activeTab)}
+                  disabled={actionLoading}
+                >
+                  <Feather
+                    name={editModes[activeTab] ? "x" : "edit-2"}
+                    size={20}
+                    color="#FFFFFF"
+                  />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.createButton, actionLoading && styles.disabledButton]}
+                  onPress={() => setShowCreateModal(true)}
+                  disabled={actionLoading}
+                >
+                  <Ionicons name="add" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+              )}
             </View>
           </SafeAreaView>
         </LinearGradient>
 
-        <View style={styles.tabContainer}>
-          {tabs.map(renderTab)}
-        </View>
+        {schoolExists && (
+          <View style={styles.tabContainer}>
+            {tabs.map(renderTab)}
+          </View>
+        )}
 
         <View style={styles.contentContainer}>
           {loading ? (
             <View style={styles.loadingContainer}>
-              <LoadingSpinner size={40} color={colors.primary} />
+              <LoadingSpinner size={40} color={colors.primary} message="Loading school profile..." />
             </View>
           ) : (
             renderContent()
@@ -572,7 +784,44 @@ export default function SchoolProfile({ visible, onClose }) {
 
         {renderActionButtons()}
 
-        {/* Toast Notification - Fixed positioning at bottom right */}
+        {/* Discard Changes Confirmation Modal */}
+        <ConfirmationModal
+          visible={discardModalVisible}
+          onClose={() => setDiscardModalVisible(false)}
+          onConfirm={handleDiscardConfirm}
+          title="Discard Changes"
+          message="You have unsaved changes. Are you sure you want to discard them?"
+          confirmText="Discard"
+          cancelText="Cancel"
+          type="warning"
+        />
+
+        {/* Cancel Edit Confirmation Modal */}
+        <ConfirmationModal
+          visible={cancelEditModalVisible}
+          onClose={() => {
+            setCancelEditModalVisible(false)
+            setPendingTabChange(null)
+          }}
+          onConfirm={handleCancelEditConfirm}
+          title="Cancel Editing"
+          message="Are you sure you want to cancel editing? All unsaved changes will be lost."
+          confirmText="Discard"
+          cancelText="Keep Editing"
+          type="warning"
+        />
+
+        {/* Create School Modal */}
+        <CreateSchool
+          visible={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onSubmit={handleCreateSchool}
+          loading={createLoading}
+          colors={colors}
+          showToast={showToast}
+        />
+
+        {/* Toast Notification */}
         <ToastNotification
           visible={!!toast}
           type={toast?.type}

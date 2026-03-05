@@ -29,8 +29,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 const CashflowForm = ({ 
   visible, 
   onClose, 
-  onSave,
-  type, // 'Income' or 'Expense'
+  type, 
   title,
   subtitle,
   transaction = null,
@@ -333,9 +332,7 @@ const CashflowForm = ({
       }
       
       if (response.data) {
-        showToast(`${isEditing ? 'Updated' : 'Added'} successfully!`, 'success')
-        onSave(response.data)
-        
+        showToast(`${isEditing ? 'Updated' : 'Added'} successfully!`, 'success')        
         // Reset form
         resetForm()
         

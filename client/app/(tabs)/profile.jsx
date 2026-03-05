@@ -229,7 +229,7 @@ export default function Profile() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.loadingContainer}>
-          <View style={[styles.loadingCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+          <View style={[styles.loadingCard]}>
             <ActivityIndicator size="large" color={colors.tint} />
             <ThemedText style={[styles.loadingText, { color: colors.textSecondary }]}>
               Loading profile...
@@ -652,12 +652,11 @@ const styles = StyleSheet.create({
   loadingCard: {
     padding: 30,
     borderRadius: 20,
-    borderWidth: 1,
     alignItems: 'center',
     gap: 16,
   },
   loadingText: {
     fontSize: 14,
-    fontFamily: 'Poppins-Regular',
+    fontFamily: 'Poppins-Medium',
   },
 })

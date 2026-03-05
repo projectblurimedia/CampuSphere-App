@@ -28,7 +28,6 @@ export default function QuickActions({ actions = [] }) {
 
   const handleModalClose = () => {
     setActiveModal(null)
-    showToast('Operation completed successfully', 'success')
     // Refresh dashboard data
     if (navigation.getParent()?.params?.refresh) {
       navigation.getParent().params.refresh()

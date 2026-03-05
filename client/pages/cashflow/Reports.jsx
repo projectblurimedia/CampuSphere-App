@@ -8,7 +8,8 @@ import {
   Modal,
   ActivityIndicator,
   FlatList,
-  RefreshControl
+  RefreshControl,
+  Platform
 } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { Ionicons, Feather, MaterialIcons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons'
@@ -92,17 +93,18 @@ const Reports = ({ visible, onClose }) => {
     limit: 50
   })
 
+  // Corrected icons - using valid MaterialIcons and MaterialCommunityIcons
   const types = [
-    { label: 'All', value: 'All', color: '#3b82f6', icon: 'swap-vert' },
-    { label: 'Income', value: 'Income', color: '#10b981', icon: 'trending-up' },
-    { label: 'Expense', value: 'Expense', color: '#ef4444', icon: 'trending-down' }
+    { label: 'All', value: 'All', color: '#3b82f6', icon: 'apps', iconFamily: 'MaterialIcons' },
+    { label: 'Income', value: 'Income', color: '#10b981', icon: 'trending-up', iconFamily: 'MaterialCommunityIcons' },
+    { label: 'Expense', value: 'Expense', color: '#ef4444', icon: 'trending-down', iconFamily: 'MaterialCommunityIcons' }
   ]
 
   const dateRanges = [
-    { label: 'Today', value: 'Today', icon: 'calendar-today' },
-    { label: 'Month', value: 'Month', icon: 'calendar-month' },
-    { label: 'Year', value: 'Year', icon: 'calendar-today' },
-    { label: 'Custom Range', value: 'Custom Range', icon: 'calendar-month' }
+    { label: 'Today', value: 'Today', icon: 'calendar-today', iconFamily: 'MaterialIcons' },
+    { label: 'Month', value: 'Month', icon: 'calendar-month', iconFamily: 'MaterialCommunityIcons' },
+    { label: 'Year', value: 'Year', icon: 'calendar', iconFamily: 'MaterialCommunityIcons' },
+    { label: 'Custom Range', value: 'Custom Range', icon: 'calendar-range', iconFamily: 'MaterialCommunityIcons' }
   ]
 
   // Month names
@@ -437,9 +439,6 @@ const Reports = ({ visible, onClose }) => {
         mimeType: 'application/pdf', 
         dialogTitle: 'Share PDF Report',
       })
-
-      showToast('PDF generated successfully', 'success')
-
     } catch (error) {
       console.error('Error generating PDF:', error)
       showToast('Failed to generate PDF: ' + error.message, 'error')
@@ -580,7 +579,22 @@ const Reports = ({ visible, onClose }) => {
     }
   }
 
-  const renderFilterButton = ({ icon, label, onPress, disabled = false, customStyle = {} }) => (
+  const getIconComponent = (iconFamily, iconName, size, color) => {
+    switch (iconFamily) {
+      case 'MaterialIcons':
+        return <MaterialIcons name={iconName} size={size} color={color} />
+      case 'MaterialCommunityIcons':
+        return <MaterialCommunityIcons name={iconName} size={size} color={color} />
+      case 'Feather':
+        return <Feather name={iconName} size={size} color={color} />
+      case 'Ionicons':
+        return <Ionicons name={iconName} size={size} color={color} />
+      default:
+        return <MaterialIcons name={iconName} size={size} color={color} />
+    }
+  }
+
+  const renderFilterButton = ({ icon, iconFamily, label, onPress, disabled = false, customStyle = {} }) => (
     <TouchableOpacity
       style={[
         styles.filterButton,
@@ -592,7 +606,7 @@ const Reports = ({ visible, onClose }) => {
       disabled={disabled}
     >
       <View style={styles.filterButtonContent}>
-        <MaterialIcons name={icon} size={18} color={disabled ? colors.textSecondary : colors.text} />
+        {getIconComponent(iconFamily, icon, 18, disabled ? colors.textSecondary : colors.text)}
         <ThemedText style={[
           styles.filterButtonText,
           { color: disabled ? colors.textSecondary : colors.text }
@@ -692,15 +706,33 @@ const Reports = ({ visible, onClose }) => {
     return dateRange
   }
 
+  const getTypeIcon = () => {
+    const found = types.find(t => t.value === type)
+    return {
+      icon: found?.icon || 'apps',
+      iconFamily: found?.iconFamily || 'MaterialIcons'
+    }
+  }
+
+  const getDateRangeIcon = () => {
+    const found = dateRanges.find(d => d.value === dateRange)
+    return {
+      icon: found?.icon || 'calendar-today',
+      iconFamily: found?.iconFamily || 'MaterialIcons'
+    }
+  }
+
   const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.background,
     },
     header: {
-      paddingTop: 55,
-      paddingBottom: 20,
+      paddingTop: Platform.OS === 'ios' ? 75 : 55,
+      paddingBottom: 16,
       paddingHorizontal: 20,
+      borderBottomLeftRadius: 24,
+      borderBottomRightRadius: 24,
     },
     headerRow: {
       flexDirection: 'row',
@@ -722,13 +754,13 @@ const Reports = ({ visible, onClose }) => {
       alignItems: 'center',
     },
     title: {
-      fontSize: 20,
+      fontSize: 18,
       color: '#FFFFFF',
       fontFamily: 'Poppins-SemiBold',
     },
     subtitle: {
-      marginTop: 4,
-      fontSize: 14,
+      marginTop: 2,
+      fontSize: 12,
       color: 'rgba(255,255,255,0.9)',
     },
     contentContainer: {
@@ -1327,6 +1359,7 @@ const Reports = ({ visible, onClose }) => {
               const isSelected = selectedValue === getValue(item)
               const label = getLabel(item)
               const icon = item.icon
+              const iconFamily = item.iconFamily
 
               return (
                 <TouchableOpacity
@@ -1340,7 +1373,11 @@ const Reports = ({ visible, onClose }) => {
                   <View style={styles.dropdownItemLeft}>
                     {icon && (
                       <View style={styles.dropdownIcon}>
-                        <MaterialCommunityIcons name={icon} size={18} color="#FFFFFF" />
+                        {iconFamily === 'MaterialIcons' ? (
+                          <MaterialIcons name={icon} size={18} color="#FFFFFF" />
+                        ) : (
+                          <MaterialCommunityIcons name={icon} size={18} color="#FFFFFF" />
+                        )}
                       </View>
                     )}
                     <ThemedText style={[
@@ -1513,10 +1550,13 @@ const Reports = ({ visible, onClose }) => {
     />
   )
 
+  const typeIcon = getTypeIcon()
+  const dateRangeIcon = getDateRangeIcon()
+
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="fade"
       onRequestClose={onClose}
       statusBarTranslucent
     >
@@ -1527,7 +1567,7 @@ const Reports = ({ visible, onClose }) => {
         >
           <View style={styles.headerRow}>
             <TouchableOpacity style={styles.backButton} onPress={onClose}>
-              <FontAwesome5 name="chevron-left" size={20} color="#FFFFFF" />
+              <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
             </TouchableOpacity>
             <View style={styles.titleContainer}>
               <ThemedText style={styles.title}>Financial Reports</ThemedText>
@@ -1553,29 +1593,34 @@ const Reports = ({ visible, onClose }) => {
           {/* Filters */}
           <View style={styles.filtersContainer}>
             {renderFilterButton({
-              icon: types.find(t => t.value === type)?.icon || 'swap-vert',
+              icon: typeIcon.icon,
+              iconFamily: typeIcon.iconFamily,
               label: types.find(t => t.value === type)?.label || 'All',
               onPress: () => setShowTypeDropdown(true)
             })}
             {renderFilterButton({
-              icon: 'date-range',
+              icon: dateRangeIcon.icon,
+              iconFamily: dateRangeIcon.iconFamily,
               label: dateRange,
               onPress: () => setShowDateRangeDropdown(true)
             })}
             {renderFilterButton({
               icon: 'category',
+              iconFamily: 'MaterialIcons',
               label: category.name.length > 15 ? category.name.substring(0, 12) + '...' : category.name,
               onPress: () => setShowCategoryDropdown(true),
               disabled: fetchingCategories
             })}
             {renderFilterButton({
               icon: 'inventory',
+              iconFamily: 'MaterialIcons',
               label: item.name.length > 15 ? item.name.substring(0, 12) + '...' : item.name,
               onPress: () => setShowItemDropdown(true),
               disabled: !category._id || fetchingItems
             })}
             {renderFilterButton({
-              icon: dateRanges.find(d => d.value === dateRange)?.icon || 'calendar-today',
+              icon: dateRangeIcon.icon,
+              iconFamily: dateRangeIcon.iconFamily,
               label: getAppliedDisplayDate(),
               onPress: handleDateButtonPress,
               customStyle: { width: datePickerWidth }

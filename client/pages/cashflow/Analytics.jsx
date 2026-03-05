@@ -7,6 +7,7 @@ import {
   Dimensions,
   Modal,
   ActivityIndicator,
+  Platform,
 } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { Feather, FontAwesome5, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons'
@@ -334,9 +335,11 @@ const Analytics = ({ visible, onClose }) => {
       backgroundColor: colors.background,
     },
     header: {
-      paddingTop: 55,
-      paddingBottom: 20,
+      paddingTop: Platform.OS === 'ios' ? 75 : 55,
+      paddingBottom: 16,
       paddingHorizontal: 20,
+      borderBottomLeftRadius: 24,
+      borderBottomRightRadius: 24,
     },
     headerRow: {
       flexDirection: 'row',
@@ -358,13 +361,13 @@ const Analytics = ({ visible, onClose }) => {
       alignItems: 'center',
     },
     title: {
-      fontSize: 20,
+      fontSize: 18,
       color: '#FFFFFF',
       fontFamily: 'Poppins-SemiBold',
     },
     subtitle: {
-      marginTop: 4,
-      fontSize: 14,
+      marginTop: 2,
+      fontSize: 12,
       color: 'rgba(255,255,255,0.9)',
     },
     contentContainer: {
@@ -556,7 +559,7 @@ const Analytics = ({ visible, onClose }) => {
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="fade"
       onRequestClose={onClose}
       statusBarTranslucent
     >
@@ -567,7 +570,7 @@ const Analytics = ({ visible, onClose }) => {
         >
           <View style={styles.headerRow}>
             <TouchableOpacity style={styles.backButton} onPress={onClose}>
-              <FontAwesome5 name="chevron-left" size={20} color="#FFFFFF" />
+              <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
             </TouchableOpacity>
             <View style={styles.titleContainer}>
               <ThemedText style={styles.title}>Financial Analytics</ThemedText>

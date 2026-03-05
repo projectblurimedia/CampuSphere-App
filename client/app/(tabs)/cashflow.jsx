@@ -109,10 +109,7 @@ export default function Cashflow() {
         profitMargin
       })
 
-      // Show success message if this is a refresh
-      if (!showLoading && transactionsData.length > 0) {
-        showToast('Dashboard updated successfully', 'success')
-      } else if (!showLoading && transactionsData.length === 0) {
+      if (!showLoading && transactionsData.length === 0) {
         showToast('No transactions found for this period', 'info')
       }
 
@@ -164,7 +161,6 @@ export default function Cashflow() {
 
   const handleTimePeriodChange = (period) => {
     setTimePeriod(period)
-    showToast(`Showing data for ${period}`, 'info')
   }
 
   const quickActions = [

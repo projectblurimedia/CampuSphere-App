@@ -73,9 +73,6 @@ export default function FeeDetails({ visible, onClose }) {
 
       if (response.data.success) {
         setFilteredStudents(response.data.data)
-        if (response.data.data.length === 0) {
-          showToast('No students found', 'info')
-        }
       } else {
         setSearchError(response.data.message || 'Search failed')
         showToast(response.data.message || 'Search failed', 'error')

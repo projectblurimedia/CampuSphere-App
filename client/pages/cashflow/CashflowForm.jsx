@@ -2393,7 +2393,7 @@ const CashflowForm = ({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="fade"
       onRequestClose={handleClose}
       statusBarTranslucent
     >

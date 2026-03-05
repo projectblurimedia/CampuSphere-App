@@ -1268,9 +1268,9 @@ export default function Attendance({ visible, onClose }) {
   const getAttendanceStatusColor = (status, isSubmitted = false) => {
     if (!isSubmitted) {
       return {
-        backgroundColor: '#f3f4f6',
-        borderColor: '#d1d5db',
-        textColor: '#6b7280'
+        backgroundColor: colors?.cardBackground,
+        borderColor: colors?.border,
+        textColor: colors?.text
       }
     }
     

@@ -209,8 +209,8 @@ export default function FeeReceipt({
                     <Feather name="phone" size={14} color={colors.primary} />
                   </View>
                   <View style={styles.contactTextContainer}>
-                    <ThemedText style={styles.contactLabel}>Phone</ThemedText>
-                    <ThemedText style={styles.contactValue}>{schoolDetails.phone}</ThemedText>
+                    <ThemedText style={[styles.contactLabel, { color: colors?.textTertiary }]}>Phone</ThemedText>
+                    <ThemedText style={[styles.contactValue, { color: colors?.text }]}>{schoolDetails.phone}</ThemedText>
                   </View>
                 </View>
                 
@@ -219,8 +219,8 @@ export default function FeeReceipt({
                     <Feather name="mail" size={14} color={colors.primary} />
                   </View>
                   <View style={styles.contactTextContainer}>
-                    <ThemedText style={styles.contactLabel}>Email</ThemedText>
-                    <ThemedText style={styles.contactValue}>{schoolDetails.email}</ThemedText>
+                    <ThemedText style={[styles.contactLabel, { color: colors?.textTertiary }]}>Email</ThemedText>
+                    <ThemedText style={[styles.contactValue, { color: colors?.text }]}>{schoolDetails.email}</ThemedText>
                   </View>
                 </View>
                 
@@ -229,8 +229,8 @@ export default function FeeReceipt({
                     <Feather name="globe" size={14} color={colors.primary} />
                   </View>
                   <View style={styles.contactTextContainer}>
-                    <ThemedText style={styles.contactLabel}>Website</ThemedText>
-                    <ThemedText style={styles.contactValue}>{schoolDetails.website}</ThemedText>
+                    <ThemedText style={[styles.contactLabel, { color: colors?.textTertiary }]}>Website</ThemedText>
+                    <ThemedText style={[styles.contactValue, { color: colors?.text }]}>{schoolDetails.website}</ThemedText>
                   </View>
                 </View>
 
@@ -239,8 +239,8 @@ export default function FeeReceipt({
                     <Ionicons name="location-sharp" size={14} color={colors.primary} />
                   </View>
                   <View style={styles.contactTextContainer}>
-                    <ThemedText style={styles.contactLabel}>Address</ThemedText>
-                    <ThemedText style={styles.contactValue}>{schoolDetails.address}</ThemedText>
+                    <ThemedText style={[styles.contactLabel, { color: colors?.textTertiary }]}>Address</ThemedText>
+                    <ThemedText style={[styles.contactValue, { color: colors?.text }]}>{schoolDetails.address}</ThemedText>
                   </View>
                 </View>
               </View>
@@ -251,7 +251,7 @@ export default function FeeReceipt({
               <View style={styles.receiptHeader}>
                 <View style={styles.receiptTitleContainer}>
                   <MaterialIcons name="receipt" size={20} color={colors.primary} />
-                  <ThemedText style={styles.receiptTitle}>FEE PAYMENT RECEIPT</ThemedText>
+                  <ThemedText style={[styles.receiptTitle, { color: colors?.text }]}>FEE PAYMENT RECEIPT</ThemedText>
                 </View>
                 <View style={[styles.statusBadge, { 
                   backgroundColor: fullyPaid ? colors.success + '20' : colors.warning + '20',
@@ -263,8 +263,8 @@ export default function FeeReceipt({
                 </View>
               </View>
               <View style={styles.receiptDateContainer}>
-                <Ionicons name="calendar-outline" size={14} color="#666" />
-                <ThemedText style={styles.receiptDate}>Date: {formatDate(receiptData.date)}</ThemedText>
+                <Ionicons name="calendar-outline" size={14} color={colors?.textTertiary} />
+                <ThemedText style={[styles.receiptDate, { color: colors?.textTertiary }]}>Date: {formatDate(receiptData.date)}</ThemedText>
               </View>
             </View>
 
@@ -272,23 +272,23 @@ export default function FeeReceipt({
             <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
               <View style={styles.sectionTitleContainer}>
                 <Ionicons name="person-circle-outline" size={20} color={colors.primary} />
-                <ThemedText style={styles.sectionTitle}>STUDENT DETAILS</ThemedText>
+                <ThemedText style={[styles.sectionTitle, { color: colors?.text }]}>STUDENT DETAILS</ThemedText>
               </View>
               
               <View style={styles.studentInfoGrid}>
                 <View style={styles.infoCard}>
                   <Ionicons name="person-outline" size={16} color={colors.primary} />
                   <View style={styles.infoContent}>
-                    <ThemedText style={styles.infoLabel}>Name</ThemedText>
-                    <ThemedText style={styles.infoValue}>{receiptData.student?.name || ''}</ThemedText>
+                    <ThemedText style={[styles.infoLabel, { color: colors?.textTertiary }]}>Name</ThemedText>
+                    <ThemedText style={[styles.infoValue, { color: colors?.textSecondary }]}>{receiptData.student?.name || ''}</ThemedText>
                   </View>
                 </View>
 
                 <View style={styles.infoCard}>
                   <Ionicons name="school-outline" size={16} color={colors.primary} />
                   <View style={styles.infoContent}>
-                    <ThemedText style={styles.infoLabel}>Class</ThemedText>
-                    <ThemedText style={styles.infoValue}>
+                    <ThemedText style={[styles.infoLabel, { color: colors?.textTertiary }]}>Class</ThemedText>
+                    <ThemedText style={[styles.infoValue, { color: colors?.textSecondary }]}>
                       {receiptData.student?.displayClass || ''} - {receiptData.student?.section || ''}
                     </ThemedText>
                   </View>
@@ -297,16 +297,16 @@ export default function FeeReceipt({
                 <View style={styles.infoCard}>
                   <Ionicons name="card-outline" size={16} color={colors.primary} />
                   <View style={styles.infoContent}>
-                    <ThemedText style={styles.infoLabel}>Parent Name</ThemedText>
-                    <ThemedText style={styles.infoValue}>{receiptData.student?.parentName}</ThemedText>
+                    <ThemedText style={[styles.infoLabel, { color: colors?.textTertiary }]}>Parent Name</ThemedText>
+                    <ThemedText style={[styles.infoValue, { color: colors?.textSecondary }]}>{receiptData.student?.parentName}</ThemedText>
                   </View>
                 </View>
 
                 <View style={styles.infoCard}>
                   <Ionicons name="call-outline" size={16} color={colors.primary} />
                   <View style={styles.infoContent}>
-                    <ThemedText style={styles.infoLabel}>Parent Phone</ThemedText>
-                    <ThemedText style={styles.infoValue}>{receiptData.student?.parentPhone || 'N/A'}</ThemedText>
+                    <ThemedText style={[styles.infoLabel, { color: colors?.textTertiary }]}>Parent Phone</ThemedText>
+                    <ThemedText style={[styles.infoValue, { color: colors?.textSecondary }]}>{receiptData.student?.parentPhone || 'N/A'}</ThemedText>
                   </View>
                 </View>
               </View>
@@ -316,39 +316,39 @@ export default function FeeReceipt({
             <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
               <View style={styles.sectionTitleContainer}>
                 <Ionicons name="card-outline" size={20} color={colors.primary} />
-                <ThemedText style={styles.sectionTitle}>PAYMENT DETAILS</ThemedText>
+                <ThemedText style={[styles.sectionTitle, { color: colors?.text }]}>PAYMENT DETAILS</ThemedText>
               </View>
               
               <View style={styles.paymentDetailsGrid}>
                 <View style={styles.paymentDetailItem}>
-                  <ThemedText style={styles.paymentDetailLabel}>Mode: </ThemedText>
+                  <ThemedText style={[styles.paymentDetailLabel, { color: colors?.textTertiary }]}>Mode: </ThemedText>
                   <View style={styles.paymentDetailValueContainer}>
                     <MaterialIcons 
                       name={receiptData.payment?.mode === 'CASH' ? 'payments' : 'account-balance'} 
                       size={14} 
                       color={colors.primary} 
                     />
-                    <ThemedText style={styles.paymentDetailValue}>
+                    <ThemedText style={[styles.paymentDetailValue, { color: colors?.text }]}>
                       {receiptData.payment?.mode?.replace('_', ' ')}
                     </ThemedText>
                   </View>
                 </View>
 
                 <View style={styles.paymentDetailItem}>
-                  <ThemedText style={styles.paymentDetailLabel}>Type: </ThemedText>
+                  <ThemedText style={[styles.paymentDetailLabel, { color: colors?.textTertiary }]}>Type: </ThemedText>
                   <View style={styles.paymentDetailValueContainer}>
                     <MaterialIcons name="payment" size={14} color={colors.primary} />
-                    <ThemedText style={styles.paymentDetailValue}>
+                    <ThemedText style={[styles.paymentDetailValue, { color: colors?.text }]}>
                       {getPaymentTypeDisplay()}
                     </ThemedText>
                   </View>
                 </View>
 
                 <View style={styles.paymentDetailItem}>
-                  <ThemedText style={styles.paymentDetailLabel}>Received By: </ThemedText>
+                  <ThemedText style={[styles.paymentDetailLabel, { color: colors?.textTertiary }]}>Received By: </ThemedText>
                   <View style={styles.paymentDetailValueContainer}>
                     <Ionicons name="person-outline" size={14} color={colors.primary} />
-                    <ThemedText style={styles.paymentDetailValue}>
+                    <ThemedText style={[styles.paymentDetailValue, { color: colors?.text }]}>
                       {receiptData.payment?.receivedBy}
                     </ThemedText>
                   </View>
@@ -360,11 +360,11 @@ export default function FeeReceipt({
             <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
               <View style={styles.sectionTitleContainer}>
                 <Ionicons name="checkmark-circle-outline" size={20} color={colors.success} />
-                <ThemedText style={styles.sectionTitle}>THIS TRANSACTION</ThemedText>
+                <ThemedText style={[styles.sectionTitle, { color: colors?.text }]}>THIS TRANSACTION</ThemedText>
               </View>
               
               <View style={styles.totalPaidContainer}>
-                <ThemedText style={styles.totalPaidLabel}>Total Paid</ThemedText>
+                <ThemedText style={[styles.totalPaidLabel, { color: colors?.textTertiary }]}>Total Paid</ThemedText>
                 <ThemedText style={[styles.totalPaidValue, { color: colors.success }]}>
                   {formatCurrency(paidAmounts.total)}
                 </ThemedText>
@@ -378,7 +378,7 @@ export default function FeeReceipt({
                       <View style={[styles.feeIcon, { backgroundColor: colors.primary + '20' }]}>
                         <Feather name="book" size={12} color={colors.primary} />
                       </View>
-                      <ThemedText style={styles.tableLabel}>School Fee</ThemedText>
+                      <ThemedText style={[styles.tableLabel, { color: colors?.textSecondary }]}>School Fee</ThemedText>
                     </View>
                     <ThemedText style={[styles.tableValue, { color: colors.primary }]}>
                       {formatCurrency(paidAmounts.school)}
@@ -393,7 +393,7 @@ export default function FeeReceipt({
                       <View style={[styles.feeIcon, { backgroundColor: colors.info + '20' }]}>
                         <Feather name="truck" size={12} color={colors.info} />
                       </View>
-                      <ThemedText style={styles.tableLabel}>Transport Fee</ThemedText>
+                      <ThemedText style={[styles.tableLabel, { color: colors?.textSecondary }]}>Transport Fee</ThemedText>
                     </View>
                     <ThemedText style={[styles.tableValue, { color: colors.info }]}>
                       {formatCurrency(paidAmounts.transport)}
@@ -408,7 +408,7 @@ export default function FeeReceipt({
                       <View style={[styles.feeIcon, { backgroundColor: colors.warning + '20' }]}>
                         <Feather name="home" size={12} color={colors.warning} />
                       </View>
-                      <ThemedText style={styles.tableLabel}>Hostel Fee</ThemedText>
+                      <ThemedText style={[styles.tableLabel, { color: colors?.textSecondary }]}>Hostel Fee</ThemedText>
                     </View>
                     <ThemedText style={[styles.tableValue, { color: colors.warning }]}>
                       {formatCurrency(paidAmounts.hostel)}
@@ -423,7 +423,7 @@ export default function FeeReceipt({
               <View style={[styles.card, { backgroundColor: colors.cardBackground }]}>
                 <View style={styles.sectionTitleContainer}>
                   <Ionicons name="alert-circle-outline" size={20} color={colors.danger} />
-                  <ThemedText style={styles.sectionTitle}>REMAINING DUE</ThemedText>
+                  <ThemedText style={[styles.sectionTitle, { color: colors?.text }]}>REMAINING DUE</ThemedText>
                 </View>
                 
                 <View style={styles.amountTable}>
@@ -434,7 +434,7 @@ export default function FeeReceipt({
                         <View style={[styles.feeIcon, { backgroundColor: colors.danger + '20' }]}>
                           <Feather name="book" size={12} color={colors.danger} />
                         </View>
-                        <ThemedText style={styles.tableLabel}>School Fee</ThemedText>
+                        <ThemedText style={[styles.tableLabel, { color: colors?.textSecondary }]}>School Fee</ThemedText>
                       </View>
                       <ThemedText style={[styles.tableValue, { color: colors.danger }]}>
                         {formatCurrency(remainingAmounts.school)}
@@ -449,7 +449,7 @@ export default function FeeReceipt({
                         <View style={[styles.feeIcon, { backgroundColor: colors.danger + '20' }]}>
                           <Feather name="truck" size={12} color={colors.danger} />
                         </View>
-                        <ThemedText style={styles.tableLabel}>Transport Fee</ThemedText>
+                        <ThemedText style={[styles.tableLabel, { color: colors?.textSecondary }]}>Transport Fee</ThemedText>
                       </View>
                       <ThemedText style={[styles.tableValue, { color: colors.danger }]}>
                         {formatCurrency(remainingAmounts.transport)}
@@ -464,7 +464,7 @@ export default function FeeReceipt({
                         <View style={[styles.feeIcon, { backgroundColor: colors.danger + '20' }]}>
                           <Feather name="home" size={12} color={colors.danger} />
                         </View>
-                        <ThemedText style={styles.tableLabel}>Hostel Fee</ThemedText>
+                        <ThemedText style={[styles.tableLabel, { color: colors?.textSecondary }]}>Hostel Fee</ThemedText>
                       </View>
                       <ThemedText style={[styles.tableValue, { color: colors.danger }]}>
                         {formatCurrency(remainingAmounts.hostel)}
@@ -474,7 +474,7 @@ export default function FeeReceipt({
 
                   {/* TOTAL OVERALL DUE */}
                   <View style={[styles.tableRow, styles.totalRow]}>
-                    <ThemedText style={styles.totalLabel}>TOTAL REMAINING</ThemedText>
+                    <ThemedText style={[styles.totalLabel, { color: colors?.text }]}>TOTAL REMAINING</ThemedText>
                     <View style={styles.totalValueContainer}>
                       <ThemedText style={[styles.totalValue, { color: colors.danger }]}>
                         {formatCurrency(remainingAmounts.total)}
@@ -516,8 +516,8 @@ export default function FeeReceipt({
             {/* Footer */}
             <View style={[styles.card, styles.footerCard, { backgroundColor: colors.cardBackground }]}>
               <View style={styles.footerContent}>
-                <MaterialIcons name="computer" size={14} color="#999" />
-                <ThemedText style={styles.footerNote}>
+                <MaterialIcons name="computer" size={14} color={colors?.textTertiary} />
+                <ThemedText style={[styles.footerNote, { color: colors?.textTertiary }]}>
                   This is a computer generated receipt
                 </ThemedText>
               </View>
@@ -678,15 +678,13 @@ const styles = StyleSheet.create({
   },
   contactLabel: {
     fontSize: 9,
-    color: '#999',
     fontFamily: 'Poppins-Medium',
-    marginBottom: -2,
+    marginBottom: -4,
     textTransform: 'uppercase',
   },
   contactValue: {
     fontSize: 11,
     fontFamily: 'Poppins-SemiBold',
-    color: '#333',
   },
   receiptHeader: {
     flexDirection: 'row',
@@ -702,7 +700,6 @@ const styles = StyleSheet.create({
   receiptTitle: {
     fontSize: 14,
     fontFamily: 'Poppins-Bold',
-    color: '#333',
   },
   receiptDateContainer: {
     flexDirection: 'row',
@@ -711,7 +708,6 @@ const styles = StyleSheet.create({
   },
   receiptDate: {
     fontSize: 11,
-    color: '#666',
     fontFamily: 'Poppins-Medium',
   },
   statusBadge: {
@@ -733,7 +729,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontFamily: 'Poppins-Bold',
-    color: '#333',
   },
   studentInfoGrid: {
     gap: 12,
@@ -741,7 +736,7 @@ const styles = StyleSheet.create({
   infoCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 18,
     padding: 12,
     backgroundColor: 'rgba(0,0,0,0.02)',
     borderRadius: 12,
@@ -751,9 +746,8 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 10,
-    color: '#666',
     fontFamily: 'Poppins-Medium',
-    marginBottom: 2,
+    marginBottom: -2,
   },
   infoValue: {
     fontSize: 14,
@@ -773,7 +767,6 @@ const styles = StyleSheet.create({
   paymentDetailLabel: {
     width: 90,
     fontSize: 12,
-    color: '#666',
     fontFamily: 'Poppins-Medium',
   },
   paymentDetailValueContainer: {
@@ -784,7 +777,6 @@ const styles = StyleSheet.create({
   paymentDetailValue: {
     fontSize: 12,
     fontFamily: 'Poppins-SemiBold',
-    color: '#333',
   },
   totalPaidContainer: {
     alignItems: 'center',
@@ -827,7 +819,6 @@ const styles = StyleSheet.create({
   },
   tableLabel: {
     fontSize: 13,
-    color: '#333',
     fontFamily: 'Poppins-Medium',
   },
   tableValue: {
@@ -844,7 +835,6 @@ const styles = StyleSheet.create({
   totalLabel: {
     fontSize: 14,
     fontFamily: 'Poppins-Bold',
-    color: '#333',
   },
   totalValueContainer: {
     backgroundColor: 'rgba(220,53,69,0.1)',
@@ -878,7 +868,6 @@ const styles = StyleSheet.create({
   },
   footerCard: {
     marginTop: 8,
-    backgroundColor: '#f8f9fa',
   },
   footerContent: {
     flexDirection: 'row',

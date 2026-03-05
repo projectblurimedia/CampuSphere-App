@@ -254,7 +254,7 @@ const EventForm = ({
     <>
       <Modal 
         visible={visible} 
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => {
           if (!externalLoading) {
             onClose();

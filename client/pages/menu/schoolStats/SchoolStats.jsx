@@ -20,6 +20,7 @@ import {
   MaterialCommunityIcons,
   Feather,
   MaterialIcons,
+  FontAwesome,
 } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 import { ToastNotification } from '@/components/ui/ToastNotification'
@@ -846,7 +847,7 @@ export default function SchoolStats({ visible, onClose }) {
               
               <View style={styles.titleContainer}>
                 <ThemedText type="subtitle" style={styles.title}>
-                  School Statistics
+                  Statistics
                 </ThemedText>
                 <ThemedText style={styles.subtitle}>
                   {statsData.basicInfo.schoolName !== '-' ? statsData.basicInfo.schoolName : 'Overview'}
@@ -858,7 +859,7 @@ export default function SchoolStats({ visible, onClose }) {
                 onPress={onRefresh}
                 disabled={loading || refreshing}
               >
-                <Ionicons
+                <FontAwesome
                   name="refresh"
                   size={20}
                   color="#FFFFFF"

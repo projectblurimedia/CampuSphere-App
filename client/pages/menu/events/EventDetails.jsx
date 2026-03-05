@@ -122,7 +122,7 @@ const EventDetails = ({ visible, event, onClose, colors, weekdayColors, renderIm
       visible={visible}
       transparent
       statusBarTranslucent
-      animationType="slide"
+      animationType="fade"
       onRequestClose={onClose}
     >
       <View style={styles.viewModalContainer}>

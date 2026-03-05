@@ -17,6 +17,7 @@ import cashflowRoutes from './routes/cashflowRoutes.js'
 import timetableRoutes from './routes/timetableRoutes.js'
 import eventRoutes from './routes/eventRoutes.js'
 import schoolRoutes from './routes/schoolRoutes.js'
+import statsRoutes from './routes/statsRoutes.js'
 
 dotenv.config()
 const app = express()
@@ -67,6 +68,7 @@ app.use('/api/cashflow', cashflowRoutes)
 app.use('/api/timetable', timetableRoutes)
 app.use('/api/events', eventRoutes)
 app.use('/api/school', schoolRoutes)
+app.use('/api/stats', statsRoutes)
 
 app.use((error, req, res, next) => {
   const errorStatus = error.status || 500

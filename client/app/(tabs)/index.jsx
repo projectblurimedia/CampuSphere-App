@@ -22,7 +22,6 @@ export default function HomeScreen() {
     try {
       // Trigger refresh in child components by updating key
       setRefreshKey(prev => prev + 1)
-      showToast('Dashboard updated successfully', 'success')
     } catch (error) {
       showToast('Failed to refresh dashboard', 'error')
     } finally {

@@ -20,6 +20,7 @@ import { ThemedText } from '@/components/ui/themed-text'
 import { FontAwesome5, Ionicons, Feather, MaterialIcons, MaterialCommunityIcons, Entypo, AntDesign, FontAwesome6 } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useSelector } from 'react-redux'
 import axiosApi from '@/utils/axiosApi'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import CreateStudent from '@/pages/menu/createStudent/CreateStudent'
@@ -28,6 +29,45 @@ import StudentAttendance from './StudentAttendance'
 import StudentMarks from './StudentMarks'
 
 const { width, height } = Dimensions.get('window')
+
+// ========== ROLE PERMISSIONS ==========
+const rolePermissions = {
+  chairperson: {
+    canEdit: true,
+    canInactivate: true,
+    canViewFees: true,
+    canViewAttendance: true,
+    canViewMarks: true
+  },
+  accountant: {
+    canEdit: true,
+    canInactivate: true,
+    canViewFees: true,
+    canViewAttendance: true,
+    canViewMarks: true
+  },
+  principal: {
+    canEdit: false,
+    canInactivate: false,
+    canViewFees: false,
+    canViewAttendance: true,
+    canViewMarks: true
+  },
+  vice_principal: {
+    canEdit: false,
+    canInactivate: false,
+    canViewFees: false,
+    canViewAttendance: true,
+    canViewMarks: true
+  },
+  default: {
+    canEdit: false,
+    canInactivate: false,
+    canViewFees: false,
+    canViewAttendance: true,
+    canViewMarks: true
+  }
+}
 
 // ========== CONFIRMATION MODAL COMPONENT ==========
 const ConfirmationModal = ({ 
@@ -208,6 +248,12 @@ const ConfirmationModal = ({
 
 export default function Student({ student, onClose }) {
   const { colors } = useTheme()
+  
+  // Get user role from Redux
+  const { employee } = useSelector((state) => state.employee)
+  const role = employee?.designation?.toLowerCase() || 'default'
+  const permissions = rolePermissions[role] || rolePermissions.default
+  
   const [loading, setLoading] = useState(true)
   const [studentData, setStudentData] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -240,6 +286,24 @@ export default function Student({ student, onClose }) {
   const hideToast = useCallback(() => {
     setToast(null)
   }, [])
+
+  // Check if user has permission for specific action
+  const hasPermission = useCallback((action) => {
+    switch(action) {
+      case 'edit':
+        return permissions.canEdit
+      case 'inactive':
+        return permissions.canInactivate
+      case 'fees':
+        return permissions.canViewFees
+      case 'attendance':
+        return permissions.canViewAttendance
+      case 'marks':
+        return permissions.canViewMarks
+      default:
+        return false
+    }
+  }, [permissions])
 
   // Fetch complete student data
   const fetchStudentData = async () => {
@@ -332,7 +396,7 @@ export default function Student({ student, onClose }) {
     try {
       const studentId = studentData?.id || student?.id
       const response = await axiosApi.post(`/fees/inactivate/${studentId}`, {
-        updatedBy: 'Admin',
+        updatedBy: employee?.name || 'Admin',
         reason: 'Student marked inactive',
         note: 'Student inactivated from profile',
         archiveData: true
@@ -372,19 +436,67 @@ export default function Student({ student, onClose }) {
     setShowInactiveConfirmModal(false)
   }
 
-  const moreActions = [
-    { id: 1, icon: 'calendar-check', iconSet: MaterialCommunityIcons, label: 'Attendance', color: '#4CAF50', action: 'attendance', handler: () => {
-      setShowMoreMenu(false)
-      setShowAttendanceModal(true)
-    } },
-    { id: 2, icon: 'star', iconSet: MaterialIcons, label: 'Marks', color: '#2196F3', action: 'marks', handler: () => {
-      setShowMoreMenu(false)
-      setShowMarksModal(true)
-    } },
-    { id: 3, icon: 'currency-inr', iconSet: MaterialCommunityIcons, label: 'Fee Details', color: '#FF9800', action: 'fees', handler: handleFeeDetails },
-    { id: 4, icon: 'edit', iconSet: MaterialIcons, label: 'Edit Student', color: colors.primary, action: 'edit', handler: handleEdit },
-    { id: 6, icon: 'delete', iconSet: MaterialIcons, label: 'Inactive Student', color: '#F44336', action: 'inactive', handler: handleInactiveClick },
-  ]
+  // Filter actions based on role permissions
+  const getAvailableActions = () => {
+    const allActions = [
+      { 
+        id: 1, 
+        icon: 'calendar-check', 
+        iconSet: MaterialCommunityIcons, 
+        label: 'Attendance', 
+        color: '#4CAF50', 
+        action: 'attendance', 
+        handler: () => {
+          setShowMoreMenu(false)
+          setShowAttendanceModal(true)
+        } 
+      },
+      { 
+        id: 2, 
+        icon: 'star', 
+        iconSet: MaterialIcons, 
+        label: 'Marks', 
+        color: '#2196F3', 
+        action: 'marks', 
+        handler: () => {
+          setShowMoreMenu(false)
+          setShowMarksModal(true)
+        } 
+      },
+      { 
+        id: 3, 
+        icon: 'currency-inr', 
+        iconSet: MaterialCommunityIcons, 
+        label: 'Fee Details', 
+        color: '#FF9800', 
+        action: 'fees', 
+        handler: handleFeeDetails 
+      },
+      { 
+        id: 4, 
+        icon: 'edit', 
+        iconSet: MaterialIcons, 
+        label: 'Edit Student', 
+        color: colors.primary, 
+        action: 'edit', 
+        handler: handleEdit 
+      },
+      { 
+        id: 6, 
+        icon: 'delete', 
+        iconSet: MaterialIcons, 
+        label: 'Inactive Student', 
+        color: '#F44336', 
+        action: 'inactive', 
+        handler: handleInactiveClick 
+      },
+    ]
+
+    // Filter actions based on permissions
+    return allActions.filter(action => hasPermission(action.action))
+  }
+
+  const moreActions = getAvailableActions()
 
   const handleMoreAction = (action) => {
     if (action.handler) {
@@ -593,13 +705,19 @@ export default function Student({ student, onClose }) {
               </ThemedText>
             </View>
             
-            <TouchableOpacity
-              style={styles.moreButton}
-              onPress={() => setShowMoreMenu(!showMoreMenu)}
-              activeOpacity={0.9}
-            >
-              <Entypo name="dots-three-vertical" size={20} color="#FFFFFF" />
-            </TouchableOpacity>
+            {/* Only show more button if there are available actions */}
+            {moreActions.length > 0 && (
+              <TouchableOpacity
+                style={styles.moreButton}
+                onPress={() => setShowMoreMenu(!showMoreMenu)}
+                activeOpacity={0.9}
+              >
+                <Entypo name="dots-three-vertical" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+
+            {/* If no actions, show empty view for spacing */}
+            {moreActions.length === 0 && <View style={{ width: 44 }} />}
           </View>
         </SafeAreaView>
       </LinearGradient>
@@ -648,46 +766,52 @@ export default function Student({ student, onClose }) {
             </View>
           </View>
 
-          {/* Quick Actions */}
+          {/* Quick Actions - Only show permitted actions */}
           <View style={styles.quickActions}>
-            <TouchableOpacity 
-              style={[styles.quickAction, { backgroundColor: `${colors.primary}08`, borderColor: `${colors.primary}20` }]}
-              onPress={() => setShowAttendanceModal(true)}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: `${colors.primary}15` }]}>
-                <MaterialCommunityIcons name="calendar-check" size={22} color={colors.primary} />
-              </View>
-              <ThemedText style={[styles.quickActionText, { color: colors.primary }]}>
-                Attendance
-              </ThemedText>
-            </TouchableOpacity>
+            {hasPermission('attendance') && (
+              <TouchableOpacity 
+                style={[styles.quickAction, { backgroundColor: `${colors.primary}08`, borderColor: `${colors.primary}20` }]}
+                onPress={() => setShowAttendanceModal(true)}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.quickActionIcon, { backgroundColor: `${colors.primary}15` }]}>
+                  <MaterialCommunityIcons name="calendar-check" size={22} color={colors.primary} />
+                </View>
+                <ThemedText style={[styles.quickActionText, { color: colors.primary }]}>
+                  Attendance
+                </ThemedText>
+              </TouchableOpacity>
+            )}
 
-            <TouchableOpacity 
-              style={[styles.quickAction, { backgroundColor: '#FF980008', borderColor: '#FF980020' }]}
-              onPress={() => setShowMarksModal(true)}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: '#FF980015' }]}>
-                <MaterialIcons name="star" size={22} color="#FF9800" />
-              </View>
-              <ThemedText style={[styles.quickActionText, { color: '#FF9800' }]}>
-                Marks
-              </ThemedText>
-            </TouchableOpacity>
+            {hasPermission('marks') && (
+              <TouchableOpacity 
+                style={[styles.quickAction, { backgroundColor: '#FF980008', borderColor: '#FF980020' }]}
+                onPress={() => setShowMarksModal(true)}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.quickActionIcon, { backgroundColor: '#FF980015' }]}>
+                  <MaterialIcons name="star" size={22} color="#FF9800" />
+                </View>
+                <ThemedText style={[styles.quickActionText, { color: '#FF9800' }]}>
+                  Marks
+                </ThemedText>
+              </TouchableOpacity>
+            )}
 
-            <TouchableOpacity 
-              style={[styles.quickAction, { backgroundColor: '#4CAF5008', borderColor: '#4CAF5020' }]}
-              onPress={handleFeeDetails}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: '#4CAF5015' }]}>
-                <MaterialCommunityIcons name="currency-inr" size={22} color="#4CAF50" />
-              </View>
-              <ThemedText style={[styles.quickActionText, { color: '#4CAF50' }]}>
-                Fees
-              </ThemedText>
-            </TouchableOpacity>
+            {hasPermission('fees') && (
+              <TouchableOpacity 
+                style={[styles.quickAction, { backgroundColor: '#4CAF5008', borderColor: '#4CAF5020' }]}
+                onPress={handleFeeDetails}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.quickActionIcon, { backgroundColor: '#4CAF5015' }]}>
+                  <MaterialCommunityIcons name="currency-inr" size={22} color="#4CAF50" />
+                </View>
+                <ThemedText style={[styles.quickActionText, { color: '#4CAF50' }]}>
+                  Fees
+                </ThemedText>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Student Details Section */}
@@ -879,7 +1003,7 @@ export default function Student({ student, onClose }) {
       </ScrollView>
 
       {/* More Menu Modal */}
-      {showMoreMenu && (
+      {showMoreMenu && moreActions.length > 0 && (
         <>
           <TouchableOpacity
             style={StyleSheet.absoluteFill}
@@ -890,31 +1014,36 @@ export default function Student({ student, onClose }) {
         </>
       )}
 
-      {/* Edit Modal */}
-      <CreateStudent
-        key={studentData?.id || student?.id}
-        visible={showEditModal}
-        onClose={(refresh) => {
-          setShowEditModal(false)
-          if (refresh) {
-            fetchStudentData() 
-          }
-        }}
-        studentData={studentData || student}
-      />
+      {/* Edit Modal - Only render if has permission */}
+      {hasPermission('edit') && (
+        <CreateStudent
+          key={studentData?.id || student?.id}
+          visible={showEditModal}
+          onClose={(refresh) => {
+            setShowEditModal(false)
+            if (refresh) {
+              fetchStudentData() 
+            }
+          }}
+          studentData={studentData || student}
+        />
+      )}
 
-      {/* Fee Details Modal */}
-      <StudentFeeDetails
-        visible={showFeeDetails}
-        onClose={() => setShowFeeDetails(false)}
-        student={studentData || student}
-        onPaymentSuccess={(result) => {
-          showToast('Payment completed successfully', 'success')
-          fetchStudentData()
-        }}
-      />
+      {/* Fee Details Modal - Only render if has permission */}
+      {hasPermission('fees') && (
+        <StudentFeeDetails
+          visible={showFeeDetails}
+          onClose={() => setShowFeeDetails(false)}
+          student={studentData || student}
+          onPaymentSuccess={(result) => {
+            showToast('Payment completed successfully', 'success')
+            fetchStudentData()
+          }}
+        />
+      )}
 
-      {showAttendanceModal && (
+      {/* Attendance Modal - Only render if has permission */}
+      {hasPermission('attendance') && showAttendanceModal && (
         <StudentAttendance
           visible={showAttendanceModal}
           onClose={() => setShowAttendanceModal(false)}
@@ -922,7 +1051,8 @@ export default function Student({ student, onClose }) {
         />
       )}
 
-      {showMarksModal && (
+      {/* Marks Modal - Only render if has permission */}
+      {hasPermission('marks') && showMarksModal && (
         <StudentMarks
           visible={showMarksModal}
           onClose={() => setShowMarksModal(false)}
@@ -930,15 +1060,17 @@ export default function Student({ student, onClose }) {
         />
       )}
 
-      {/* Inactive Confirmation Modal */}
-      <ConfirmationModal
-        visible={showInactiveConfirmModal}
-        onConfirm={handleInactiveConfirm}
-        onCancel={handleInactiveCancel}
-        student={studentData || student}
-        actionType="inactive"
-        isProcessing={isProcessingInactive}
-      />
+      {/* Inactive Confirmation Modal - Only render if has permission */}
+      {hasPermission('inactive') && (
+        <ConfirmationModal
+          visible={showInactiveConfirmModal}
+          onConfirm={handleInactiveConfirm}
+          onCancel={handleInactiveCancel}
+          student={studentData || student}
+          actionType="inactive"
+          isProcessing={isProcessingInactive}
+        />
+      )}
 
       {/* Toast Notification */}
       <ToastNotification

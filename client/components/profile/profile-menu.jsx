@@ -96,14 +96,7 @@ export default function ProfileMenu({ visible, onClose }) {
   }
 
   const handleLogout = () => {
-    // Close the side menu first
-    setIsVisible(false)
-    onClose()
-    
-    // Small delay to ensure menu is closed before opening modal
-    setTimeout(() => {
-      setShowLogoutModal(true)
-    }, 300)
+    setShowLogoutModal(true)
   }
 
   const confirmLogout = async () => {

@@ -6,12 +6,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Modal,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { FontAwesome5, Feather, MaterialIcons } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 import { useDispatch, useSelector } from 'react-redux'
 import { loginEmployee, clearError, resetLoginFlow } from '@/redux/employeeSlice'
+import ForgotPassword from './ForgotPassword'
 
 const PasswordStep = ({ onBack }) => {
   const { colors } = useTheme()
@@ -20,8 +22,8 @@ const PasswordStep = ({ onBack }) => {
   const { tempEmployee, isLoading, error } = useSelector((state) => state.employee)
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [rememberMe, setRememberMe] = useState(false)
   const [localLoading, setLocalLoading] = useState(false)
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
 
   const handleBack = () => {
     if (onBack) {
@@ -46,12 +48,15 @@ const PasswordStep = ({ onBack }) => {
       await dispatch(loginEmployee({
         employeeId: tempEmployee.employeeId,
         password: password.trim()
-      })).unwrap() // unwrap() will throw if the promise is rejected
-      
-      // Success - Redux will handle the navigation
+      })).unwrap()
     } catch (err) {
       setLocalLoading(false)
     }
+  }
+
+  const handleForgotPasswordSuccess = () => {
+    setShowForgotPassword(false)
+    dispatch(resetLoginFlow())
   }
 
   const styles = StyleSheet.create({
@@ -153,30 +158,14 @@ const PasswordStep = ({ onBack }) => {
       marginBottom: 12,
       textAlign: 'center',
     },
-    rememberContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
+    forgotPasswordContainer: {
+      alignItems: 'flex-end',
       marginBottom: 20,
-      alignSelf: 'flex-start',
     },
-    checkbox: {
-      width: 20,
-      height: 20,
-      borderRadius: 4,
-      borderWidth: 2,
-      borderColor: colors.textSecondary + '60',
-      marginRight: 8,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    checkboxChecked: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
-    },
-    rememberText: {
+    forgotPasswordText: {
       fontSize: 14,
       fontFamily: 'Poppins-Medium',
-      color: colors.text,
+      color: colors.primary,
     },
     submitButton: {
       borderRadius: 12,
@@ -200,13 +189,24 @@ const PasswordStep = ({ onBack }) => {
     submitIcon: {
       marginLeft: 10,
     },
+    modalContainer: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'flex-end',
+    },
+    modalContent: {
+      backgroundColor: colors.background,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: 20,
+      height: '70%',
+    },
   })
 
   if (!tempEmployee) {
     return null
   }
 
-  // Determine if button should be disabled
   const isButtonDisabled = localLoading || !password.trim()
   const showButtonLoading = localLoading
 
@@ -273,24 +273,17 @@ const PasswordStep = ({ onBack }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Error Message - Inline error */}
+      {/* Error Message */}
       {error && (
         <Text style={styles.errorText}>{error}</Text>
       )}
 
-      {/* Remember Me */}
-      <TouchableOpacity
-        style={styles.rememberContainer}
-        onPress={() => setRememberMe(!rememberMe)}
-        disabled={localLoading}
-      >
-        <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-          {rememberMe && (
-            <Feather name="check" size={14} color="#fff" />
-          )}
-        </View>
-        <Text style={styles.rememberText}>Remember me on this device</Text>
-      </TouchableOpacity>
+      {/* Forgot Password Link */}
+      <View style={styles.forgotPasswordContainer}>
+        <TouchableOpacity onPress={() => setShowForgotPassword(true)}>
+          <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Submit Button */}
       <TouchableOpacity
@@ -315,6 +308,25 @@ const PasswordStep = ({ onBack }) => {
           )}
         </LinearGradient>
       </TouchableOpacity>
+
+      {/* Forgot Password Modal */}
+      <Modal
+        statusBarTranslucent
+        visible={showForgotPassword}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowForgotPassword(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <ForgotPassword
+              email={tempEmployee?.email}
+              onSuccess={handleForgotPasswordSuccess}
+              onBack={() => setShowForgotPassword(false)}
+            />
+          </View>
+        </View>
+      </Modal>
     </>
   )
 }

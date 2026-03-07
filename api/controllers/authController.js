@@ -1,9 +1,46 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma.js'
+import sgMail from '@sendgrid/mail'
+
+sgMail.setApiKey(process.env.SENDGRID_API_KEY)
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
 const JWT_EXPIRES_IN = '7d'
+
+// Helper function to send OTP email
+const sendOTPEmail = async (email, otp, firstName) => {
+  try {
+    const msg = {
+      to: email,
+      from: 'projectblurimedia@gmail.com', // Verified sender in SendGrid
+      subject: 'Password Reset OTP - Bluri High School',
+      text: `Hello ${firstName},\n\nYour OTP for password reset is: ${otp}\n\nThis OTP will expire in 15 minutes.\n\nIf you didn't request this, please ignore this email.\n\nRegards,\nBluri High School Administration`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">Password Reset Request</h2>
+          <p>Hello <strong>${firstName}</strong>,</p>
+          <p>We received a request to reset your password for your Bluri High School account.</p>
+          <div style="background-color: #f4f4f4; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h3 style="margin: 0; color: #555;">Your OTP Code:</h3>
+            <p style="font-size: 32px; font-weight: bold; color: #0066cc; margin: 10px 0;">${otp}</p>
+          </div>
+          <p>This code will expire in <strong>15 minutes</strong>.</p>
+          <p>If you didn't request this password reset, please contact the school administration immediately.</p>
+          <hr style="border: 1px solid #eee; margin: 20px 0;">
+          <p style="color: #777; font-size: 12px;">Bluri (E.M) High School, Gavaravaram</p>
+        </div>
+      `,
+    }
+    
+    await sgMail.send(msg)
+    console.log(`OTP email sent successfully to ${email}`)
+    return true
+  } catch (error) {
+    console.error('SendGrid email error:', error)
+    return false
+  }
+}
 
 export const checkUserExists = async (req, res) => {
   try {
@@ -117,12 +154,12 @@ export const loginWithPassword = async (req, res) => {
     }
 
     // Generate token
-    const token = jwt.sign({ id: employee.id }, JWT_SECRET, {
+    const token = jwt.sign({ id: employee.id, email: employee.email }, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN
     })
 
     // Remove password from response
-    const { hashedPassword, ...employeeData } = employee
+    const { hashedPassword, resetOtp, resetOtpExpiry, ...employeeData } = employee
 
     return res.status(200).json({
       success: true,
@@ -197,11 +234,11 @@ export const createPassword = async (req, res) => {
     })
 
     // Auto-login after password creation
-    const token = jwt.sign({ id: employeeId }, JWT_SECRET, {
+    const token = jwt.sign({ id: employeeId, email: employee.email }, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN
     })
 
-    const { hashedPassword: _, ...employeeData } = employee
+    const { hashedPassword: _, resetOtp, resetOtpExpiry, ...employeeData } = employee
 
     return res.status(200).json({
       success: true,
@@ -221,7 +258,7 @@ export const createPassword = async (req, res) => {
   }
 }
 
-// 4. FORGOT PASSWORD
+// 4. FORGOT PASSWORD - Send OTP
 export const forgotPassword = async (req, res) => {
   try {
     const { emailOrPhone } = req.body
@@ -255,29 +292,51 @@ export const forgotPassword = async (req, res) => {
       // For security, don't reveal if user exists
       return res.status(200).json({
         success: true,
-        message: 'If an account exists, a reset OTP will be sent'
+        message: 'If an account exists with this email/phone, an OTP will be sent'
       })
     }
 
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString()
     
-    // Store OTP in session (use Redis in production)
-    req.session.resetOTP = {
-      employeeId: employee.id,
-      otp,
-      expires: Date.now() + 15 * 60 * 1000 // 15 minutes
+    // Set expiry to 15 minutes from now
+    const expiryTime = new Date(Date.now() + 15 * 60 * 1000)
+
+    // Clear any existing OTP and set new one
+    await prisma.employee.update({
+      where: { id: employee.id },
+      data: {
+        resetOtp: otp,
+        resetOtpExpiry: expiryTime
+      }
+    })
+
+    // Send OTP via email
+    const emailSent = await sendOTPEmail(employee.email, otp, employee.firstName)
+
+    if (!emailSent) {
+      // If email fails, clear the OTP
+      await prisma.employee.update({
+        where: { id: employee.id },
+        data: {
+          resetOtp: null,
+          resetOtpExpiry: null
+        }
+      })
+      
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send OTP email. Please try again or contact administration.'
+      })
     }
 
-    // Send OTP (implement your SMS/email service)
-    console.log(`OTP for ${employee.email || employee.phone}: ${otp}`)
-    // await sendOTP(employee.email || employee.phone, otp)
+    console.log(`OTP for ${employee.email}: ${otp}`) // For development - remove in production
 
     return res.status(200).json({
       success: true,
       data: {
         employeeId: employee.id,
-        message: `OTP sent to your ${isEmail ? 'email' : 'phone'}`
+        message: `OTP sent successfully to your registered email`
       }
     })
 
@@ -285,7 +344,7 @@ export const forgotPassword = async (req, res) => {
     console.error('Forgot password error:', error)
     return res.status(500).json({
       success: false,
-      message: 'Server error'
+      message: 'Server error. Please try again later.'
     })
   }
 }
@@ -302,24 +361,45 @@ export const verifyOTP = async (req, res) => {
       })
     }
 
-    const otpData = req.session.resetOTP
+    // Find employee with matching OTP that hasn't expired
+    const employee = await prisma.employee.findFirst({
+      where: {
+        id: employeeId,
+        resetOtp: otp,
+        resetOtpExpiry: {
+          gt: new Date() // OTP expiry is greater than current time
+        }
+      }
+    })
 
-    if (!otpData || otpData.employeeId !== employeeId) {
-      return res.status(400).json({
-        success: false,
-        message: 'OTP session expired or invalid'
+    if (!employee) {
+      // Check if OTP exists but expired
+      const expiredEmployee = await prisma.employee.findFirst({
+        where: {
+          id: employeeId,
+          resetOtp: otp,
+          resetOtpExpiry: {
+            lte: new Date() // OTP expired
+          }
+        }
       })
-    }
 
-    if (Date.now() > otpData.expires) {
-      delete req.session.resetOTP
-      return res.status(400).json({
-        success: false,
-        message: 'OTP has expired'
-      })
-    }
+      if (expiredEmployee) {
+        // Clear expired OTP
+        await prisma.employee.update({
+          where: { id: employeeId },
+          data: {
+            resetOtp: null,
+            resetOtpExpiry: null
+          }
+        })
+        
+        return res.status(400).json({
+          success: false,
+          message: 'OTP has expired. Please request a new one.'
+        })
+      }
 
-    if (otpData.otp !== otp) {
       return res.status(400).json({
         success: false,
         message: 'Invalid OTP'
@@ -330,14 +410,21 @@ export const verifyOTP = async (req, res) => {
     const resetToken = jwt.sign(
       { 
         id: employeeId,
+        email: employee.email,
         purpose: 'password-reset'
       },
       JWT_SECRET,
       { expiresIn: '15m' }
     )
 
-    // Clear OTP data from session
-    delete req.session.resetOTP
+    // Clear OTP from database after successful verification
+    await prisma.employee.update({
+      where: { id: employeeId },
+      data: {
+        resetOtp: null,
+        resetOtpExpiry: null
+      }
+    })
 
     return res.status(200).json({
       success: true,
@@ -387,9 +474,15 @@ export const resetPassword = async (req, res) => {
     try {
       decoded = jwt.verify(resetToken, JWT_SECRET)
     } catch (error) {
+      if (error.name === 'TokenExpiredError') {
+        return res.status(401).json({
+          success: false,
+          message: 'Reset token has expired. Please request a new OTP.'
+        })
+      }
       return res.status(401).json({
         success: false,
-        message: 'Invalid or expired reset token'
+        message: 'Invalid reset token'
       })
     }
 
@@ -425,6 +518,30 @@ export const resetPassword = async (req, res) => {
         updatedAt: new Date()
       }
     })
+
+    // Send confirmation email
+    try {
+      const msg = {
+        to: employee.email,
+        from: 'projectblurimedia@gmail.com',
+        subject: 'Password Reset Successful - Bluri High School',
+        text: `Hello ${employee.firstName},\n\nYour password has been successfully reset.\n\nIf you didn't perform this action, please contact the school administration immediately.\n\nRegards,\nBluri High School Administration`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">Password Reset Successful</h2>
+            <p>Hello <strong>${employee.firstName}</strong>,</p>
+            <p>Your password has been successfully reset.</p>
+            <p>If you didn't perform this action, please contact the school administration immediately.</p>
+            <hr style="border: 1px solid #eee; margin: 20px 0;">
+            <p style="color: #777; font-size: 12px;">Bluri (E.M) High School, Gavaravaram</p>
+          </div>
+        `,
+      }
+      await sgMail.send(msg)
+    } catch (emailError) {
+      console.error('Failed to send confirmation email:', emailError)
+      // Don't fail the request if confirmation email fails
+    }
 
     return res.status(200).json({
       success: true,
@@ -470,7 +587,7 @@ export const changePassword = async (req, res) => {
     if (currentPassword === newPassword) {
       return res.status(400).json({
         success: false,
-        message: 'New password must be different'
+        message: 'New password must be different from current password'
       })
     }
 

@@ -364,6 +364,10 @@ model Employee {
   profilePicUrl      String? @db.Text
   profilePicPublicId String? @db.VarChar(500)
   
+  // OTP fields for password reset
+  resetOtp         String?  @db.VarChar(6)
+  resetOtpExpiry   DateTime?
+  
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -378,6 +382,8 @@ model Employee {
   @@index([firstName, lastName])
   @@index([createdAt])
   @@index([hashedPassword])
+  @@index([resetOtp])
+  @@index([resetOtpExpiry])
 }
 
 

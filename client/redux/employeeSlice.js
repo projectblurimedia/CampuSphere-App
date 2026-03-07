@@ -55,6 +55,47 @@ export const createEmployeePassword = createAsyncThunk(
   }
 )
 
+// FORGOT PASSWORD THUNKS
+export const forgotPassword = createAsyncThunk(
+  'employee/forgotPassword',
+  async (emailOrPhone, { rejectWithValue }) => {
+    try {
+      const response = await axiosApi.post('/auth/forgot-password', { emailOrPhone })
+      return response.data
+    } catch (error) {
+      return rejectWithValue(error.response?.data || { message: error.message })
+    }
+  }
+)
+
+export const verifyOTP = createAsyncThunk(
+  'employee/verifyOTP',
+  async ({ employeeId, otp }, { rejectWithValue }) => {
+    try {
+      const response = await axiosApi.post('/auth/verify-otp', { employeeId, otp })
+      return response.data
+    } catch (error) {
+      return rejectWithValue(error.response?.data || { message: error.message })
+    }
+  }
+)
+
+export const resetPassword = createAsyncThunk(
+  'employee/resetPassword',
+  async ({ resetToken, newPassword, confirmPassword }, { rejectWithValue }) => {
+    try {
+      const response = await axiosApi.post('/auth/reset-password', {
+        resetToken,
+        newPassword,
+        confirmPassword
+      })
+      return response.data
+    } catch (error) {
+      return rejectWithValue(error.response?.data || { message: error.message })
+    }
+  }
+)
+
 export const logoutEmployee = createAsyncThunk(
   'employee/logout',
   async (_, { rejectWithValue }) => {
@@ -101,6 +142,18 @@ const employeeSlice = createSlice({
     error: null,
     currentStep: 'emailPhone',
     tempEmployee: null,
+    
+    // Forgot password state
+    forgotPassword: {
+      step: 'email', // email, otp, createPassword
+      employeeId: null,
+      email: null,
+      resetToken: null,
+      isLoading: false,
+      error: null,
+      success: false,
+      message: null,
+    },
   },
   reducers: {
     setCurrentStep: (state, action) => {
@@ -129,6 +182,26 @@ const employeeSlice = createSlice({
       state.currentStep = 'emailPhone'
       state.tempEmployee = null
       state.isLoading = false
+    },
+    
+    // Forgot password reducers
+    setForgotPasswordStep: (state, action) => {
+      state.forgotPassword.step = action.payload
+    },
+    resetForgotPassword: (state) => {
+      state.forgotPassword = {
+        step: 'email',
+        employeeId: null,
+        email: null,
+        resetToken: null,
+        isLoading: false,
+        error: null,
+        success: false,
+        message: null,
+      }
+    },
+    clearForgotPasswordError: (state) => {
+      state.forgotPassword.error = null
     },
   },
   extraReducers: (builder) => {
@@ -204,6 +277,67 @@ const employeeSlice = createSlice({
         state.error = action.payload?.message || 'Password creation failed'
       })
       
+      // FORGOT PASSWORD CASES
+      // Send OTP
+      .addCase(forgotPassword.pending, (state) => {
+        state.forgotPassword.isLoading = true
+        state.forgotPassword.error = null
+        state.forgotPassword.message = null
+      })
+      .addCase(forgotPassword.fulfilled, (state, action) => {
+        state.forgotPassword.isLoading = false
+        if (action.payload.success) {
+          state.forgotPassword.employeeId = action.payload.data?.employeeId
+          state.forgotPassword.step = 'otp'
+          state.forgotPassword.message = action.payload.data?.message || 'OTP sent successfully'
+        } else {
+          state.forgotPassword.error = action.payload?.message || 'Failed to send OTP'
+        }
+      })
+      .addCase(forgotPassword.rejected, (state, action) => {
+        state.forgotPassword.isLoading = false
+        state.forgotPassword.error = action.payload?.message || 'Failed to send OTP'
+      })
+      
+      // Verify OTP
+      .addCase(verifyOTP.pending, (state) => {
+        state.forgotPassword.isLoading = true
+        state.forgotPassword.error = null
+      })
+      .addCase(verifyOTP.fulfilled, (state, action) => {
+        state.forgotPassword.isLoading = false
+        if (action.payload.success) {
+          state.forgotPassword.resetToken = action.payload.data?.resetToken
+          state.forgotPassword.step = 'createPassword'
+          state.forgotPassword.message = 'OTP verified successfully'
+        } else {
+          state.forgotPassword.error = action.payload?.message || 'Invalid OTP'
+        }
+      })
+      .addCase(verifyOTP.rejected, (state, action) => {
+        state.forgotPassword.isLoading = false
+        state.forgotPassword.error = action.payload?.message || 'OTP verification failed'
+      })
+      
+      // Reset Password
+      .addCase(resetPassword.pending, (state) => {
+        state.forgotPassword.isLoading = true
+        state.forgotPassword.error = null
+      })
+      .addCase(resetPassword.fulfilled, (state, action) => {
+        state.forgotPassword.isLoading = false
+        if (action.payload.success) {
+          state.forgotPassword.success = true
+          state.forgotPassword.message = 'Password reset successfully'
+        } else {
+          state.forgotPassword.error = action.payload?.message || 'Failed to reset password'
+        }
+      })
+      .addCase(resetPassword.rejected, (state, action) => {
+        state.forgotPassword.isLoading = false
+        state.forgotPassword.error = action.payload?.message || 'Password reset failed'
+      })
+      
       // Logout
       .addCase(logoutEmployee.fulfilled, (state) => {
         state.employee = null
@@ -223,7 +357,10 @@ export const {
   clearError, 
   resetLoginFlow,
   setEmployee,
-  clearEmployee
+  clearEmployee,
+  setForgotPasswordStep,
+  resetForgotPassword,
+  clearForgotPasswordError,
 } = employeeSlice.actions
 
 export default employeeSlice.reducer

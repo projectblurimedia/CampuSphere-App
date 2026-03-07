@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import {
   View,
   Text,
@@ -9,47 +9,181 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Modal,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { FontAwesome5, Feather } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
+import { useDispatch, useSelector } from 'react-redux'
+import {
+  forgotPassword,
+  verifyOTP,
+  resetPassword,
+  setForgotPasswordStep,
+  resetForgotPassword,
+  clearForgotPasswordError,
+} from '@/redux/employeeSlice'
+
+// Confirmation Modal Component
+const ConfirmationModal = ({ visible, title, message, onConfirm, onCancel, loading }) => {
+  const { colors } = useTheme()
+
+  const styles = StyleSheet.create({
+    modalContainer: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalContent: {
+      backgroundColor: colors.background,
+      borderRadius: 20,
+      padding: 24,
+      width: '100%',
+      maxWidth: 340,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+      marginBottom: 8,
+      textAlign: 'center',
+    },
+    modalMessage: {
+      fontSize: 14,
+      fontFamily: 'Poppins-Regular',
+      color: colors.textSecondary,
+      marginBottom: 24,
+      textAlign: 'center',
+      lineHeight: 20,
+    },
+    modalButtons: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    modalButton: {
+      flex: 1,
+      height: 48,
+      borderRadius: 12,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    cancelButton: {
+      backgroundColor: colors.inputBackground,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    confirmButton: {
+      backgroundColor: colors.primary,
+    },
+    cancelButtonText: {
+      fontSize: 16,
+      fontFamily: 'Poppins-Medium',
+      color: colors.text,
+    },
+    confirmButtonText: {
+      fontSize: 16,
+      fontFamily: 'Poppins-SemiBold',
+      color: '#fff',
+    },
+  })
+
+  return (
+    <Modal
+      transparent
+      visible={visible}
+      animationType="fade"
+      onRequestClose={onCancel}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>{title}</Text>
+          <Text style={styles.modalMessage}>{message}</Text>
+          <View style={styles.modalButtons}>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.cancelButton]}
+              onPress={onCancel}
+              disabled={loading}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.confirmButton]}
+              onPress={onConfirm}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.confirmButtonText}>Confirm</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
+}
 
 // Email Verification Step Component
-const EmailVerificationStep = ({ initialEmail, onSuccess, onBack }) => {
+const EmailVerificationStep = ({ onSuccess, onBack }) => {
   const { colors } = useTheme()
-  const [email, setEmail] = useState(initialEmail || '')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const dispatch = useDispatch()
+  
+  const { isLoading, error, message } = useSelector((state) => state.employee.forgotPassword)
+  const { tempEmployee } = useSelector((state) => state.employee)
+  
+  const [selectedContact, setSelectedContact] = useState('email') // 'email' or 'phone'
+  const [inputError, setInputError] = useState('')
+  
+  // Get email and phone from tempEmployee
+  const email = tempEmployee?.email || ''
+  const phone = tempEmployee?.phone || ''
 
   const handleSubmit = async () => {
-    if (!email.trim()) {
-      setError('Email is required')
+    setInputError('')
+    dispatch(clearForgotPasswordError())
+
+    const contactValue = selectedContact === 'email' ? email : phone
+    
+    if (!contactValue) {
+      setInputError(`No ${selectedContact === 'email' ? 'email' : 'phone number'} found for this employee`)
       return
     }
 
-    if (!/\S+@\S+\.\S+/.test(email)) {
-      setError('Please enter a valid email')
-      return
+    // Validate based on selected contact type
+    if (selectedContact === 'email') {
+      const isEmail = contactValue.includes('@')
+      if (!isEmail) {
+        setInputError('Invalid email format')
+        return
+      }
+    } else {
+      const isPhone = /^\d{10}$/.test(contactValue.replace(/\D/g, ''))
+      if (!isPhone) {
+        setInputError('Invalid phone number format')
+        return
+      }
     }
 
-    setLoading(true)
-    setError('')
-
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      onSuccess(email)
-    } catch (err) {
-      setError('Failed to verify email. Please try again.')
-    } finally {
-      setLoading(false)
+    const result = await dispatch(forgotPassword(contactValue))
+    
+    if (forgotPassword.fulfilled.match(result) && result.payload?.success) {
+      if (onSuccess) {
+        onSuccess(contactValue)
+      }
     }
   }
 
+  const toggleContactMethod = () => {
+    setSelectedContact(prev => prev === 'email' ? 'phone' : 'email')
+    setInputError('')
+    dispatch(clearForgotPasswordError())
+  }
+
   const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-    },
     title: {
       fontSize: 22,
       fontFamily: 'Poppins-SemiBold',
@@ -60,7 +194,37 @@ const EmailVerificationStep = ({ initialEmail, onSuccess, onBack }) => {
       fontSize: 14,
       fontFamily: 'Poppins-Regular',
       color: colors.textSecondary,
-      marginBottom: 30,
+      marginBottom: 20,
+    },
+    contactCard: {
+      backgroundColor: colors.primary + '10',
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 24,
+      borderWidth: 1,
+      borderColor: colors.primary + '20',
+    },
+    contactLabel: {
+      fontSize: 12,
+      fontFamily: 'Poppins-Medium',
+      color: colors.textSecondary,
+      marginBottom: 4,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    contactValue: {
+      fontSize: 14,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+      marginBottom: 12,
+    },
+    switchButton: {
+      alignSelf: 'flex-start',
+    },
+    switchButtonText: {
+      fontSize: 14,
+      fontFamily: 'Poppins-Medium',
+      color: colors.primary,
     },
     inputContainer: {
       flexDirection: 'row',
@@ -68,10 +232,11 @@ const EmailVerificationStep = ({ initialEmail, onSuccess, onBack }) => {
       backgroundColor: colors.inputBackground,
       borderRadius: 12,
       paddingHorizontal: 16,
-      marginBottom: 16,
+      marginBottom: 8,
       borderWidth: 1,
-      borderColor: error ? colors.error : colors.border,
+      borderColor: inputError || error ? colors.error : colors.border,
       height: 56,
+      opacity: 0.8,
     },
     inputIcon: {
       marginRight: 12,
@@ -82,64 +247,118 @@ const EmailVerificationStep = ({ initialEmail, onSuccess, onBack }) => {
       fontFamily: 'Poppins-Medium',
       color: colors.text,
     },
+    inputDisabled: {
+      color: colors.textSecondary,
+    },
     errorText: {
       color: colors.error || '#ef4444',
       fontSize: 12,
       fontFamily: 'Poppins-Medium',
       marginBottom: 16,
     },
+    successText: {
+      color: '#10b981',
+      fontSize: 12,
+      fontFamily: 'Poppins-Medium',
+      marginBottom: 16,
+      textAlign: 'center',
+    },
     submitButton: {
       borderRadius: 12,
       overflow: 'hidden',
       height: 56,
-      marginBottom: 16,
+      marginTop: 10,
     },
     submitGradient: {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      height: 45,
-      borderRadius: 20,
     },
     submitButtonText: {
       fontSize: 16,
       fontFamily: 'Poppins-SemiBold',
       color: '#fff',
-      marginBottom: -2,
+    },
+    badgeContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    badge: {
+      backgroundColor: colors.primary + '20',
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 16,
+      marginRight: 8,
+    },
+    badgeText: {
+      fontSize: 12,
+      fontFamily: 'Poppins-Medium',
+      color: colors.primary,
     },
   })
 
   return (
-    <View style={styles.container}>
+    <View>
       <Text style={styles.title}>Forgot Password?</Text>
       <Text style={styles.description}>
-        Enter your email address and we'll send you a verification code to reset your password.
+        We'll send a verification code to your registered contact method.
       </Text>
 
-      <View style={styles.inputContainer}>
-        <Feather name="mail" size={20} color={colors.textSecondary} style={styles.inputIcon} />
+      <View style={styles.badgeContainer}>
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>
+            {selectedContact === 'email' ? '📧 Email' : '📱 Mobile'}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.contactCard}>
+        <Text style={styles.contactLabel}>
+          {selectedContact === 'email' ? 'EMAIL ADDRESS' : 'PHONE NUMBER'}
+        </Text>
+        <Text style={styles.contactValue}>
+          {selectedContact === 'email' ? email : phone}
+        </Text>
+        
+        <TouchableOpacity 
+          style={styles.switchButton}
+          onPress={toggleContactMethod}
+          disabled={isLoading}
+        >
+          <Text style={styles.switchButtonText}>
+            {selectedContact === 'email' 
+              ? '📱 Use mobile number instead' 
+              : '📧 Use email instead'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Display the contact in a disabled input for clarity */}
+      <View style={[styles.inputContainer, { backgroundColor: colors.inputBackground + '80' }]}>
+        <Feather 
+          name={selectedContact === 'email' ? 'mail' : 'phone'} 
+          size={20} 
+          color={colors.textSecondary} 
+          style={styles.inputIcon} 
+        />
         <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor={colors.textSecondary + '80'}
-          value={email}
-          onChangeText={(text) => {
-            setEmail(text)
-            setError('')
-          }}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          editable={!loading}
-          autoFocus={true}
+          style={[styles.input, styles.inputDisabled]}
+          value={selectedContact === 'email' ? email : phone}
+          editable={false}
+          selectTextOnFocus={false}
         />
       </View>
 
+      {inputError ? <Text style={styles.errorText}>{inputError}</Text> : null}
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {message ? <Text style={styles.successText}>{message}</Text> : null}
 
       <TouchableOpacity
         onPress={handleSubmit}
-        disabled={loading}
+        disabled={isLoading || !(selectedContact === 'email' ? email : phone)}
         activeOpacity={0.9}
+        style={styles.submitButton}
       >
         <LinearGradient
           colors={[colors.primary, colors.primaryDark || '#0c7bc9']}
@@ -147,10 +366,12 @@ const EmailVerificationStep = ({ initialEmail, onSuccess, onBack }) => {
           end={{ x: 1, y: 0 }}
           style={styles.submitGradient}
         >
-          {loading ? (
+          {isLoading ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Text style={styles.submitButtonText}>Send Verification Code</Text>
+            <Text style={styles.submitButtonText}>
+              Send Code to {selectedContact === 'email' ? 'Email' : 'Mobile'}
+            </Text>
           )}
         </LinearGradient>
       </TouchableOpacity>
@@ -159,18 +380,20 @@ const EmailVerificationStep = ({ initialEmail, onSuccess, onBack }) => {
 }
 
 // OTP Verification Step Component
-const OtpVerificationStep = ({ email, onSuccess, onBack }) => {
+const OtpVerificationStep = ({ contact, onBack }) => {
   const { colors } = useTheme()
+  const dispatch = useDispatch()
+  
+  const { isLoading, error, employeeId } = useSelector((state) => state.employee.forgotPassword)
   const [otp, setOtp] = useState(['', '', '', '', '', ''])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
   const [timeLeft, setTimeLeft] = useState(60)
   const [canResend, setCanResend] = useState(false)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
   
   // Create refs for each OTP input
   const inputRefs = useRef([])
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (timeLeft > 0) {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000)
       return () => clearTimeout(timer)
@@ -200,43 +423,50 @@ const OtpVerificationStep = ({ email, onSuccess, onBack }) => {
   const handleSubmit = async () => {
     const otpString = otp.join('')
     if (otpString.length !== 6) {
-      setError('Please enter complete OTP')
+      setShowConfirmModal(true)
       return
     }
 
-    setLoading(true)
-    setError('')
+    if (!employeeId) {
+      setShowConfirmModal(true)
+      return
+    }
 
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      onSuccess()
-    } catch (err) {
-      setError('Invalid OTP. Please try again.')
-    } finally {
-      setLoading(false)
+    const result = await dispatch(verifyOTP({ employeeId, otp: otpString }))
+    
+    if (verifyOTP.fulfilled.match(result) && result.payload?.success) {
+      // Will automatically move to createPassword step via Redux
     }
   }
 
   const handleResend = async () => {
+    if (!canResend) return
+    
     setCanResend(false)
     setTimeLeft(60)
     setOtp(['', '', '', '', '', ''])
-    setError('')
     
     // Focus first input after reset
     setTimeout(() => {
       inputRefs.current[0]?.focus()
     }, 100)
     
-    // Simulate resend API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // Resend OTP using the contact
+    await dispatch(forgotPassword(contact))
+  }
+
+  const getErrorMessage = () => {
+    const otpString = otp.join('')
+    if (otpString.length !== 6) {
+      return 'Please enter complete 6-digit OTP'
+    }
+    if (!employeeId) {
+      return 'Session expired. Please start over.'
+    }
+    return error
   }
 
   const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-    },
     title: {
       fontSize: 22,
       fontFamily: 'Poppins-SemiBold',
@@ -249,7 +479,7 @@ const OtpVerificationStep = ({ email, onSuccess, onBack }) => {
       color: colors.textSecondary,
       marginBottom: 5,
     },
-    emailText: {
+    contactText: {
       fontSize: 16,
       fontFamily: 'Poppins-Medium',
       color: colors.primary,
@@ -290,6 +520,7 @@ const OtpVerificationStep = ({ email, onSuccess, onBack }) => {
     },
     resendButton: {
       alignItems: 'center',
+      marginBottom: 20,
     },
     resendText: {
       fontSize: 14,
@@ -300,7 +531,6 @@ const OtpVerificationStep = ({ email, onSuccess, onBack }) => {
       borderRadius: 12,
       overflow: 'hidden',
       height: 56,
-      marginTop: 20,
     },
     submitGradient: {
       flex: 1,
@@ -315,10 +545,10 @@ const OtpVerificationStep = ({ email, onSuccess, onBack }) => {
   })
 
   return (
-    <View style={styles.container}>
+    <>
       <Text style={styles.title}>Enter Verification Code</Text>
       <Text style={styles.description}>We've sent a code to</Text>
-      <Text style={styles.emailText}>{email}</Text>
+      <Text style={styles.contactText}>{contact}</Text>
 
       <View style={styles.otpContainer}>
         {otp.map((digit, index) => (
@@ -331,13 +561,15 @@ const OtpVerificationStep = ({ email, onSuccess, onBack }) => {
             onKeyPress={(e) => handleKeyPress(e, index)}
             keyboardType="numeric"
             maxLength={1}
-            editable={!loading}
+            editable={!isLoading}
             selectTextOnFocus={true}
           />
         ))}
       </View>
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error && !getErrorMessage().includes('Please') ? (
+        <Text style={styles.errorText}>{error}</Text>
+      ) : null}
 
       <View style={styles.timerContainer}>
         <Text style={styles.timerText}>
@@ -348,14 +580,14 @@ const OtpVerificationStep = ({ email, onSuccess, onBack }) => {
       <TouchableOpacity
         style={styles.resendButton}
         onPress={handleResend}
-        disabled={!canResend || loading}
+        disabled={!canResend || isLoading}
       >
         <Text style={styles.resendText}>Resend Code</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         onPress={handleSubmit}
-        disabled={loading}
+        disabled={isLoading}
         activeOpacity={0.9}
         style={styles.submitButton}
       >
@@ -365,26 +597,37 @@ const OtpVerificationStep = ({ email, onSuccess, onBack }) => {
           end={{ x: 1, y: 0 }}
           style={styles.submitGradient}
         >
-          {loading ? (
+          {isLoading ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <Text style={styles.submitButtonText}>Verify & Continue</Text>
           )}
         </LinearGradient>
       </TouchableOpacity>
-    </View>
+
+      <ConfirmationModal
+        visible={showConfirmModal}
+        title="Invalid OTP"
+        message={getErrorMessage() || 'Please check your OTP and try again.'}
+        onConfirm={() => setShowConfirmModal(false)}
+        onCancel={() => setShowConfirmModal(false)}
+      />
+    </>
   )
 }
 
 // Create Password Step Component
-const CreatePasswordStep = ({ onSuccess, onBack }) => {
+const CreatePasswordStep = ({ onSuccess }) => {
   const { colors } = useTheme()
+  const dispatch = useDispatch()
+  
+  const { isLoading, error, resetToken } = useSelector((state) => state.employee.forgotPassword)
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [modalConfig, setModalConfig] = useState({ title: '', message: '' })
 
   const validatePassword = (pass) => {
     const hasMinLength = pass.length >= 8
@@ -407,35 +650,57 @@ const CreatePasswordStep = ({ onSuccess, onBack }) => {
     const validation = validatePassword(password)
     
     if (!validation.isValid) {
-      setError('Password does not meet all requirements')
+      setModalConfig({
+        title: 'Invalid Password',
+        message: 'Password does not meet all requirements. Please check the criteria below.'
+      })
+      setShowConfirmModal(true)
       return
     }
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match')
+      setModalConfig({
+        title: 'Password Mismatch',
+        message: 'Passwords do not match. Please make sure both passwords are identical.'
+      })
+      setShowConfirmModal(true)
       return
     }
 
-    setLoading(true)
-    setError('')
+    if (!resetToken) {
+      setModalConfig({
+        title: 'Session Expired',
+        message: 'Your session has expired. Please start the password reset process again.'
+      })
+      setShowConfirmModal(true)
+      return
+    }
 
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500))
+    const result = await dispatch(resetPassword({
+      resetToken,
+      newPassword: password,
+      confirmPassword
+    }))
+    
+    if (resetPassword.fulfilled.match(result) && result.payload?.success) {
+      setModalConfig({
+        title: 'Success!',
+        message: 'Password reset successfully! You can now login with your new password.'
+      })
+      setShowConfirmModal(true)
+    }
+  }
+
+  const handleModalConfirm = () => {
+    setShowConfirmModal(false)
+    if (modalConfig.title === 'Success!') {
       onSuccess()
-    } catch (err) {
-      setError('Failed to reset password. Please try again.')
-    } finally {
-      setLoading(false)
     }
   }
 
   const validation = validatePassword(password)
 
   const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-    },
     title: {
       fontSize: 22,
       fontFamily: 'Poppins-SemiBold',
@@ -488,14 +753,12 @@ const CreatePasswordStep = ({ onSuccess, onBack }) => {
     validationValid: {
       color: '#10b981',
     },
-    validationInvalid: {
-      color: colors.textSecondary,
-    },
     errorText: {
       color: colors.error || '#ef4444',
       fontSize: 12,
       fontFamily: 'Poppins-Medium',
       marginBottom: 16,
+      textAlign: 'center',
     },
     submitButton: {
       borderRadius: 12,
@@ -516,7 +779,7 @@ const CreatePasswordStep = ({ onSuccess, onBack }) => {
   })
 
   return (
-    <View style={styles.container}>
+    <>
       <Text style={styles.title}>Create New Password</Text>
       <Text style={styles.description}>
         Your new password must be different from previously used passwords.
@@ -529,12 +792,9 @@ const CreatePasswordStep = ({ onSuccess, onBack }) => {
           placeholder="New Password"
           placeholderTextColor={colors.textSecondary + '80'}
           value={password}
-          onChangeText={(text) => {
-            setPassword(text)
-            setError('')
-          }}
+          onChangeText={setPassword}
           secureTextEntry={!showPassword}
-          editable={!loading}
+          editable={!isLoading}
         />
         <TouchableOpacity
           onPress={() => setShowPassword(!showPassword)}
@@ -555,12 +815,9 @@ const CreatePasswordStep = ({ onSuccess, onBack }) => {
           placeholder="Confirm New Password"
           placeholderTextColor={colors.textSecondary + '80'}
           value={confirmPassword}
-          onChangeText={(text) => {
-            setConfirmPassword(text)
-            setError('')
-          }}
+          onChangeText={setConfirmPassword}
           secureTextEntry={!showConfirmPassword}
-          editable={!loading}
+          editable={!isLoading}
         />
         <TouchableOpacity
           onPress={() => setShowConfirmPassword(!showConfirmPassword)}
@@ -631,7 +888,7 @@ const CreatePasswordStep = ({ onSuccess, onBack }) => {
 
       <TouchableOpacity
         onPress={handleSubmit}
-        disabled={loading}
+        disabled={isLoading}
         activeOpacity={0.9}
         style={styles.submitButton}
       >
@@ -641,54 +898,78 @@ const CreatePasswordStep = ({ onSuccess, onBack }) => {
           end={{ x: 1, y: 0 }}
           style={styles.submitGradient}
         >
-          {loading ? (
+          {isLoading ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <Text style={styles.submitButtonText}>Reset Password</Text>
           )}
         </LinearGradient>
       </TouchableOpacity>
-    </View>
+
+      <ConfirmationModal
+        visible={showConfirmModal}
+        title={modalConfig.title}
+        message={modalConfig.message}
+        onConfirm={handleModalConfirm}
+        onCancel={() => setShowConfirmModal(false)}
+        loading={isLoading}
+      />
+    </>
   )
 }
 
 // Main ForgotPassword Component
-const ForgotPassword = ({ email, onSuccess, onBack }) => {
+const ForgotPassword = ({ onSuccess, onBack }) => {
   const { colors } = useTheme()
-  const [step, setStep] = useState('email') 
-  const [verifiedEmail, setVerifiedEmail] = useState(email || '')
+  const dispatch = useDispatch()
+  
+  const { step, email } = useSelector((state) => state.employee.forgotPassword)
+  const [userContact, setUserContact] = useState('')
 
-  const handleEmailVerified = (email) => {
-    setVerifiedEmail(email)
-    setStep('otp')
-  }
-
-  const handleOtpVerified = () => {
-    setStep('createPassword')
-  }
-
-  const handlePasswordCreated = () => {
-    onSuccess()
-  }
-
-  const getBackButtonText = () => {
-    if (step === 'email') {
-      return 'Back to Login'
-    } else if (step === 'otp') {
-      return 'Back to Email'
-    } else if (step === 'createPassword') {
-      return 'Back to OTP'
+  useEffect(() => {
+    // Cleanup on unmount
+    return () => {
+      dispatch(resetForgotPassword())
     }
-    return 'Back'
+  }, [])
+
+  const handleContactSuccess = (contact) => {
+    setUserContact(contact)
   }
 
   const handleBack = () => {
     if (step === 'email') {
-      onBack()
+      dispatch(resetForgotPassword())
+      if (onBack) onBack()
     } else if (step === 'otp') {
-      setStep('email')
+      dispatch(setForgotPasswordStep('email'))
     } else if (step === 'createPassword') {
-      setStep('otp')
+      dispatch(setForgotPasswordStep('otp'))
+    }
+  }
+
+  const handleSuccess = () => {
+    dispatch(resetForgotPassword())
+    if (onSuccess) onSuccess()
+  }
+
+  const getBackButtonText = () => {
+    if (step === 'email') return 'Back to Login'
+    if (step === 'otp') return 'Back to Contact'
+    if (step === 'createPassword') return 'Back to OTP'
+    return 'Back'
+  }
+
+  const renderStep = () => {
+    switch (step) {
+      case 'email':
+        return <EmailVerificationStep onSuccess={handleContactSuccess} onBack={handleBack} />
+      case 'otp':
+        return <OtpVerificationStep contact={email || userContact} onBack={handleBack} />
+      case 'createPassword':
+        return <CreatePasswordStep onSuccess={handleSuccess} />
+      default:
+        return null
     }
   }
 
@@ -712,42 +993,11 @@ const ForgotPassword = ({ email, onSuccess, onBack }) => {
       fontFamily: 'Poppins-SemiBold',
       color: colors.primary,
       marginLeft: 8,
-      marginBottom: -2,
     },
     content: {
       flex: 1,
     },
   })
-
-  const renderStep = () => {
-    switch (step) {
-      case 'email':
-        return (
-          <EmailVerificationStep
-            initialEmail={verifiedEmail}
-            onSuccess={handleEmailVerified}
-            onBack={handleBack}
-          />
-        )
-      case 'otp':
-        return (
-          <OtpVerificationStep
-            email={verifiedEmail}
-            onSuccess={handleOtpVerified}
-            onBack={handleBack}
-          />
-        )
-      case 'createPassword':
-        return (
-          <CreatePasswordStep
-            onSuccess={handlePasswordCreated}
-            onBack={handleBack}
-          />
-        )
-      default:
-        return null
-    }
-  }
 
   return (
     <KeyboardAvoidingView

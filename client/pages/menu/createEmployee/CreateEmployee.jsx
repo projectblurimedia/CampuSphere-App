@@ -19,16 +19,15 @@ import * as ImagePicker from 'expo-image-picker'
 import {
   FontAwesome5,
   Feather,
-  AntDesign,
   MaterialIcons,
   MaterialCommunityIcons,
   Ionicons,
-  Entypo,
 } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import axiosApi from '@/utils/axiosApi'
 import { Image } from 'expo-image'
+import { forceLogoutEmployee } from '@/socket/socket'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
@@ -537,6 +536,10 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
       }
 
       if (response.data.success) {
+        forceLogoutEmployee(
+          employeeData.id,
+          'Your account details have been updated. Please login again.'
+        )
         showToast(isEdit ? 'Employee updated successfully!' : 'Employee created successfully!', 'success')
         setTimeout(() => onClose(true), 1500)
       } else {

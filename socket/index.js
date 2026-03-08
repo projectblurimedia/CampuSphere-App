@@ -33,6 +33,10 @@ const getReceiver = (receiverId) => {
     return users.find((user) => user.userId === receiverId)
 }
 
+const getUsersByUserId = (userId) => {
+    return users.filter((user) => user.userId === userId)
+}
+
 const removeReceiver = (receiverId) => {
     users = users.filter((user) => user.userId !== receiverId)
 }
@@ -66,6 +70,23 @@ io.on('connection', (socket) => {
         }
     })
 
+    // Handle force logout request
+    socket.on('forceLogout', (data) => {
+        const { userId, reason } = data
+        console.log(`Force logout requested for user ${userId}, reason: ${reason}`)
+        
+        // Find all sockets for this user
+        const userSockets = getUsersByUserId(userId)
+        
+        // Emit logout event to all user's connected devices
+        userSockets.forEach(user => {
+            io.to(user.socketId).emit('forceLogout', {
+                reason: reason || 'Your account has been updated. Please login again.',
+                timestamp: new Date().toISOString()
+            })
+        })
+    })
+
     // Disconnect
     socket.on('disconnect', () => {
         const userId = socket.handshake.auth.userId
@@ -75,4 +96,3 @@ io.on('connection', (socket) => {
         io.emit('getUsers', users) 
     })
 })
-

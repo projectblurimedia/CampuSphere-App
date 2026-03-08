@@ -203,6 +203,14 @@ const employeeSlice = createSlice({
     clearForgotPasswordError: (state) => {
       state.forgotPassword.error = null
     },
+    immediateLogout: (state) => {
+      state.employee = null
+      state.token = null
+      state.isAuthenticated = false
+      state.currentStep = 'emailPhone'
+      state.tempEmployee = null
+      state.error = null
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -361,6 +369,7 @@ export const {
   setForgotPasswordStep,
   resetForgotPassword,
   clearForgotPasswordError,
+  immediateLogout,
 } = employeeSlice.actions
 
 export default employeeSlice.reducer

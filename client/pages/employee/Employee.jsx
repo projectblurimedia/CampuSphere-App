@@ -22,6 +22,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import axiosApi from '@/utils/axiosApi'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import CreateEmployee from '@/pages/menu/createEmployee/CreateEmployee'
+import { forceLogoutEmployee } from '../../socket/socket'
 
 const { width, height } = Dimensions.get('window')
 
@@ -180,6 +181,10 @@ export default function Employee({ employee, onClose }) {
     try {
       const response = await axiosApi.delete(`/employees/${employee.id}`)
       if (response.data.success) {
+        forceLogoutEmployee(
+          employeeData.id,
+          'Your account details have been updated. Please login again.'
+        )
         setShowDeleteModal(false)
         showToast('Employee deleted successfully', 'success')
         setTimeout(() => {

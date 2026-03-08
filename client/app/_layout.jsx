@@ -1,15 +1,18 @@
 import { Stack } from 'expo-router'
 import 'react-native-reanimated'
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import * as Font from 'expo-font'
 import { View, ActivityIndicator, AppState, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { Provider, useDispatch, useSelector } from 'react-redux'
 import { store } from '@/redux/store'
-import { loadEmployeeFromStorage } from '@/redux/employeeSlice'
+import { loadEmployeeFromStorage, logoutEmployee } from '@/redux/employeeSlice'
 import { GlobalToast } from '@/components/ui/GlobalToast'
 import * as LocalAuthentication from 'expo-local-authentication'
 import { MaterialIcons } from '@expo/vector-icons'
+import { disconnectSocket, initializeSocket } from '@/socket/socket'
+import axiosApi from '@/utils/axiosApi'
+import { ToastNotification } from '@/components/ui/ToastNotification'
 
 // Fonts
 import PoppinsLight from '../assets/fonts/Poppins-Light.ttf'
@@ -28,8 +31,49 @@ export const unstable_settings = {
 
 // Main App Component (Authenticated)
 const MainApp = () => {
+  const dispatch = useDispatch()
   const { employee } = useSelector((state) => state.employee)
   const { colors, currentTheme } = useSelector((state) => state.theme)
+
+  const appState = useRef(AppState.currentState)
+  const socketConnected = useRef(false)
+
+  useEffect(() => {
+    function handleAppStateChange(nextAppState) {
+      // Only act if user is logged in
+      if (!employee.id) return
+
+      const isInactiveOrBg = nextAppState === 'inactive'
+      const isActive = nextAppState === 'active' || nextAppState === 'background'
+
+      if (isInactiveOrBg && socketConnected.current) {
+        disconnectSocket(employee.id)
+        socketConnected.current = false
+      } else if (isActive && !socketConnected.current) {
+        initializeSocket(employee.id, dispatch)
+        socketConnected.current = true
+      }
+
+      appState.current = nextAppState
+    }
+
+    // On mount: connect if active and user exists
+    if (appState.current === 'active' && employee.id && !socketConnected.current) {
+      initializeSocket(employee.id, dispatch)
+      socketConnected.current = true
+    }
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange)
+
+    // Cleanup
+    return () => {
+      subscription.remove()
+      if (employee.id && socketConnected.current) {
+        disconnectSocket(employee.id)
+        socketConnected.current = false
+      }
+    }
+  }, [employee.id, dispatch])
   
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -115,6 +159,8 @@ const AppContent = () => {
   const [isAuthenticating, setIsAuthenticating] = useState(false)
   const [isFirstLaunch, setIsFirstLaunch] = useState(true)
   const [appState, setAppState] = useState(AppState.currentState)
+  const [checkingStatus, setCheckingStatus] = useState(true)
+  const [toast, setToast] = useState(null)
   const dispatch = useDispatch()
   
   // Get authentication state from Redux
@@ -124,10 +170,77 @@ const AppContent = () => {
   // Track if we've already authenticated in this session
   const hasAuthenticatedRef = useRef(false)
 
+  // Show toast notification
+  const showToast = useCallback((message, type = 'error') => {
+    setToast({ message, type })
+  }, [])
+
+  // Hide toast notification
+  const hideToast = useCallback(() => {
+    setToast(null)
+  }, [])
+
+  // Check if employee is still active in database
+  const checkEmployeeActiveStatus = async () => {
+    if (!employee?.id) {
+      setCheckingStatus(false)
+      return true
+    }
+
+    try {
+      console.log('Checking if employee is still active:', employee.id)
+      
+      const response = await axiosApi.get(`/employees/${employee.id}`)
+      
+      if (response.data.success) {
+        const employeeData = response.data.data
+        
+        if (!employeeData.isActive) {
+          console.log('Employee is no longer active - logging out')
+          
+          showToast('Your account has been deactivated. Please contact administrator.', 'error')
+          
+          // Force logout
+          setTimeout(() => {
+            dispatch(logoutEmployee())
+            disconnectSocket(employee.id)
+          }, 2000)
+          
+          setCheckingStatus(false)
+          return false
+        }
+        
+        console.log('Employee is active - continuing')
+        setCheckingStatus(false)
+        return true
+      }
+    } catch (error) {
+      console.error('Error checking employee active status:', error)
+      
+      if (error.response?.status === 404) {
+        console.log('Employee not found in database - logging out')
+        
+        showToast('Your account no longer exists. Please contact administrator.', 'error')
+        
+        setTimeout(() => {
+          dispatch(logoutEmployee())
+          disconnectSocket(employee.id)
+        }, 2000)
+        
+        setCheckingStatus(false)
+        return false
+      }
+      
+      showToast('Unable to verify account status. You may continue but some features might be limited.', 'warning')
+      
+      setCheckingStatus(false)
+      return true
+    }
+  }
+
   useEffect(() => {
     async function initializeApp() {
       try {
-        // 1. Load fonts
         await Font.loadAsync({
           'Poppins-Light': PoppinsLight,
           'Poppins-Regular': PoppinsRegular,
@@ -138,10 +251,8 @@ const AppContent = () => {
         })
         setFontsLoaded(true)
         
-        // 2. Load employee data from storage
         await dispatch(loadEmployeeFromStorage()).unwrap()
         
-        // 3. Mark app as ready
         setAppReady(true)
       } catch (error) {
         console.error('App initialization error:', error)
@@ -152,38 +263,39 @@ const AppContent = () => {
     initializeApp()
   }, [dispatch])
 
-  // Trigger biometric when app is ready and user is authenticated (only on first launch)
   useEffect(() => {
-    if (appReady && fontsLoaded && isAuthenticated && employee && isFirstLaunch) {
-      // Small delay to ensure UI is ready
+    if (appReady && fontsLoaded && isAuthenticated && employee) {
+      checkEmployeeActiveStatus()
+    } else if (appReady && fontsLoaded && !isAuthenticated) {
+      setCheckingStatus(false)
+    }
+  }, [appReady, fontsLoaded, isAuthenticated, employee])
+
+  useEffect(() => {
+    if (appReady && fontsLoaded && isAuthenticated && employee && isFirstLaunch && !checkingStatus) {
       setTimeout(() => {
         setIsLocked(true)
         authenticateWithBiometric()
       }, 500)
     }
-  }, [appReady, fontsLoaded, isAuthenticated, employee, isFirstLaunch])
+  }, [appReady, fontsLoaded, isAuthenticated, employee, isFirstLaunch, checkingStatus])
 
-  // Handle app state changes (background/foreground)
   useEffect(() => {
     const subscription = AppState.addEventListener('change', handleAppStateChange)
     return () => {
       subscription.remove()
     }
-  }, [appState, isAuthenticated, employee])
+  }, [])
 
   const handleAppStateChange = (nextAppState) => {
-    // Just track app state changes but don't trigger authentication
     setAppState(nextAppState)
     
-    // If app comes to foreground and was in background
     if (appState.match(/inactive|background/) && nextAppState === 'active') {
-      // DO NOT trigger authentication - only on fresh launch
       console.log('App came from background - no authentication needed')
     }
   }
 
   const authenticateWithBiometric = async () => {
-    // Don't authenticate if already authenticated in this session
     if (hasAuthenticatedRef.current) {
       setIsLocked(false)
       return
@@ -192,11 +304,9 @@ const AppContent = () => {
     setIsAuthenticating(true)
     
     try {
-      // Check if biometric is available
       const compatible = await LocalAuthentication.hasHardwareAsync()
       
       if (!compatible) {
-        // If no biometric hardware, just unlock
         hasAuthenticatedRef.current = true
         setIsLocked(false)
         setIsFirstLaunch(false)
@@ -207,7 +317,6 @@ const AppContent = () => {
       const enrolled = await LocalAuthentication.isEnrolledAsync()
       
       if (!enrolled) {
-        // If no biometrics enrolled, just unlock
         hasAuthenticatedRef.current = true
         setIsLocked(false)
         setIsFirstLaunch(false)
@@ -215,7 +324,6 @@ const AppContent = () => {
         return
       }
 
-      // Show biometric dialog
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: 'Authenticate to access School App',
         fallbackLabel: 'Use Password Instead',
@@ -224,18 +332,14 @@ const AppContent = () => {
       })
 
       if (result.success) {
-        // Authentication successful - unlock the app
         hasAuthenticatedRef.current = true
         setIsLocked(false)
         setIsFirstLaunch(false)
       } else {
-        // User clicked cancel or closed the dialog
-        // Keep the app locked and show lock screen
         console.log('Authentication cancelled - app remains locked')
       }
     } catch (error) {
       console.error('Authentication error:', error)
-      // On error, keep the app locked
     } finally {
       setIsAuthenticating(false)
     }
@@ -245,38 +349,80 @@ const AppContent = () => {
     authenticateWithBiometric()
   }
 
-  // Show loading while initializing
-  if (!appReady || !fontsLoaded) {
+  if (!appReady || !fontsLoaded || checkingStatus) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
         <View style={[styles.loadingCard, { backgroundColor: colors.cardBackground }]}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-            Loading...
+            {checkingStatus ? 'Verifying account...' : 'Loading...'}
           </Text>
         </View>
+        <ToastNotification
+          visible={!!toast}
+          type={toast?.type}
+          message={toast?.message}
+          onHide={hideToast}
+          position="bottom-center"
+          duration={3000}
+          showCloseButton={true}
+        />
       </View>
     )
   }
 
-  // If not authenticated with school credentials, show login screen
   if (!isAuthenticated || !employee) {
-    return <LoginScreen />
-  }
-
-  // If app is locked (only on first launch), show lock screen with theme colors
-  if (isLocked) {
     return (
-      <LockScreen 
-        onUnlockPress={handleUnlockPress} 
-        isAuthenticating={isAuthenticating}
-        colors={colors}
-      />
+      <>
+        <LoginScreen />
+        <ToastNotification
+          visible={!!toast}
+          type={toast?.type}
+          message={toast?.message}
+          onHide={hideToast}
+          position="bottom-center"
+          duration={3000}
+          showCloseButton={true}
+        />
+      </>
     )
   }
 
-  // If unlocked, show main app
-  return <MainApp />
+  if (isLocked) {
+    return (
+      <>
+        <LockScreen 
+          onUnlockPress={handleUnlockPress} 
+          isAuthenticating={isAuthenticating}
+          colors={colors}
+        />
+        <ToastNotification
+          visible={!!toast}
+          type={toast?.type}
+          message={toast?.message}
+          onHide={hideToast}
+          position="bottom-center"
+          duration={3000}
+          showCloseButton={true}
+        />
+      </>
+    )
+  }
+
+  return (
+    <>
+      <MainApp />
+      <ToastNotification
+        visible={!!toast}
+        type={toast?.type}
+        message={toast?.message}
+        onHide={hideToast}
+        position="bottom-center"
+        duration={3000}
+        showCloseButton={true}
+      />
+    </>
+  )
 }
 
 // Root Layout
@@ -284,7 +430,6 @@ export default function RootLayout() {
   return (
     <Provider store={store}>
       <AppContent />
-      <GlobalToast />
     </Provider>
   )
 }

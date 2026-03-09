@@ -295,7 +295,7 @@ export default function Profile() {
               {renderAvatar()}
               
               <View style={styles.profileInfo}>
-                <ThemedText style={styles.profileName}>
+                <ThemedText type='subtitle' style={[styles.profileName, { color: colors?.text }]}>
                   {displayName}
                 </ThemedText>
                 
@@ -534,7 +534,7 @@ const styles = StyleSheet.create({
   },
   profileInfo: {
     flex: 1,
-    gap: 8,
+    gap: 4,
   },
   profileName: {
     fontSize: 18,

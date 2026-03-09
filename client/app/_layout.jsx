@@ -24,6 +24,7 @@ import PoppinsExtraBold from '../assets/fonts/Poppins-ExtraBold.ttf'
 
 // Components
 import LoginScreen from '@/pages/login/LoginScreen'
+import { useTheme } from '@/hooks/useTheme'
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -33,8 +34,7 @@ export const unstable_settings = {
 const MainApp = () => {
   const dispatch = useDispatch()
   const { employee } = useSelector((state) => state.employee)
-  const { colors, currentTheme } = useSelector((state) => state.theme)
-
+  const { colors } = useTheme()
   const appState = useRef(AppState.currentState)
   const socketConnected = useRef(false)
 
@@ -77,7 +77,7 @@ const MainApp = () => {
   
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <StatusBar style={currentTheme === 'dark' ? 'light' : 'dark'} />
+      <StatusBar style={'light'} />
       <Stack
         screenOptions={{
           headerStyle: {
@@ -430,6 +430,7 @@ export default function RootLayout() {
   return (
     <Provider store={store}>
       <AppContent />
+      <GlobalToast />
     </Provider>
   )
 }

@@ -828,7 +828,6 @@ const styles = StyleSheet.create({
   },
   profileName: {
     fontSize: 18,
-    color: '#FFFFFF',
     letterSpacing: 0.3,
     fontFamily: 'Poppins-SemiBold',
   },

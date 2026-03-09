@@ -496,5 +496,6 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 14,
     fontFamily: 'Poppins-Medium',
+    textAlign: 'center',
   },
 })

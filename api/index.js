@@ -51,6 +51,36 @@ const authLimiter = rateLimit({
   message: 'Too many attempts, please try again later'
 })
 
+// Health check endpoint for uptime monitoring - UPDATED for Prisma
+app.get('/health', async (req, res) => {
+  let dbStatus = "disconnected"
+  try {
+    // Test database connection with Prisma
+    await prisma.$queryRaw`SELECT 1`
+    dbStatus = 'connected'
+  } catch (error) {
+    dbStatus = 'disconnected'
+    console.error('Database health check failed:', error)
+  }
+  
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    database: dbStatus
+  })
+})
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: 'School Management System API',
+    status: 'running',
+    keepAliveEndpoints: [
+      '/health - for uptime monitoring',
+    ]
+  })
+})
+
 // Apply rate limiting to auth routes
 app.use('/api/auth/login', authLimiter)
 app.use('/api/auth/forgot-password', authLimiter)

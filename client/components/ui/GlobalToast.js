@@ -31,9 +31,9 @@ export const GlobalToast = () => {
   // Get position styles
   const getPositionStyle = () => {
     const positions = {
-      'top-left': { top: 50, left: 20, right: undefined },
-      'top-right': { top: 50, right: 20, left: undefined },
-      'top-center': { top: 20, left: 20, right: 20, alignItems: 'center' },
+      'top-left': { top: 35, left: 20, right: undefined },
+      'top-right': { top: 35, right: 20, left: undefined },
+      'top-center': { top: 35, left: 20, right: 20, alignItems: 'center' },
       'bottom-left': { bottom: 20, left: 20, right: undefined },
       'bottom-right': { bottom: 20, right: 20, left: undefined },
       'bottom-center': { bottom: 20, left: 20, right: 20, alignItems: 'center' }
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 20,
     maxWidth: SCREEN_WIDTH * 0.95,
     minWidth: 350,
     minHeight: 70,

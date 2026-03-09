@@ -25,6 +25,7 @@ import PoppinsExtraBold from '../assets/fonts/Poppins-ExtraBold.ttf'
 // Components
 import LoginScreen from '@/pages/login/LoginScreen'
 import { useTheme } from '@/hooks/useTheme'
+import { ThemedText } from '@/components/ui/themed-text'
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -352,11 +353,11 @@ const AppContent = () => {
   if (!appReady || !fontsLoaded || checkingStatus) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
-        <View style={[styles.loadingCard, { backgroundColor: colors.cardBackground }]}>
+        <View style={[styles.loadingCard, {backgroundColor: colors?.cardBackground}]}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+          <ThemedText style={[styles.loadingText, { color: colors.textSecondary }]}>
             {checkingStatus ? 'Verifying account...' : 'Loading...'}
-          </Text>
+          </ThemedText>
         </View>
         <ToastNotification
           visible={!!toast}
@@ -484,17 +485,13 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   loadingCard: {
-    padding: 30,
+    padding: 20,
     borderRadius: 20,
     alignItems: 'center',
     gap: 16,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
   },
   loadingText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Poppins-Medium',
     textAlign: 'center',
   },

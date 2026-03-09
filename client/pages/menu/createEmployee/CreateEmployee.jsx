@@ -31,74 +31,99 @@ import { forceLogoutEmployee } from '@/socket/socket'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
-// Custom Input Component
-const CustomInput = React.memo(({
+// Modern Input Component with Label
+const ModernInput = React.memo(({
   value,
   onChangeText,
   placeholder,
+  label,
   keyboardType,
   multiline,
   numberOfLines,
   maxLength,
   editable = true,
+  required = false,
+  icon,
   style,
   ...props
 }) => {
   const { colors } = useTheme()
+  const [isFocused, setIsFocused] = useState(false)
   
   return (
-    <TextInput
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={colors.textSecondary}
-      keyboardType={keyboardType}
-      multiline={multiline}
-      numberOfLines={numberOfLines}
-      maxLength={maxLength}
-      editable={editable}
-      style={[
+    <View style={styles.inputWrapper}>
+      {label && (
+        <ThemedText style={[styles.inputLabel, { color: colors.textSecondary }]}>
+          {label} {required && <ThemedText style={{ color: colors.danger }}>*</ThemedText>}
+        </ThemedText>
+      )}
+      <View style={[
+        styles.modernInputContainer,
         {
-          flex: 1,
-          height: '100%',
-          fontSize: 15,
-          color: editable ? colors.text : colors.textSecondary,
-          paddingVertical: 0,
-          paddingRight: 10,
-          margin: 0,
-          fontFamily: 'Poppins-Medium'
+          borderColor: isFocused ? colors.primary : colors.border,
+          backgroundColor: colors.inputBackground,
+          opacity: editable ? 1 : 0.6,
+          minHeight: multiline ? 90 : 50,
         },
-        multiline && {
-          height: '100%',
-          textAlignVertical: 'top',
-          paddingTop: 0,
-        },
-        style,
-      ]}
-      cursorColor="#1d9bf0"
-      selectionColor="#1d9bf0"
-      {...props}
-    />
+        style
+      ]}>
+        {icon && (
+          <View style={styles.modernInputIcon}>
+            {icon}
+          </View>
+        )}
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textSecondary + '80'}
+          keyboardType={keyboardType}
+          multiline={multiline}
+          numberOfLines={numberOfLines}
+          maxLength={maxLength}
+          editable={editable}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          style={[
+            styles.modernInput,
+            {
+              color: editable ? colors.text : colors.textSecondary,
+              textAlignVertical: multiline ? 'top' : 'center',
+              paddingTop: multiline ? 12 : 0,
+            }
+          ]}
+          cursorColor={colors.primary}
+          selectionColor={colors.primary + '40'}
+          {...props}
+        />
+      </View>
+    </View>
   )
 })
 
-// Custom Dropdown Component
-const CustomDropdown = ({
+// Modern Dropdown Component with Label
+const ModernDropdown = ({
   value,
   items,
   onSelect,
+  label,
   placeholder = "Select an option",
+  required = false,
   disabled = false,
+  icon,
   style,
-  dropdownStyle,
 }) => {
   const { colors } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
   const [selectedLabel, setSelectedLabel] = useState(
-    items.find(item => item.value === value)?.label || placeholder
+    items.find(item => item.value === value)?.label || ''
   )
   const rotateAnim = useRef(new Animated.Value(0)).current
   const heightAnim = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    setSelectedLabel(items.find(item => item.value === value)?.label || '')
+  }, [value, items])
 
   const toggleDropdown = () => {
     if (disabled) return
@@ -133,13 +158,6 @@ const CustomDropdown = ({
     }
   }
 
-  const handleSelect = (item) => {
-    if (disabled) return
-    setSelectedLabel(item.label)
-    onSelect(item.value)
-    toggleDropdown()
-  }
-
   const rotate = rotateAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '180deg']
@@ -147,143 +165,91 @@ const CustomDropdown = ({
 
   const maxDropdownHeight = Math.min(items.length * 48, SCREEN_HEIGHT * 0.3)
 
-  useEffect(() => {
-    const selectedItem = items.find(item => item.value === value)
-    if (selectedItem) {
-      setSelectedLabel(selectedItem.label)
-    } else {
-      setSelectedLabel(placeholder)
-    }
-  }, [value, items, placeholder])
-
-  const dropdownStyles = {
-    customDropdownContainer: {
-      marginBottom: 12,
-    },
-    dropdownHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderWidth: 1,
-      borderLeftWidth: 3,
-      borderRadius: 6,
-      borderTopRightRadius: 22,
-      borderBottomRightRadius: 22,
-      paddingHorizontal: 12,
-      height: 50,
-      backgroundColor: colors.inputBackground,
-      borderColor: colors.border,
-      borderLeftColor: colors.primary,
-      opacity: disabled ? 0.5 : 1,
-    },
-    dropdownIcon: {
-      marginRight: 8,
-    },
-    dropdownSelectedText: {
-      flex: 1,
-      fontSize: 15,
-      fontFamily: 'Poppins-Medium',
-      color: value ? (disabled ? colors.textSecondary : colors.text) : colors.textSecondary,
-    },
-    dropdownList: {
-      position: 'absolute',
-      top: 52,
-      left: 0,
-      right: 0,
-      borderWidth: 1,
-      borderRadius: 8,
-      borderTopWidth: 0,
-      zIndex: 1000,
-      elevation: 5,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 3,
-      backgroundColor: colors.inputBackground,
-      borderColor: colors.primary + '30',
-      overflow: 'hidden',
-    },
-    dropdownItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      borderBottomWidth: 1,
-      borderBottomColor: 'rgba(0,0,0,0.05)',
-    },
-    dropdownItemText: {
-      fontSize: 15,
-      flex: 1,
-    },
-  }
-
   return (
-    <View style={[dropdownStyles.customDropdownContainer, style]}>
-      <TouchableOpacity
-        style={dropdownStyles.dropdownHeader}
-        onPress={toggleDropdown}
-        activeOpacity={0.7}
-        disabled={disabled}
-      >
-        <Feather name="chevron-down" size={18} color={colors.textSecondary} style={dropdownStyles.dropdownIcon} />
-        <ThemedText style={dropdownStyles.dropdownSelectedText}>
-          {selectedLabel}
+    <View style={[styles.inputWrapper, style]}>
+      {label && (
+        <ThemedText style={[styles.inputLabel, { color: colors.textSecondary }]}>
+          {label} {required && <ThemedText style={{ color: colors.danger }}>*</ThemedText>}
         </ThemedText>
-        <Animated.View style={{ transform: [{ rotate }] }}>
-          <Ionicons name="chevron-down" size={16} color={disabled ? colors.textSecondary : colors.primary} />
-        </Animated.View>
-      </TouchableOpacity>
-      
-      {isOpen && (
-        <Animated.View style={[
-          dropdownStyles.dropdownList,
-          dropdownStyle,
-          { height: heightAnim }
-        ]}>
-          <ScrollView 
-            nestedScrollEnabled={true}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            style={{ maxHeight: maxDropdownHeight }}
-          >
-            {items.map((item) => (
-              <TouchableOpacity
-                key={item.value.toString()}
-                style={[
-                  dropdownStyles.dropdownItem,
-                  {
-                    backgroundColor: value === item.value ? colors.primary + '15' : 'transparent',
-                    borderLeftWidth: value === item.value ? 2 : 0,
-                    borderLeftColor: colors.primary,
-                  }
-                ]}
-                onPress={() => handleSelect(item)}
-                disabled={disabled}
-              >
-                <ThemedText style={[
-                  dropdownStyles.dropdownItemText,
-                  { 
-                    color: value === item.value ? colors.primary : colors.text,
-                    fontFamily: value === item.value ? 'Poppins-SemiBold' : 'Poppins-Medium'
-                  }
-                ]}>
-                  {item.label}
-                </ThemedText>
-                {value === item.value && (
-                  <Feather name="check" size={16} color={colors.primary} />
-                )}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </Animated.View>
       )}
+      <View style={[
+        styles.modernInputContainer,
+        {
+          borderColor: isOpen ? colors.primary : colors.border,
+          backgroundColor: colors.inputBackground,
+          opacity: disabled ? 0.6 : 1,
+          padding: 0,
+          overflow: 'visible',
+        }
+      ]}>
+        <TouchableOpacity
+          style={styles.modernDropdownHeader}
+          onPress={toggleDropdown}
+          activeOpacity={0.7}
+          disabled={disabled}
+        >
+          {icon && <View style={styles.modernInputIcon}>{icon}</View>}
+          <ThemedText style={[
+            styles.modernDropdownText,
+            { color: value ? colors.text : colors.textSecondary + '80' }
+          ]}>
+            {selectedLabel || placeholder}
+          </ThemedText>
+          <Animated.View style={{ transform: [{ rotate }] }}>
+            <Ionicons name="chevron-down" size={18} color={colors.primary} />
+          </Animated.View>
+        </TouchableOpacity>
+        
+        {isOpen && (
+          <Animated.View style={[
+            styles.modernDropdownList,
+            { 
+              height: heightAnim, 
+              backgroundColor: colors.cardBackground,
+              borderColor: colors.border,
+            }
+          ]}>
+            <ScrollView 
+              nestedScrollEnabled={true}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              style={{ maxHeight: maxDropdownHeight }}
+            >
+              {items.map((item) => (
+                <TouchableOpacity
+                  key={item.value.toString()}
+                  style={[
+                    styles.modernDropdownItem,
+                    value === item.value && {
+                      backgroundColor: colors.primary + '10',
+                    }
+                  ]}
+                  onPress={() => {
+                    onSelect(item.value)
+                    toggleDropdown()
+                  }}
+                >
+                  <ThemedText style={[
+                    styles.modernDropdownItemText,
+                    { color: value === item.value ? colors.primary : colors.text }
+                  ]}>
+                    {item.label}
+                  </ThemedText>
+                  {value === item.value && (
+                    <Feather name="check" size={16} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Animated.View>
+        )}
+      </View>
     </View>
   )
 }
 
 export default function CreateEmployee({ visible, onClose, employeeData }) {
   const { colors } = useTheme()
-
   const isEdit = !!employeeData
 
   const [formData, setFormData] = useState({
@@ -310,14 +276,12 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
   const [toast, setToast] = useState(null)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
 
-  // Gender options (matching schema)
   const genderOptions = useMemo(() => [
     { label: 'Male', value: 'MALE' },
     { label: 'Female', value: 'FEMALE' },
     { label: 'Not Specified', value: 'NOT_SPECIFIED' },
   ], [])
 
-  // Designation options (matching schema enum)
   const designationOptions = useMemo(() => [
     { label: 'Chairperson', value: 'Chairperson' },
     { label: 'Principal', value: 'Principal' },
@@ -327,9 +291,8 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
     { label: 'Other', value: 'Other' },
   ], [])
 
-  // Load employee data in edit mode
   useEffect(() => {
-    if (isEdit) {
+    if (visible && isEdit && employeeData) {
       setFormData({
         firstName: employeeData.firstName || '',
         lastName: employeeData.lastName || '',
@@ -348,8 +311,7 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
       setExistingProfilePic(employeeData.profilePicUrl || null)
       setProfilePic(null)
       setRemoveProfilePic(false)
-    } else {
-      // Reset for create mode
+    } else if (visible && !isEdit) {
       setFormData({
         firstName: '',
         lastName: '',
@@ -371,22 +333,14 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
     }
   }, [visible, employeeData, isEdit])
 
-  // Update form data
-  const updateFormData = useCallback((updates) => {
-    setFormData(prev => ({ ...prev, ...updates }))
-  }, [])
-
-  // Show toast notification
   const showToast = useCallback((message, type = 'error') => {
     setToast({ message, type })
   }, [])
 
-  // Hide toast notification
   const hideToast = useCallback(() => {
     setToast(null)
   }, [])
 
-  // Handle profile picture selection
   const handleProfilePic = useCallback(async () => {
     if (loading) return
 
@@ -410,12 +364,10 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
     }
   }, [loading, showToast])
 
-  // Handle delete profile picture
   const handleDeleteProfilePic = useCallback(() => {
     setShowDeleteModal(true)
   }, [])
 
-  // Confirm delete profile picture
   const confirmDeleteProfilePic = useCallback(() => {
     setProfilePic(null)
     setExistingProfilePic(null)
@@ -424,35 +376,41 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
     showToast('Profile picture will be removed on save', 'success')
   }, [showToast])
 
-  // Validate form data
   const validateForm = useCallback(() => {
-    const requiredFields = [
-      'firstName', 'lastName', 'dob', 'email', 'phone',
-      'address', 'designation',
-    ]
-
-    for (const field of requiredFields) {
-      if (!formData[field] || formData[field].toString().trim() === '') {
-        showToast(`Please fill ${field.replace(/([A-Z])/g, ' $1').toLowerCase()}`, 'error')
-        return false
-      }
+    if (!formData.firstName?.trim()) {
+      showToast('First name is required', 'error')
+      return false
     }
-
-    // Email validation
+    if (!formData.lastName?.trim()) {
+      showToast('Last name is required', 'error')
+      return false
+    }
+    if (!formData.email?.trim()) {
+      showToast('Email is required', 'error')
+      return false
+    }
     const emailRegex = /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/
     if (!emailRegex.test(formData.email)) {
       showToast('Please enter a valid email address', 'error')
       return false
     }
-
-    // Phone validation (10 digits)
+    if (!formData.phone?.trim()) {
+      showToast('Phone number is required', 'error')
+      return false
+    }
     const phoneRegex = /^[0-9]{10}$/
     if (!phoneRegex.test(formData.phone.replace(/\D/g, ''))) {
       showToast('Phone number must be 10 digits', 'error')
       return false
     }
-
-    // Aadhar validation (if provided)
+    if (!formData.village?.trim()) {
+      showToast('Village is required', 'error')
+      return false
+    }
+    if (!formData.designation) {
+      showToast('Designation is required', 'error')
+      return false
+    }
     if (formData.aadharNumber && formData.aadharNumber.trim() !== '') {
       const aadharRegex = /^[0-9]{12}$/
       if (!aadharRegex.test(formData.aadharNumber)) {
@@ -460,8 +418,6 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
         return false
       }
     }
-
-    // PAN validation (if provided)
     if (formData.panNumber && formData.panNumber.trim() !== '') {
       const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/
       if (!panRegex.test(formData.panNumber.toUpperCase())) {
@@ -469,42 +425,26 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
         return false
       }
     }
-
     return true
   }, [formData, showToast])
 
-  // Handle save
   const handleSave = useCallback(async () => {
-    if (loading) return
-    
-    if (!validateForm()) {
-      return
-    }
+    if (loading || !validateForm()) return
 
     setLoading(true)
     try {
       const formDataToSend = new FormData()
       
-      // Add all form fields
       Object.keys(formData).forEach(key => {
         if (formData[key] !== undefined && formData[key] !== null) {
           if (key === 'dob' || key === 'joiningDate') {
             formDataToSend.append(key, new Date(formData[key]).toISOString())
-          } else if (key === 'aadharNumber' && formData[key].trim() === '') {
-            formDataToSend.append(key, '')
-          } else if (key === 'panNumber' && formData[key].trim() === '') {
-            formDataToSend.append(key, '')
-          } else if (key === 'qualification' && formData[key].trim() === '') {
-            formDataToSend.append(key, '')
-          } else if (key === 'village' && formData[key].trim() === '') {
-            formDataToSend.append(key, '')
           } else {
-            formDataToSend.append(key, formData[key].toString().trim())
+            formDataToSend.append(key, String(formData[key]).trim())
           }
         }
       })
 
-      // Add profile picture
       if (profilePic) {
         const uriParts = profilePic.uri.split('.')
         const fileType = uriParts[uriParts.length - 1]
@@ -515,47 +455,36 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
         })
       }
 
-      // Add removeProfilePic flag only in edit mode
       if (isEdit && removeProfilePic) {
         formDataToSend.append('removeProfilePic', 'true')
       }
 
-      let response;
+      let response
       if (isEdit) {
         response = await axiosApi.put(`/employees/${employeeData.id}`, formDataToSend, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
+          headers: { 'Content-Type': 'multipart/form-data' },
         })
       } else {
         response = await axiosApi.post('/employees', formDataToSend, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
+          headers: { 'Content-Type': 'multipart/form-data' },
         })
       }
 
       if (response.data.success) {
-        forceLogoutEmployee(
-          employeeData.id,
-          'Your account details have been updated. Please login again.'
-        )
+        if (isEdit) {
+          forceLogoutEmployee(
+            employeeData.id,
+            'Your account details have been updated. Please login again.'
+          )
+        }
         showToast(isEdit ? 'Employee updated successfully!' : 'Employee created successfully!', 'success')
         setTimeout(() => onClose(true), 1500)
-      } else {
-        showToast(response.data.message || (isEdit ? 'Failed to update employee' : 'Failed to create employee'), 'error')
       }
     } catch (error) {
       console.error(`${isEdit ? 'Update' : 'Create'} employee error:`, error)
-      let errorMessage = isEdit ? 'Failed to update employee' : 'Failed to create employee'
       
+      let errorMessage = isEdit ? 'Failed to update employee' : 'Failed to create employee'
       if (error.response) {
-        errorMessage = error.response.data?.message || 
-                      error.response.data?.error || 
-                      error.response.data?.errors?.join(', ') || 
-                      'Server error occurred'
-        
-        // Handle specific error messages
         if (error.response.status === 400) {
           if (error.response.data.message?.includes('email already exists')) {
             errorMessage = 'Email already exists in the system'
@@ -563,42 +492,21 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
             errorMessage = 'Phone number already exists in the system'
           } else if (error.response.data.message?.includes('aadhar already exists')) {
             errorMessage = 'Aadhar number already exists in the system'
+          } else {
+            errorMessage = error.response.data?.message || error.response.data?.error || errorMessage
           }
+        } else {
+          errorMessage = error.response.data?.message || error.response.data?.error || errorMessage
         }
       } else if (error.request) {
         errorMessage = 'No response from server. Check your internet connection.'
-      } else {
-        errorMessage = error.message || (isEdit ? 'Failed to update employee' : 'Failed to create employee')
       }
       
       showToast(errorMessage, 'error')
     } finally {
       setLoading(false)
     }
-  }, [formData, profilePic, removeProfilePic, employeeData, validateForm, loading, onClose, showToast, isEdit])
-
-  // Date change handlers
-  const onDateChange = useCallback((field) => (event, selectedDate) => {
-    setShowDatePicker(prev => ({ ...prev, [field]: Platform.OS === 'ios' }))
-    if (selectedDate) {
-      updateFormData({ [field]: selectedDate })
-    }
-  }, [updateFormData])
-
-  // Input change handlers
-  const onFirstNameChange = useCallback((text) => updateFormData({ firstName: text }), [updateFormData])
-  const onLastNameChange = useCallback((text) => updateFormData({ lastName: text }), [updateFormData])
-  const onEmailChange = useCallback((text) => updateFormData({ email: text.toLowerCase() }), [updateFormData])
-  const onPhoneChange = useCallback((text) => updateFormData({ phone: text.replace(/[^0-9]/g, '').substring(0, 10) }), [updateFormData])
-  const onAddressChange = useCallback((text) => updateFormData({ address: text }), [updateFormData])
-  const onVillageChange = useCallback((text) => updateFormData({ village: text }), [updateFormData])
-  const onQualificationChange = useCallback((text) => updateFormData({ qualification: text }), [updateFormData])
-  const onAadharNumberChange = useCallback((text) => updateFormData({ aadharNumber: text.replace(/[^0-9]/g, '').substring(0, 12) }), [updateFormData])
-  const onPanNumberChange = useCallback((text) => updateFormData({ panNumber: text.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 10) }), [updateFormData])
-
-  // Dropdown handlers
-  const onGenderSelect = useCallback((value) => updateFormData({ gender: value }), [updateFormData])
-  const onDesignationSelect = useCallback((value) => updateFormData({ designation: value }), [updateFormData])
+  }, [formData, profilePic, removeProfilePic, employeeData, isEdit, validateForm, loading, onClose, showToast])
 
   const handleClose = useCallback(() => {
     if (!loading) {
@@ -606,306 +514,11 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
     }
   }, [loading, onClose])
 
-  const styles = useMemo(() => StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    header: {
-      paddingTop: Platform.OS === 'ios' ? 70 : 50,
-      paddingBottom: 16,
-      paddingHorizontal: 20,
-      borderBottomLeftRadius: 24,
-      borderBottomRightRadius: 24,
-    },
-    headerRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    backButton: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: 'rgba(255, 255, 255, 0.18)',
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.4)',
-    },
-    title: {
-      fontSize: 18,
-      color: '#FFFFFF',
-      marginBottom: -5,
-    },
-    subtitle: {
-      marginTop: 4,
-      fontSize: 11,
-      color: 'rgba(255,255,255,0.9)',
-    },
-    scrollView: {
-      flex: 1,
-    },
-    scrollContent: {
-      padding: 16,
-      paddingBottom: 500
-    },
-    card: {
-      borderRadius: 18,
-      padding: 16,
-      backgroundColor: colors.cardBackground,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    formGroup: {
-      marginBottom: 26,
-    },
-    groupTitleContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 18,
-      paddingBottom: 10,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.primary + '30',
-    },
-    groupTitleChip: {
-      paddingHorizontal: 0,
-      paddingVertical: 4,
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    groupTitleText: {
-      marginLeft: 8,
-      fontSize: 16,
-      color: colors.primary,
-      letterSpacing: 0.5,
-    },
-    profilePicContainer: {
-      alignItems: 'center',
-      marginBottom: 16,
-    },
-    profilePicWrapper: {
-      position: 'relative',
-    },
-    profilePicOuter: {
-      width: 96,
-      height: 96,
-      borderRadius: 48,
-      padding: 3,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    profilePicInner: {
-      width: 90,
-      height: 90,
-      borderRadius: 45,
-      backgroundColor: colors.inputBackground,
-      justifyContent: 'center',
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: colors.primary + '50',
-      overflow: 'hidden',
-    },
-    profilePicImage: {
-      width: '100%',
-      height: '100%',
-      borderRadius: 45,
-    },
-    deletePicButton: {
-      position: 'absolute',
-      bottom: 0,
-      right: 0,
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      justifyContent: 'center',
-      alignItems: 'center',
-      borderWidth: 2,
-      borderColor: colors.cardBackground,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 3.84,
-      elevation: 5,
-    },
-    profilePicHint: {
-      color: colors.textSecondary,
-      marginTop: 6,
-      fontSize: 11,
-    },
-    fieldLabel: {
-      fontSize: 14,
-      color: colors.textSecondary,
-      marginBottom: 6,
-    },
-    inputContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderLeftWidth: 3,
-      borderLeftColor: colors.primary,
-      backgroundColor: colors.inputBackground,
-      borderRadius: 6,
-      borderTopRightRadius: 22,
-      borderBottomRightRadius: 22,
-      marginBottom: 12,
-      paddingHorizontal: 10,
-      height: 50,
-    },
-    inputIcon: {
-      marginRight: 8,
-      color: colors.textSecondary,
-      width: 24,
-      marginBottom: 3,
-    },
-    textInput: {
-      flex: 1,
-      height: '100%',
-      fontSize: 15,
-      color: colors.text,
-      paddingVertical: 0,
-      paddingHorizontal: 0,
-      margin: 0,
-      fontFamily: 'Poppins-Medium'
-    },
-    dateText: {
-      fontSize: 15,
-      color: colors.text,
-      flex: 1,
-      height: '100%',
-      textAlignVertical: 'center',
-      fontFamily: 'Poppins-Medium'
-    },
-    dateTouchable: {
-      flex: 1,
-      justifyContent: 'center',
-      height: '100%',
-    },
-    multilineContainer: {
-      height: 90,
-      alignItems: 'flex-start',
-      paddingTop: 10,
-      paddingBottom: 10,
-    },
-    multilineInput: {
-      height: '100%',
-      textAlignVertical: 'top',
-      paddingTop: 0,
-    },
-    multilineIcon: {
-      marginTop: 4,
-    },
-    footerWrapper: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: 0,
-      paddingHorizontal: 16,
-      paddingBottom: Platform.OS === 'ios' ? 24 : 16,
-      paddingTop: 8,
-      backgroundColor: colors?.background
-    },
-    footerCard: {
-      borderRadius: 16,
-      overflow: 'hidden',
-    },
-    saveBtnGradient: {
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    saveBtnPressable: {
-      flex: 1,
-      paddingVertical: 13,
-      paddingHorizontal: 18,
-      width: '100%',
-      height: '100%',
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    saveBtnText: {
-      color: '#FFFFFF',
-      fontSize: 16,
-      marginLeft: 8,
-    },
-    // Modal Styles
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    modalContent: {
-      width: SCREEN_WIDTH * 0.8,
-      backgroundColor: colors.cardBackground,
-      borderRadius: 20,
-      padding: 20,
-      alignItems: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 4,
-      elevation: 5,
-    },
-    modalIcon: {
-      width: 60,
-      height: 60,
-      borderRadius: 30,
-      backgroundColor: colors.danger + '20',
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 16,
-    },
-    modalTitle: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: colors.text,
-      marginBottom: 8,
-    },
-    modalMessage: {
-      fontSize: 14,
-      color: colors.textSecondary,
-      textAlign: 'center',
-      marginBottom: 20,
-    },
-    modalButtons: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    modalButton: {
-      flex: 1,
-      paddingVertical: 12,
-      borderRadius: 10,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    modalButtonCancel: {
-      backgroundColor: colors.inputBackground,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    modalButtonDelete: {
-      backgroundColor: colors.danger,
-    },
-    modalButtonText: {
-      fontSize: 14,
-      fontWeight: '600',
-    },
-    modalButtonTextCancel: {
-      color: colors.text,
-    },
-    modalButtonTextDelete: {
-      color: '#FFFFFF',
-    },
-  }), [colors])
-
-  // Get current profile picture to display
   const currentProfilePic = profilePic?.uri || existingProfilePic
 
   return (
     <Modal visible={visible} animationType="fade" onRequestClose={handleClose} statusBarTranslucent>
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <LinearGradient
           colors={[colors.gradientStart, colors.gradientEnd]}
           style={styles.header}
@@ -920,8 +533,12 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
                 <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
               </TouchableOpacity>
               <View style={{ flex: 1, alignItems: 'center' }}>
-                <ThemedText type='subtitle' style={styles.title}>{isEdit ? 'Edit Employee' : 'Create Employee'}</ThemedText>
-                <ThemedText style={styles.subtitle}>{isEdit ? 'Update employee details' : 'Add new employee details'}</ThemedText>
+                <ThemedText style={styles.title}>
+                  {isEdit ? 'Edit Employee' : 'Create Employee'}
+                </ThemedText>
+                <ThemedText style={styles.subtitle}>
+                  {isEdit ? 'Update employee details' : 'Add new employee details'}
+                </ThemedText>
               </View>
               <View style={{ width: 44 }} />
             </View>
@@ -934,312 +551,301 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.card}>
-            {/* PROFILE PICTURE */}
-            <View style={styles.formGroup}>
-              <View style={styles.profilePicContainer}>
-                <View style={styles.profilePicWrapper}>
-                  <TouchableOpacity onPress={handleProfilePic} activeOpacity={0.8} disabled={loading}>
-                    <LinearGradient
-                      colors={[colors.gradientStart, colors.gradientEnd]}
-                      style={styles.profilePicOuter}
-                    >
-                      <View style={styles.profilePicInner}>
-                        {currentProfilePic ? (
-                          <Image source={{ uri: currentProfilePic }} style={styles.profilePicImage} />
-                        ) : (
-                          <Feather name="camera" size={30} color={colors.textSecondary} />
-                        )}
-                      </View>
-                    </LinearGradient>
+          <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+            {/* Profile Picture */}
+            <View style={styles.profilePicContainer}>
+              <View style={styles.profilePicWrapper}>
+                <TouchableOpacity onPress={handleProfilePic} activeOpacity={0.8} disabled={loading}>
+                  <LinearGradient
+                    colors={[colors.gradientStart, colors.gradientEnd]}
+                    style={styles.profilePicOuter}
+                  >
+                    <View style={[styles.profilePicInner, { backgroundColor: colors.inputBackground }]}>
+                      {currentProfilePic ? (
+                        <Image source={{ uri: currentProfilePic }} style={styles.profilePicImage} />
+                      ) : (
+                        <Feather name="camera" size={30} color={colors.textSecondary} />
+                      )}
+                    </View>
+                  </LinearGradient>
+                </TouchableOpacity>
+                
+                {currentProfilePic && (
+                  <TouchableOpacity
+                    style={[styles.deletePicButton, { backgroundColor: colors.danger }]}
+                    onPress={handleDeleteProfilePic}
+                    disabled={loading}
+                  >
+                    <MaterialIcons name="delete" size={18} color="#FFFFFF" />
                   </TouchableOpacity>
-                  
-                  {/* Delete button - only show when there's a profile picture */}
-                  {currentProfilePic && (
-                    <TouchableOpacity
-                      style={[styles.deletePicButton, { backgroundColor: colors.danger }]}
-                      onPress={handleDeleteProfilePic}
-                      disabled={loading}
-                    >
-                      <MaterialIcons name="delete" size={18} color="#FFFFFF" />
-                    </TouchableOpacity>
-                  )}
-                </View>
-                <ThemedText style={styles.profilePicHint}>
-                  Tap to change profile picture
+                )}
+              </View>
+              <ThemedText style={[styles.profilePicHint, { color: colors.textSecondary }]}>
+                Tap to change profile picture
+              </ThemedText>
+            </View>
+
+            {/* Personal Details */}
+            <View style={styles.formGroup}>
+              <View style={styles.groupTitleContainer}>
+                <MaterialIcons name="person" size={22} color={colors.primary} />
+                <ThemedText style={[styles.groupTitleText, { color: colors.primary }]}>
+                  Personal Details
                 </ThemedText>
               </View>
-            </View>
 
-            {/* PERSONAL DETAILS */}
-            <View style={styles.formGroup}>
-              <View style={styles.groupTitleContainer}>
-                <View style={styles.groupTitleChip}>
-                  <MaterialIcons name="person" size={22} color={colors.primary} />
-                  <ThemedText type='subtitle' style={styles.groupTitleText}>Personal Details</ThemedText>
-                </View>
-              </View>
+              <ModernInput
+                label="First Name"
+                placeholder="Enter first name"
+                value={formData.firstName}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, firstName: text }))}
+                required
+                icon={<Feather name="user" size={18} color={colors.primary} />}
+                editable={!loading}
+                maxLength={50}
+              />
 
-              <ThemedText style={styles.fieldLabel}>First Name *</ThemedText>
-              <View style={styles.inputContainer}>
-                <Feather name="user" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter first name"
-                  value={formData.firstName}
-                  onChangeText={onFirstNameChange}
-                  editable={!loading}
-                  maxLength={50}
-                />
-              </View>
+              <ModernInput
+                label="Last Name"
+                placeholder="Enter last name"
+                value={formData.lastName}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, lastName: text }))}
+                required
+                icon={<Feather name="user-check" size={18} color={colors.primary} />}
+                editable={!loading}
+                maxLength={50}
+              />
 
-              <ThemedText style={styles.fieldLabel}>Last Name *</ThemedText>
-              <View style={styles.inputContainer}>
-                <Feather name="user-check" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter last name"
-                  value={formData.lastName}
-                  onChangeText={onLastNameChange}
-                  editable={!loading}
-                  maxLength={50}
-                />
-              </View>
-
-              <ThemedText style={styles.fieldLabel}>Gender *</ThemedText>
-              <CustomDropdown
+              <ModernDropdown
+                label="Gender"
                 value={formData.gender}
                 items={genderOptions}
-                onSelect={onGenderSelect}
-                placeholder="Select Gender"
+                onSelect={(value) => setFormData(prev => ({ ...prev, gender: value }))}
+                placeholder="Select gender"
+                required
+                icon={<Ionicons name="male-female" size={18} color={colors.primary} />}
                 disabled={loading}
               />
 
-              <ThemedText style={styles.fieldLabel}>Date of Birth *</ThemedText>
-              <View style={styles.inputContainer}>
-                <MaterialCommunityIcons
-                  name="cake-variant"
-                  size={20}
-                  style={styles.inputIcon}
+              <TouchableOpacity
+                onPress={() => !loading && setShowDatePicker(prev => ({ ...prev, dob: true }))}
+                activeOpacity={0.8}
+                disabled={loading}
+              >
+                <ModernInput
+                  label="Date of Birth"
+                  placeholder="Select date of birth"
+                  value={formData.dob.toLocaleDateString()}
+                  editable={false}
+                  required
+                  icon={<MaterialCommunityIcons name="cake-variant" size={18} color={colors.primary} />}
                 />
-                <TouchableOpacity
-                  style={styles.dateTouchable}
-                  onPress={() => !loading && setShowDatePicker(prev => ({ ...prev, dob: true }))}
-                  activeOpacity={0.8}
-                  disabled={loading}
-                >
-                  <ThemedText style={styles.dateText}>
-                    {formData.dob.toLocaleDateString()}
-                  </ThemedText>
-                </TouchableOpacity>
-                {showDatePicker.dob && (
-                  <DateTimePicker
-                    value={formData.dob}
-                    mode="date"
-                    display="default"
-                    maximumDate={new Date()}
-                    onChange={onDateChange('dob')}
-                  />
-                )}
-              </View>
+              </TouchableOpacity>
+
+              {showDatePicker.dob && (
+                <DateTimePicker
+                  value={formData.dob}
+                  mode="date"
+                  display="default"
+                  maximumDate={new Date()}
+                  onChange={(event, selectedDate) => {
+                    setShowDatePicker(prev => ({ ...prev, dob: false }))
+                    if (selectedDate) {
+                      setFormData(prev => ({ ...prev, dob: selectedDate }))
+                    }
+                  }}
+                />
+              )}
             </View>
 
-            {/* CONTACT DETAILS */}
+            {/* Contact Details */}
             <View style={styles.formGroup}>
               <View style={styles.groupTitleContainer}>
-                <View style={styles.groupTitleChip}>
-                  <MaterialIcons name="contact-phone" size={22} color={colors.primary} />
-                  <ThemedText type='subtitle' style={styles.groupTitleText}>Contact Details</ThemedText>
-                </View>
+                <MaterialIcons name="contact-phone" size={22} color={colors.primary} />
+                <ThemedText style={[styles.groupTitleText, { color: colors.primary }]}>
+                  Contact Details
+                </ThemedText>
               </View>
 
-              <ThemedText style={styles.fieldLabel}>Email *</ThemedText>
-              <View style={styles.inputContainer}>
-                <Feather name="mail" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter email address"
-                  value={formData.email}
-                  onChangeText={onEmailChange}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  editable={!loading}
-                  maxLength={50}
-                />
-              </View>
+              <ModernInput
+                label="Email"
+                placeholder="Enter email address"
+                value={formData.email}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, email: text.toLowerCase() }))}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                required
+                icon={<Feather name="mail" size={18} color={colors.primary} />}
+                editable={!loading}
+                maxLength={50}
+              />
 
-              <ThemedText style={styles.fieldLabel}>Phone Number *</ThemedText>
-              <View style={styles.inputContainer}>
-                <Feather name="phone" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter 10-digit phone number"
-                  value={formData.phone}
-                  onChangeText={onPhoneChange}
-                  keyboardType="phone-pad"
-                  editable={!loading}
-                  maxLength={10}
-                />
-              </View>
+              <ModernInput
+                label="Phone Number"
+                placeholder="Enter 10-digit phone number"
+                value={formData.phone}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, phone: text.replace(/[^0-9]/g, '').substring(0, 10) }))}
+                keyboardType="phone-pad"
+                required
+                icon={<Feather name="phone" size={18} color={colors.primary} />}
+                editable={!loading}
+                maxLength={10}
+              />
             </View>
 
-            {/* ADDRESS DETAILS */}
+            {/* Address Details */}
             <View style={styles.formGroup}>
               <View style={styles.groupTitleContainer}>
-                <View style={styles.groupTitleChip}>
-                  <MaterialIcons name="location-on" size={22} color={colors.primary} />
-                  <ThemedText type='subtitle' style={styles.groupTitleText}>Address Details</ThemedText>
-                </View>
+                <MaterialIcons name="location-on" size={22} color={colors.primary} />
+                <ThemedText style={[styles.groupTitleText, { color: colors.primary }]}>
+                  Address Details
+                </ThemedText>
               </View>
 
-              <ThemedText style={styles.fieldLabel}>Address *</ThemedText>
-              <View style={[styles.inputContainer, styles.multilineContainer]}>
-                <Feather 
-                  name="map-pin" 
-                  size={20} 
-                  style={[styles.inputIcon, styles.multilineIcon]} 
-                />
-                <CustomInput
-                  placeholder="Enter full address"
-                  value={formData.address}
-                  onChangeText={onAddressChange}
-                  multiline
-                  numberOfLines={3}
-                  style={styles.multilineInput}
-                  editable={!loading}
-                />
-              </View>
+              <ModernInput
+                label="Address"
+                placeholder="Enter full address"
+                value={formData.address}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, address: text }))}
+                multiline
+                numberOfLines={3}
+                icon={<Feather name="map-pin" size={18} color={colors.primary} />}
+                editable={!loading}
+              />
 
-              <ThemedText style={styles.fieldLabel}>Village</ThemedText>
-              <View style={styles.inputContainer}>
-                <MaterialIcons name="location-city" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter village/town"
-                  value={formData.village}
-                  onChangeText={onVillageChange}
-                  editable={!loading}
-                  maxLength={50}
-                />
-              </View>
+              <ModernInput
+                label="Village / Town"
+                placeholder="Enter village or town"
+                value={formData.village}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, village: text }))}
+                required
+                icon={<MaterialIcons name="location-city" size={18} color={colors.primary} />}
+                editable={!loading}
+                maxLength={50}
+              />
             </View>
 
-            {/* EMPLOYMENT DETAILS */}
+            {/* Employment Details */}
             <View style={styles.formGroup}>
               <View style={styles.groupTitleContainer}>
-                <View style={styles.groupTitleChip}>
-                  <MaterialIcons name="work" size={22} color={colors.primary} />
-                  <ThemedText type='subtitle' style={styles.groupTitleText}>Employment Details</ThemedText>
-                </View>
+                <MaterialIcons name="work" size={22} color={colors.primary} />
+                <ThemedText style={[styles.groupTitleText, { color: colors.primary }]}>
+                  Employment Details
+                </ThemedText>
               </View>
 
-              <ThemedText style={styles.fieldLabel}>Designation *</ThemedText>
-              <CustomDropdown
+              <ModernDropdown
+                label="Designation"
                 value={formData.designation}
                 items={designationOptions}
-                onSelect={onDesignationSelect}
-                placeholder="Select Designation"
+                onSelect={(value) => setFormData(prev => ({ ...prev, designation: value }))}
+                placeholder="Select designation"
+                required
+                icon={<MaterialIcons name="badge" size={18} color={colors.primary} />}
                 disabled={loading}
               />
 
-              <ThemedText style={styles.fieldLabel}>Joining Date</ThemedText>
-              <View style={styles.inputContainer}>
-                <MaterialIcons name="date-range" size={20} style={styles.inputIcon} />
-                <TouchableOpacity
-                  style={styles.dateTouchable}
-                  onPress={() => !loading && setShowDatePicker(prev => ({ ...prev, joiningDate: true }))}
-                  activeOpacity={0.8}
-                  disabled={loading}
-                >
-                  <ThemedText style={styles.dateText}>
-                    {formData.joiningDate.toLocaleDateString()}
-                  </ThemedText>
-                </TouchableOpacity>
-                {showDatePicker.joiningDate && (
-                  <DateTimePicker
-                    value={formData.joiningDate}
-                    mode="date"
-                    display="default"
-                    maximumDate={new Date()}
-                    onChange={onDateChange('joiningDate')}
-                  />
-                )}
-              </View>
-
-              <ThemedText style={styles.fieldLabel}>Qualification</ThemedText>
-              <View style={styles.inputContainer}>
-                <MaterialIcons name="school" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter qualification"
-                  value={formData.qualification}
-                  onChangeText={onQualificationChange}
-                  editable={!loading}
-                  maxLength={50}
+              <TouchableOpacity
+                onPress={() => !loading && setShowDatePicker(prev => ({ ...prev, joiningDate: true }))}
+                activeOpacity={0.8}
+                disabled={loading}
+              >
+                <ModernInput
+                  label="Joining Date"
+                  placeholder="Select joining date"
+                  value={formData.joiningDate.toLocaleDateString()}
+                  editable={false}
+                  required
+                  icon={<MaterialIcons name="date-range" size={18} color={colors.primary} />}
                 />
-              </View>
+              </TouchableOpacity>
+
+              {showDatePicker.joiningDate && (
+                <DateTimePicker
+                  value={formData.joiningDate}
+                  mode="date"
+                  display="default"
+                  maximumDate={new Date()}
+                  onChange={(event, selectedDate) => {
+                    setShowDatePicker(prev => ({ ...prev, joiningDate: false }))
+                    if (selectedDate) {
+                      setFormData(prev => ({ ...prev, joiningDate: selectedDate }))
+                    }
+                  }}
+                />
+              )}
+
+              <ModernInput
+                label="Qualification"
+                placeholder="Enter qualification"
+                value={formData.qualification}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, qualification: text }))}
+                icon={<MaterialIcons name="school" size={18} color={colors.primary} />}
+                editable={!loading}
+                maxLength={50}
+              />
             </View>
 
-            {/* DOCUMENT DETAILS */}
+            {/* Document Details */}
             <View style={styles.formGroup}>
               <View style={styles.groupTitleContainer}>
-                <View style={styles.groupTitleChip}>
-                  <MaterialIcons name="description" size={22} color={colors.primary} />
-                  <ThemedText type='subtitle' style={styles.groupTitleText}>Document Details</ThemedText>
-                </View>
+                <MaterialIcons name="description" size={22} color={colors.primary} />
+                <ThemedText style={[styles.groupTitleText, { color: colors.primary }]}>
+                  Document Details
+                </ThemedText>
               </View>
 
-              <ThemedText style={styles.fieldLabel}>Aadhar Number</ThemedText>
-              <View style={styles.inputContainer}>
-                <MaterialIcons name="credit-card" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter 12-digit Aadhar number"
-                  value={formData.aadharNumber}
-                  onChangeText={onAadharNumberChange}
-                  keyboardType="number-pad"
-                  editable={!loading}
-                  maxLength={12}
-                />
-              </View>
+              <ModernInput
+                label="Aadhar Number"
+                placeholder="Enter 12-digit Aadhar number"
+                value={formData.aadharNumber}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, aadharNumber: text.replace(/[^0-9]/g, '').substring(0, 12) }))}
+                keyboardType="number-pad"
+                icon={<MaterialIcons name="credit-card" size={18} color={colors.primary} />}
+                editable={!loading}
+                maxLength={12}
+              />
 
-              <ThemedText style={styles.fieldLabel}>PAN Number</ThemedText>
-              <View style={styles.inputContainer}>
-                <MaterialIcons name="assignment" size={20} style={styles.inputIcon} />
-                <CustomInput
-                  placeholder="Enter 10-digit PAN number"
-                  value={formData.panNumber}
-                  onChangeText={onPanNumberChange}
-                  editable={!loading}
-                  maxLength={10}
-                />
-              </View>
+              <ModernInput
+                label="PAN Number"
+                placeholder="Enter 10-digit PAN number"
+                value={formData.panNumber}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, panNumber: text.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 10) }))}
+                icon={<MaterialIcons name="assignment" size={18} color={colors.primary} />}
+                editable={!loading}
+                maxLength={10}
+              />
             </View>
           </View>
         </ScrollView>
 
-        {/* SAVE BUTTON */}
-        <View style={styles.footerWrapper}>
-          <View style={styles.footerCard}>
-            <LinearGradient
-              colors={[colors.gradientStart, colors.gradientEnd]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.saveBtnGradient}
+        {/* Save Button */}
+        <View style={[styles.footerWrapper, { backgroundColor: colors.background }]}>
+          <LinearGradient
+            colors={[colors.gradientStart, colors.gradientEnd]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.saveBtnGradient}
+          >
+            <TouchableOpacity
+              onPress={handleSave}
+              activeOpacity={0.9}
+              style={[styles.saveBtnPressable, loading && { opacity: 0.5 }]}
+              disabled={loading}
             >
-              <TouchableOpacity
-                onPress={handleSave}
-                activeOpacity={0.9}
-                style={[styles.saveBtnPressable, loading && { opacity: 0.5 }]}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <FontAwesome5 name="check-circle" size={18} color="#FFFFFF" />
-                )}
-                <ThemedText style={styles.saveBtnText}>
-                  {loading ? (isEdit ? 'Updating...' : 'Creating...') : (isEdit ? 'Update Employee' : 'Create Employee')}
-                </ThemedText>
-              </TouchableOpacity>
-            </LinearGradient>
-          </View>
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <FontAwesome5 name="check-circle" size={18} color="#FFFFFF" />
+              )}
+              <ThemedText style={styles.saveBtnText}>
+                {loading ? (isEdit ? 'Updating...' : 'Creating...') : (isEdit ? 'Update Employee' : 'Create Employee')}
+              </ThemedText>
+            </TouchableOpacity>
+          </LinearGradient>
         </View>
 
-        {/* DELETE CONFIRMATION MODAL */}
+        {/* Delete Confirmation Modal */}
         <Modal
           visible={showDeleteModal}
           transparent={true}
@@ -1247,25 +853,27 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
           onRequestClose={() => setShowDeleteModal(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
+            <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
               <View style={[styles.modalIcon, { backgroundColor: colors.danger + '20' }]}>
                 <MaterialIcons name="delete" size={30} color={colors.danger} />
               </View>
-              <ThemedText style={styles.modalTitle}>Delete Profile Picture</ThemedText>
-              <ThemedText style={styles.modalMessage}>
+              <ThemedText style={[styles.modalTitle, { color: colors.text }]}>
+                Delete Profile Picture
+              </ThemedText>
+              <ThemedText style={[styles.modalMessage, { color: colors.textSecondary }]}>
                 Are you sure you want to delete the profile picture? This action cannot be undone.
               </ThemedText>
               <View style={styles.modalButtons}>
                 <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  style={[styles.modalButton, styles.modalButtonCancel, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
                   onPress={() => setShowDeleteModal(false)}
                 >
-                  <ThemedText style={[styles.modalButtonText, styles.modalButtonTextCancel]}>
+                  <ThemedText style={[styles.modalButtonText, { color: colors.text }]}>
                     Cancel
                   </ThemedText>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonDelete]}
+                  style={[styles.modalButton, styles.modalButtonDelete, { backgroundColor: colors.danger }]}
                   onPress={confirmDeleteProfilePic}
                 >
                   <ThemedText style={[styles.modalButtonText, styles.modalButtonTextDelete]}>
@@ -1277,7 +885,6 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
           </View>
         </Modal>
 
-        {/* Toast Notification */}
         <ToastNotification
           visible={!!toast}
           type={toast?.type}
@@ -1291,3 +898,276 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
     </Modal>
   )
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 70 : 50,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  title: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    marginBottom: -5,
+    fontFamily: 'Poppins-SemiBold',
+  },
+  subtitle: {
+    marginTop: 4,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.9)',
+    fontFamily: 'Poppins-Medium',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 100,
+  },
+  card: {
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+  },
+  formGroup: {
+    marginBottom: 24,
+  },
+  groupTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  groupTitleText: {
+    marginLeft: 8,
+    fontSize: 16,
+    fontFamily: 'Poppins-SemiBold',
+  },
+  profilePicContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  profilePicWrapper: {
+    position: 'relative',
+  },
+  profilePicOuter: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    padding: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profilePicInner: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    overflow: 'hidden',
+  },
+  profilePicImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 45,
+  },
+  deletePicButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  profilePicHint: {
+    marginTop: 6,
+    fontSize: 11,
+    fontFamily: 'Poppins-Medium',
+  },
+  inputWrapper: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontFamily: 'Poppins-Medium',
+    marginBottom: 6,
+    marginLeft: 4,
+  },
+  modernInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    overflow: 'hidden',
+  },
+  modernInputIcon: {
+    marginRight: 8,
+    width: 24,
+    alignItems: 'center',
+  },
+  modernInput: {
+    flex: 1,
+    height: 50,
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    padding: 0,
+    marginBottom: -4,
+  },
+  modernDropdownHeader: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 50,
+  },
+  modernDropdownText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+  },
+  modernDropdownList: {
+    position: 'absolute',
+    top: 52,
+    left: 0,
+    right: 0,
+    borderRadius: 12,
+    borderWidth: 1,
+    zIndex: 1000,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    overflow: 'hidden',
+  },
+  modernDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  modernDropdownItemText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    flex: 1,
+  },
+  footerWrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 16,
+    paddingTop: 8,
+  },
+  saveBtnGradient: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  saveBtnPressable: {
+    paddingVertical: 13,
+    paddingHorizontal: 18,
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    marginLeft: 8,
+    fontFamily: 'Poppins-SemiBold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: SCREEN_WIDTH * 0.8,
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontFamily: 'Poppins-SemiBold',
+    marginBottom: 8,
+  },
+  modalMessage: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalButtonCancel: {
+    borderWidth: 1,
+  },
+  modalButtonDelete: {},
+  modalButtonText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-SemiBold',
+  },
+  modalButtonTextDelete: {
+    color: '#FFFFFF',
+  },
+})

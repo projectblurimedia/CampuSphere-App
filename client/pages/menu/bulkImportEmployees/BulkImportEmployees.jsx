@@ -5,7 +5,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Platform,
-  Dimensions,
   ActivityIndicator,
   Modal,
 } from 'react-native'
@@ -17,6 +16,7 @@ import { useTheme } from '@/hooks/useTheme'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import axiosApi from '@/utils/axiosApi'
 import * as DocumentPicker from 'expo-document-picker'
+import { downloadEmployeeTemplate } from './sampleData'
 
 export default function BulkImportEmployees({ visible, onClose }) {
   const { colors } = useTheme()
@@ -73,33 +73,12 @@ export default function BulkImportEmployees({ visible, onClose }) {
   }, [showToast])
 
   const downloadTemplate = useCallback(async () => {
-    try {
-      setLoading(true)
-      const response = await axiosApi.get('/employees/download-template', {
-        responseType: 'blob'
-      })
-      
-      // Create blob from response
-      const blob = new Blob([response.data], { 
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
-      })
-      
-      // Create download link
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = 'employees_bulk_import_template.xlsx'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-      
-      showToast('Template downloaded successfully', 'success')
-    } catch (error) {
-      console.error('Download error:', error)
-      showToast('Failed to download template. Please try again.', 'error')
-    } finally {
-      setLoading(false)
+    const result = downloadEmployeeTemplate()
+  
+    if (result.success) {
+      showToast(result.message, 'success')
+    } else {
+      showToast(result.message, 'error')
     }
   }, [showToast])
 

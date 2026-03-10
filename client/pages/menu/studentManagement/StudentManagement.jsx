@@ -29,6 +29,7 @@ import { useTheme } from '@/hooks/useTheme'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import { useDebounce } from '@/utils/useDebounce'
 import axiosApi from '@/utils/axiosApi'
+import { useSelector } from 'react-redux'
 
 const { width, height } = Dimensions.get('window')
 
@@ -378,7 +379,6 @@ const SuccessResultModal = ({
   const actionColor = getActionColor()
   const backdropOpacity = fadeAnim
   const modalScale = scaleAnim
-
   return (
     <Modal
       visible={visible}
@@ -725,6 +725,9 @@ export default function StudentManagement({ visible, onClose }) {
     setShowConfirmModal(true)
   }, [])
 
+  const employee = useSelector(state => state.employee.employee)
+  const teacherName = employee ? `${employee.firstName} ${employee.lastName}` : 'Teacher'
+
   // Handle confirmation (Use studentId in URL)
   const handleConfirm = useCallback(async () => {
     if (!selectedStudent) return
@@ -742,7 +745,7 @@ export default function StudentManagement({ visible, onClose }) {
       const url = `${endpoint}/${selectedStudent.id}`
       
       const payload = {
-        updatedBy: 'Teacher Name', // This should come from your auth context
+        updatedBy: teacherName, 
         ...(activeTab === 'promote' && {
           newSection: selectedStudent.section,
           note: 'Promoted to next class'

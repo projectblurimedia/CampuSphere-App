@@ -293,20 +293,20 @@ export const getNextClass = (currentClass) => {
 
 export const getPreviousClass = (currentClass) => {
   const classOrder = [
-    'Pre-Nursery',
-    'Nursery',
+    'PRE_NURSERY',
+    'NURSERY',
     'LKG',
     'UKG',
-    'Class 1',
-    'Class 2',
-    'Class 3',
-    'Class 4',
-    'Class 5',
-    'Class 6',
-    'Class 7',
-    'Class 8',
-    'Class 9',
-    'Class 10'
+    'CLASS_1',
+    'CLASS_2',
+    'CLASS_3',
+    'CLASS_4',
+    'CLASS_5',
+    'CLASS_6',
+    'CLASS_7',
+    'CLASS_8',
+    'CLASS_9',
+    'CLASS_10',
   ]
 
   const currentIndex = classOrder.indexOf(currentClass)

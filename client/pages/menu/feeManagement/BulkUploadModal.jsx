@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import {
   View,
   StyleSheet,
@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   Dimensions,
   Platform,
 } from 'react-native'
@@ -15,8 +14,11 @@ import { ThemedText } from '@/components/ui/themed-text'
 import {
   Feather,
   MaterialIcons,
-  MaterialCommunityIcons,
 } from '@expo/vector-icons'
+import { downloadClassFeeTemplate } from './sampleData/classFeeTemplate'
+import { downloadBusFeeTemplate } from './sampleData/busFeeTemplate'
+import { downloadHostelFeeTemplate } from './sampleData/hostelFeeTemplate'
+import { ToastNotification } from '@/components/ui/ToastNotification'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -31,6 +33,51 @@ const BulkUploadModal = React.memo(({
   onClose,
   onRefresh,
 }) => {
+  const [downloading, setDownloading] = useState(false)
+  const [toast, setToast] = useState({
+    visible: false,
+    message: '',
+    type: 'info'
+  })
+
+  const showToast = (message, type = 'info') => {
+    setToast({
+      visible: true,
+      message,
+      type
+    })
+  }
+
+  const hideToast = () => {
+    setToast(prev => ({ ...prev, visible: false }))
+  }
+
+  const handleDownloadTemplate = async () => {
+    setDownloading(true)
+    let result
+    
+    try {
+      if (activeTab === 'class') {
+        result = await downloadClassFeeTemplate()
+      } else if (activeTab === 'bus') {
+        result = await downloadBusFeeTemplate()
+      } else if (activeTab === 'hostel') {
+        result = await downloadHostelFeeTemplate()
+      }
+      
+      if (result?.success) {
+        showToast(result.message, 'success')
+      } else {
+        showToast(result?.message || 'Failed to download template', 'error')
+      }
+    } catch (error) {
+      console.error('Download error:', error)
+      showToast('Failed to download template', 'error')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   const handleFileUpload = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -53,12 +100,12 @@ const BulkUploadModal = React.memo(({
       const fileExtension = asset.name.toLowerCase().slice(asset.name.lastIndexOf('.'))
       
       if (!validExtensions.includes(fileExtension)) {
-        Alert.alert('Invalid File', 'Please select an Excel file (.xlsx or .xls)')
+        showToast('Please select an Excel file (.xlsx or .xls)', 'error')
         return
       }
       
       if (asset.size > 10 * 1024 * 1024) {
-        Alert.alert('File Too Large', 'File size must be less than 10MB')
+        showToast('File size must be less than 10MB', 'error')
         return
       }
 
@@ -76,7 +123,7 @@ const BulkUploadModal = React.memo(({
       onUpload(file)
     } catch (error) {
       console.error('Error picking file:', error)
-      Alert.alert('Error', 'Failed to pick file. Please try again.')
+      showToast('Failed to pick file. Please try again.', 'error')
     }
   }
 
@@ -103,7 +150,6 @@ const BulkUploadModal = React.memo(({
       case 'class':
         return [
           'className* (PRE_NURSERY, NURSERY, LKG, UKG, CLASS_1 to CLASS_12)',
-          'totalAnnualFee*',
           'tuitionFee (optional)',
           'examFee (optional)',
           'activityFee (optional)',
@@ -117,15 +163,14 @@ const BulkUploadModal = React.memo(({
       case 'bus':
         return [
           'villageName*',
+          'distance*',
           'feeAmount*',
-          'distance (optional)',
           'description (optional)'
         ]
       case 'hostel':
         return [
           'className* (PRE_NURSERY, NURSERY, LKG, UKG, CLASS_1 to CLASS_12)',
           'totalAnnualFee*',
-          'totalTerms (optional, default: 3)',
           'description (optional)'
         ]
       default:
@@ -503,216 +548,242 @@ const BulkUploadModal = React.memo(({
     );
   };
 
-  return (
-    <Modal
-      transparent
-      visible={visible}
-      animationType="fade"
-      onRequestClose={() => {
-        if (!uploading) {
-          onClose()
-        }
-      }}
-      statusBarTranslucent={true}
-    >
-      <View style={styles.overlay}>
-        <View style={[styles.container, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-          <View style={styles.header}>
-            <View style={[styles.iconContainer, { backgroundColor: tabColor + '15' }]}>
-              <Feather name="upload" size={24} color={tabColor} />
-            </View>
-            <View style={styles.titleContainer}>
-              <ThemedText type='subtitle' style={[styles.title, { color: colors.text }]}>
-                Bulk Upload {tabName}
-              </ThemedText>
-              <ThemedText style={[styles.subtitle, { color: colors.textSecondary }]}>
-                Upload Excel file with {activeTab} fee data
-              </ThemedText>
-            </View>
-            <TouchableOpacity
-              onPress={() => {
-                if (!uploading) onClose()
-              }}
-              disabled={uploading}
-              style={styles.closeButton}
-            >
-              <Feather name="x" size={24} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-          
-          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-            {/* File Upload Section */}
-            <View style={[styles.uploadCard, { backgroundColor: tabColor + '05', borderColor: tabColor + '20' }]}>
-              <View style={styles.uploadHeader}>
-                <View style={[styles.uploadIcon, { backgroundColor: tabColor + '15' }]}>
-                  <Feather name="upload-cloud" size={24} color={tabColor} />
-                </View>
-                <View style={styles.uploadTextContainer}>
-                  <ThemedText style={[styles.uploadTitle, { color: tabColor }]}>
-                    Upload Excel File
-                  </ThemedText>
-                  <ThemedText style={[styles.uploadDescription, { color: colors.textSecondary }]}>
-                    Select your prepared Excel file. Existing records will be updated, new ones created.
-                  </ThemedText>
-                </View>
-              </View>
-              
-              {/* Required Columns Info */}
-              <View style={[styles.infoContainer, { backgroundColor: colors.inputBackground }]}>
-                <View style={styles.infoHeader}>
-                  <MaterialIcons name="info-outline" size={16} color={colors.textSecondary} />
-                  <ThemedText style={[styles.infoTitle, { color: colors.text }]}>
-                    Required Columns:
-                  </ThemedText>
-                </View>
-                <View style={styles.columnsList}>
-                  {requiredColumns.map((column, index) => (
-                    <View key={index} style={[styles.columnItem, { 
-                      backgroundColor: colors.background,
-                      borderColor: colors.border
-                    }]}>
-                      <Feather 
-                        name={column.includes('*') ? "check-circle" : "circle"} 
-                        size={12} 
-                        color={column.includes('*') ? colors.success : colors.textSecondary} 
-                      />
-                      <ThemedText style={[
-                        styles.columnText, 
-                        { color: column.includes('*') ? colors.text : colors.textSecondary }
-                      ]}>
-                        {column}
-                      </ThemedText>
-                    </View>
-                  ))}
-                </View>
-              </View>
-              
-              {/* File Requirements */}
-              <View style={styles.requirements}>
-                <View style={styles.requirementItem}>
-                  <MaterialIcons name="insert-drive-file" size={16} color={colors.textSecondary} />
-                  <ThemedText style={[styles.requirementText, { color: colors.textSecondary }]}>
-                    Excel (.xlsx, .xls)
-                  </ThemedText>
-                </View>
-                <View style={styles.requirementItem}>
-                  <MaterialIcons name="straighten" size={16} color={colors.textSecondary} />
-                  <ThemedText style={[styles.requirementText, { color: colors.textSecondary }]}>
-                    Max: 10MB
-                  </ThemedText>
-                </View>
-                <View style={styles.requirementItem}>
-                  <MaterialIcons name="format-list-bulleted" size={16} color={colors.textSecondary} />
-                  <ThemedText style={[styles.requirementText, { color: colors.textSecondary }]}>
-                    Header row required
-                  </ThemedText>
-                </View>
-              </View>
-              
-              {/* Upload Button */}
-              <TouchableOpacity
-                style={[styles.uploadButton, { 
-                  backgroundColor: tabColor + '10',
-                  borderColor: tabColor,
-                  borderStyle: 'dashed'
-                }]}
-                onPress={handleFileUpload}
-                disabled={uploading}
-              >
-                {uploading ? (
-                  <>
-                    <ActivityIndicator size="small" color={tabColor} />
-                    <ThemedText style={[styles.uploadButtonText, { color: tabColor }]}>
-                      Uploading... {uploadProgress}%
-                    </ThemedText>
-                  </>
-                ) : (
-                  <>
-                    <Feather name="upload-cloud" size={24} color={tabColor} />
-                    <ThemedText style={[styles.uploadButtonText, { color: tabColor }]}>
-                      Select Excel File
-                    </ThemedText>
-                  </>
-                )}
-              </TouchableOpacity>
-              
-              {/* Upload Progress */}
-              {uploading && uploadProgress > 0 && (
-                <View style={styles.progressContainer}>
-                  <View style={styles.progressBarContainer}>
-                    <View 
-                      style={[
-                        styles.progressBarFill,
-                        { 
-                          backgroundColor: tabColor,
-                          width: `${uploadProgress}%` 
-                        }
-                      ]} 
-                    />
-                  </View>
-                  <ThemedText style={[styles.progressText, { color: colors.textSecondary }]}>
-                    Uploading: {uploadProgress}% complete
-                  </ThemedText>
-                </View>
-              )}
-            </View>
+  const handleCancel = () => {
+    if (uploading) {
+      showToast('Upload cancelled', 'warning')
+    }
+    onClose()
+  }
 
-            {/* Upload Results with Detailed Information */}
-            {uploadResult && renderUploadDetails()}
-          </ScrollView>
-          
-          {/* Footer Buttons */}
-          <View style={[styles.footer, { borderTopColor: colors.border }]}>
-            <TouchableOpacity
-              style={[styles.button, { 
-                backgroundColor: colors.inputBackground,
-                borderColor: colors.border
-              }]}
-              onPress={() => {
-                if (uploadResult) {
-                  onClose()
-                } else if (uploading) {
-                  Alert.alert(
-                    'Cancel Upload',
-                    'Are you sure you want to cancel the upload?',
-                    [
-                      { text: 'No', style: 'cancel' },
-                      { 
-                        text: 'Yes', 
-                        style: 'destructive',
-                        onPress: onClose
-                      }
-                    ]
-                  )
-                } else {
-                  onClose()
-                }
-              }}
-              disabled={uploading && !uploadResult}
-            >
-              <ThemedText style={[styles.buttonText, { color: colors.text }]}>
-                {uploadResult ? 'Close' : uploading ? 'Cancel' : 'Cancel'}
-              </ThemedText>
-            </TouchableOpacity>
-            
-            {uploadResult && (
+  return (
+    <>
+      <Modal
+        transparent
+        visible={visible}
+        animationType="fade"
+        onRequestClose={() => {
+          if (!uploading) {
+            onClose()
+          }
+        }}
+        statusBarTranslucent={true}
+      >
+        <View style={styles.overlay}>
+          <View style={[styles.container, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+            <View style={styles.header}>
+              <View style={[styles.iconContainer, { backgroundColor: tabColor + '15' }]}>
+                <Feather name="upload" size={24} color={tabColor} />
+              </View>
+              <View style={styles.titleContainer}>
+                <ThemedText type='subtitle' style={[styles.title, { color: colors.text }]}>
+                  Bulk Upload {tabName}
+                </ThemedText>
+                <ThemedText style={[styles.subtitle, { color: colors.textSecondary }]}>
+                  Upload Excel file with {activeTab} fee data
+                </ThemedText>
+              </View>
               <TouchableOpacity
-                style={[styles.button, styles.refreshButton, { 
-                  backgroundColor: tabColor,
-                  borderColor: tabColor
-                }]}
-                onPress={onRefresh}
+                onPress={handleCancel}
+                disabled={uploading}
+                style={styles.closeButton}
               >
-                <Feather name="refresh-cw" size={16} color="#FFFFFF" />
-                <ThemedText style={[styles.buttonText, { color: '#FFFFFF' }]}>
-                  Refresh Data
+                <Feather name="x" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+              {/* File Upload Section */}
+              <View style={[styles.uploadCard, { backgroundColor: tabColor + '05', borderColor: tabColor + '20' }]}>
+                <View style={styles.uploadHeader}>
+                  <View style={[styles.uploadIcon, { backgroundColor: tabColor + '15' }]}>
+                    <Feather name="upload-cloud" size={24} color={tabColor} />
+                  </View>
+                  <View style={styles.uploadTextContainer}>
+                    <ThemedText style={[styles.uploadTitle, { color: tabColor }]}>
+                      Upload Excel File
+                    </ThemedText>
+                    <ThemedText style={[styles.uploadDescription, { color: colors.textSecondary }]}>
+                      Select your prepared Excel file. Existing records will be updated, new ones created.
+                    </ThemedText>
+                  </View>
+                </View>
+                
+                {/* Download Template Button */}
+                <TouchableOpacity
+                  style={[styles.templateButton, { 
+                    backgroundColor: colors.inputBackground,
+                    borderColor: tabColor,
+                  }]}
+                  onPress={handleDownloadTemplate}
+                  disabled={downloading}
+                >
+                  {downloading ? (
+                    <>
+                      <ActivityIndicator size="small" color={tabColor} />
+                      <ThemedText style={[styles.templateButtonText, { color: tabColor }]}>
+                        Downloading...
+                      </ThemedText>
+                    </>
+                  ) : (
+                    <>
+                      <Feather name="download" size={20} color={tabColor} />
+                      <ThemedText style={[styles.templateButtonText, { color: tabColor }]}>
+                        Download Sample Template
+                      </ThemedText>
+                    </>
+                  )}
+                </TouchableOpacity>
+                
+                {/* Required Columns Info */}
+                <View style={[styles.infoContainer, { backgroundColor: colors.inputBackground }]}>
+                  <View style={styles.infoHeader}>
+                    <MaterialIcons name="info-outline" size={16} color={colors.textSecondary} />
+                    <ThemedText style={[styles.infoTitle, { color: colors.text }]}>
+                      Required Columns:
+                    </ThemedText>
+                  </View>
+                  <View style={styles.columnsList}>
+                    {requiredColumns.map((column, index) => (
+                      <View key={index} style={[styles.columnItem, { 
+                        backgroundColor: colors.background,
+                        borderColor: colors.border
+                      }]}>
+                        <Feather 
+                          name={column.includes('*') ? "check-circle" : "circle"} 
+                          size={12} 
+                          color={column.includes('*') ? colors.success : colors.textSecondary} 
+                        />
+                        <ThemedText style={[
+                          styles.columnText, 
+                          { color: column.includes('*') ? colors.text : colors.textSecondary }
+                        ]}>
+                          {column}
+                        </ThemedText>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+                
+                {/* File Requirements */}
+                <View style={styles.requirements}>
+                  <View style={styles.requirementItem}>
+                    <MaterialIcons name="insert-drive-file" size={16} color={colors.textSecondary} />
+                    <ThemedText style={[styles.requirementText, { color: colors.textSecondary }]}>
+                      Excel (.xlsx, .xls)
+                    </ThemedText>
+                  </View>
+                  <View style={styles.requirementItem}>
+                    <MaterialIcons name="straighten" size={16} color={colors.textSecondary} />
+                    <ThemedText style={[styles.requirementText, { color: colors.textSecondary }]}>
+                      Max: 10MB
+                    </ThemedText>
+                  </View>
+                  <View style={styles.requirementItem}>
+                    <MaterialIcons name="format-list-bulleted" size={16} color={colors.textSecondary} />
+                    <ThemedText style={[styles.requirementText, { color: colors.textSecondary }]}>
+                      Header row required
+                    </ThemedText>
+                  </View>
+                </View>
+                
+                {/* Upload Button */}
+                <TouchableOpacity
+                  style={[styles.uploadButton, { 
+                    backgroundColor: tabColor + '10',
+                    borderColor: tabColor,
+                    borderStyle: 'dashed'
+                  }]}
+                  onPress={handleFileUpload}
+                  disabled={uploading}
+                >
+                  {uploading ? (
+                    <>
+                      <ActivityIndicator size="small" color={tabColor} />
+                      <ThemedText style={[styles.uploadButtonText, { color: tabColor }]}>
+                        Uploading... {uploadProgress}%
+                      </ThemedText>
+                    </>
+                  ) : (
+                    <>
+                      <Feather name="upload-cloud" size={24} color={tabColor} />
+                      <ThemedText style={[styles.uploadButtonText, { color: tabColor }]}>
+                        Select Excel File
+                      </ThemedText>
+                    </>
+                  )}
+                </TouchableOpacity>
+                
+                {/* Upload Progress */}
+                {uploading && uploadProgress > 0 && (
+                  <View style={styles.progressContainer}>
+                    <View style={styles.progressBarContainer}>
+                      <View 
+                        style={[
+                          styles.progressBarFill,
+                          { 
+                            backgroundColor: tabColor,
+                            width: `${uploadProgress}%` 
+                          }
+                        ]} 
+                      />
+                    </View>
+                    <ThemedText style={[styles.progressText, { color: colors.textSecondary }]}>
+                      Uploading: {uploadProgress}% complete
+                    </ThemedText>
+                  </View>
+                )}
+              </View>
+
+              {/* Upload Results with Detailed Information */}
+              {uploadResult && renderUploadDetails()}
+            </ScrollView>
+            
+            {/* Footer Buttons */}
+            <View style={[styles.footer, { borderTopColor: colors.border }]}>
+              <TouchableOpacity
+                style={[styles.button, { 
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border
+                }]}
+                onPress={handleCancel}
+                disabled={uploading && !uploadResult}
+              >
+                <ThemedText style={[styles.buttonText, { color: colors.text }]}>
+                  {uploadResult ? 'Close' : uploading ? 'Cancel' : 'Cancel'}
                 </ThemedText>
               </TouchableOpacity>
-            )}
+              
+              {uploadResult && (
+                <TouchableOpacity
+                  style={[styles.button, styles.refreshButton, { 
+                    backgroundColor: tabColor,
+                    borderColor: tabColor
+                  }]}
+                  onPress={() => {
+                    onRefresh()
+                    showToast('Data refreshed successfully', 'success')
+                  }}
+                >
+                  <Feather name="refresh-cw" size={16} color="#FFFFFF" />
+                  <ThemedText style={[styles.buttonText, { color: '#FFFFFF' }]}>
+                    Refresh Data
+                  </ThemedText>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
+
+      <ToastNotification
+        visible={toast.visible}
+        type={toast.type}
+        message={toast.message}
+        duration={3000}
+        onHide={hideToast}
+        position="top-center"
+      />
+    </>
   )
 })
 
@@ -793,6 +864,19 @@ const styles = StyleSheet.create({
   uploadDescription: {
     fontSize: 12,
     lineHeight: 16,
+  },
+  templateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    marginBottom: 20,
+  },
+  templateButtonText: {
+    fontSize: 14,
   },
   infoContainer: {
     padding: 16,

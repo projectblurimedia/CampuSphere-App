@@ -319,7 +319,7 @@ export const createEmployee = [
       // Validate required fields
       const requiredFields = [
         'firstName', 'lastName', 'dob', 'email', 'phone',
-        'address', 'designation'
+        'village', 'designation'
       ]
       
       const missingFields = requiredFields.filter(field => !req.body[field])
@@ -806,9 +806,6 @@ export const searchEmployees = async (req, res) => {
         where.OR = [
           { firstName: { contains: searchWords[0], mode: 'insensitive' } },
           { lastName: { contains: searchWords[0], mode: 'insensitive' } },
-          { email: { contains: searchWords[0], mode: 'insensitive' } },
-          { phone: { contains: searchWords[0], mode: 'insensitive' } },
-          { village: { contains: searchWords[0], mode: 'insensitive' } },
         ]
       } else if (searchWords.length >= 2) {
         // Multiple words - try to match firstName + lastName pattern
@@ -831,9 +828,6 @@ export const searchEmployees = async (req, res) => {
               OR: [
                 { firstName: { contains: word, mode: 'insensitive' } },
                 { lastName: { contains: word, mode: 'insensitive' } },
-                { email: { contains: word, mode: 'insensitive' } },
-                { phone: { contains: word, mode: 'insensitive' } },
-                { village: { contains: word, mode: 'insensitive' } },
               ]
             }))
           }

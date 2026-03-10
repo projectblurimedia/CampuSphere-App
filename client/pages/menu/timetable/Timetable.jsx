@@ -18,6 +18,7 @@ import { ToastNotification } from '@/components/ui/ToastNotification'
 import axiosApi from '@/utils/axiosApi'
 import * as DocumentPicker from 'expo-document-picker'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { downloadTimetableTemplate } from './sampleData'
 
 // Subject colors for different periods - assigned based on period number
 const PERIOD_COLORS = [
@@ -424,40 +425,12 @@ export default function Timetable({ visible, onClose }) {
   }, [showToast])
 
   const downloadTemplate = useCallback(async () => {
-    try {
-      setImportLoading(true)
-      
-      const headers = ['sno', 'class', 'section', 'day', 'type', 'subject', 'timings', 'teacherName', 'breakType']
-      const sampleData = [
-        ['1', '1', 'A', 'Monday', 'period', 'Mathematics', '9:00 AM - 10:00 AM', 'John Smith', ''],
-        ['2', '1', 'A', 'Monday', 'period', 'English', '10:00 AM - 11:00 AM', 'Sarah Johnson', ''],
-        ['3', '1', 'A', 'Monday', 'break', 'Break', '11:00 AM - 11:15 AM', '', 'SHORT_BREAK'],
-        ['4', '1', 'A', 'Monday', 'break', 'Lunch Break', '1:15 PM - 2:00 PM', '', 'LUNCH']
-      ]
-      
-      const csvContent = [
-        headers.join(','),
-        ...sampleData.map(row => row.map(cell => `"${cell}"`).join(','))
-      ].join('\n')
-      
-      const blob = new Blob([csvContent], { type: 'text/csv' })
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = 'timetable_template.csv'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-      
-      showToast('Template downloaded successfully', 'success')
-    } catch (error) {
-      console.error('Download error:', error)
-      showToast('Failed to download template', 'error')
-    } finally {
-      if (isMounted.current) {
-        setImportLoading(false)
-      }
+    const result = downloadTimetableTemplate()
+  
+    if (result.success) {
+      showToast(result.message, 'success')
+    } else {
+      showToast(result.message, 'error')
     }
   }, [showToast])
 

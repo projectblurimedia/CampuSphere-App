@@ -355,8 +355,8 @@ const AppContent = () => {
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
         <View style={[styles.loadingCard, {backgroundColor: colors?.cardBackground}]}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <ThemedText style={[styles.loadingText, { color: colors.textSecondary }]}>
-            {checkingStatus ? 'Verifying account...' : 'Loading...'}
+          <ThemedText style={[styles.loadingText, { color: colors.primary }]}>
+            {checkingStatus ? 'Verifying Account...' : 'Loading...'}
           </ThemedText>
         </View>
         <ToastNotification
@@ -489,9 +489,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     gap: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
   },
   loadingText: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: 'Poppins-Medium',
     textAlign: 'center',
   },

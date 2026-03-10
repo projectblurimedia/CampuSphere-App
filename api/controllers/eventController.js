@@ -439,7 +439,7 @@ export const createEvent = [
       const { title, date, description } = req.body
 
       // Validate required fields
-      const requiredFields = ['title', 'date', 'description']
+      const requiredFields = ['title', 'date']
       const missingFields = requiredFields.filter(field => !req.body[field])
       
       if (missingFields.length > 0) {

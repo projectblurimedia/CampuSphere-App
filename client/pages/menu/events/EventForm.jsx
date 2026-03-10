@@ -69,7 +69,6 @@ const EventForm = ({
         images: [] 
       })
     }
-    setErrors({})
     setIsInitialized(true)
   }, [isEdit, eventData, isInitialized])
 
@@ -78,7 +77,6 @@ const EventForm = ({
       initializeForm()
     } else {
       setIsInitialized(false)
-      setErrors({})
       setImageToRemove(null)
       setRemoveImageModalVisible(false)
     }
@@ -90,7 +88,7 @@ const EventForm = ({
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
       if (status !== 'granted') {
-        showToast('warning', 'Please grant permission to access photos')
+        showToast('Please grant permission to access photos', 'warning')
         return
       }
 
@@ -111,10 +109,10 @@ const EventForm = ({
           ...prev,
           images: [...prev.images, ...newImages]
         }))
-        showToast('success', `${newImages.length} image(s) added`)
+        showToast(`${newImages.length} image(s) added`, 'success')
       }
     } catch (error) {
-      showToast('error', 'Failed to pick images')
+      showToast('Failed to pick images', 'error')
     }
   }
 
@@ -129,7 +127,7 @@ const EventForm = ({
     const newImages = [...formData.images]
     newImages.splice(imageToRemove.index, 1)
     setFormData(prev => ({ ...prev, images: newImages }))
-    showToast('success', 'Image removed')
+    showToast('Image removed', 'success')
     setRemoveImageModalVisible(false)
     setImageToRemove(null)
   }
@@ -143,23 +141,24 @@ const EventForm = ({
       newErrors.title = 'Title cannot exceed 100 characters'
     }
     
-    if (!formData.description.trim()) {
-      newErrors.description = 'Event description is required'
-    } else if (formData.description.length > 2000) {
+    if (formData.description.length > 2000) {
       newErrors.description = 'Description cannot exceed 2000 characters'
     }
     
     setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+    return newErrors
   }
 
   const handleSubmit = () => {
     if (externalLoading) return
     
-    if (!validateForm()) {
-      showToast('warning', 'Please fix the errors in the form')
+    const validationErrors = validateForm()
+  
+    if (Object.keys(validationErrors).length > 0) {
+      showToast('Please fix the errors in the form', 'warning')
       return
     }
+
 
     if (isEdit && eventData) {
       const existingImages = eventData.images || []
@@ -317,7 +316,9 @@ const EventForm = ({
                 />
               </View>
               {errors.title && (
-                <ThemedText style={styles.errorText}>{errors.title}</ThemedText>
+                <ThemedText style={styles.errorText}>
+                  {errors.title}
+                </ThemedText>
               )}
             </View>
 
@@ -493,7 +494,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom:20,
   },
   inputLabel: {
     fontSize: 14,
@@ -538,8 +539,8 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#EF4444',
     fontSize: 12,
-    marginTop: 4,
-    marginLeft: 4,
+    marginLeft: 6,
+    marginTop: -10,
   },
   saveBtn: {
     backgroundColor: '#1d9bf0', 

@@ -10,22 +10,37 @@ export const generateClassWisePDFHTML = (data) => {
     generatedAt
   } = data
 
-  const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+  // Safe number formatter - FIXED: Returns 0 for undefined/null
+  const safeNumber = (value) => {
+    if (value === undefined || value === null || isNaN(value)) {
+      return 0
+    }
+    return Number(value)
   }
 
+  const formatDate = (date) => {
+    if (!date) return ''
+    try {
+      return new Date(date).toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    } catch {
+      return ''
+    }
+  }
+
+  // FIXED: Safe currency formatter - handles undefined values
   const formatCurrency = (amount) => {
-    return `₹${amount.toLocaleString('en-IN')}`
+    const num = safeNumber(amount)
+    return `₹${num.toLocaleString('en-IN')}`
   }
 
   // Check if any fee category has non-zero values across all sections
-  const hasPreviousYearFees = sections.some(section => section.totalPreviousYearPending > 0)
+  const hasPreviousYearFees = sections.some(section => safeNumber(section.totalPreviousYearPending) > 0)
   
   // Determine which columns to show based on selected term
   const getColumns = () => {
@@ -59,44 +74,54 @@ export const generateClassWisePDFHTML = (data) => {
   // Generate each section's table with proper alignment
   const generateSectionTables = () => {
     return sections.map((section, index) => {
-      const students = section.students
+      const students = section.students || []
       const hasStudents = students.length > 0
 
-      // Calculate section totals based on visible columns
-      const sectionTerm1Total = students.reduce((sum, s) => sum + (s.term1Pending || 0), 0)
-      const sectionTerm2Total = students.reduce((sum, s) => sum + (s.term2Pending || 0), 0)
-      const sectionTerm3Total = students.reduce((sum, s) => sum + (s.term3Pending || 0), 0)
-      const sectionPreviousYearTotal = students.reduce((sum, s) => sum + (s.previousYearFee || 0), 0)
-      const sectionGrandTotal = students.reduce((sum, s) => sum + (s.totalPending || 0), 0)
+      // Calculate section totals based on visible columns using safe numbers
+      const sectionTerm1Total = students.reduce((sum, s) => sum + safeNumber(s.term1Pending), 0)
+      const sectionTerm2Total = students.reduce((sum, s) => sum + safeNumber(s.term2Pending), 0)
+      const sectionTerm3Total = students.reduce((sum, s) => sum + safeNumber(s.term3Pending), 0)
+      const sectionPreviousYearTotal = students.reduce((sum, s) => sum + safeNumber(s.previousYearFee), 0)
+      const sectionGrandTotal = students.reduce((sum, s) => sum + safeNumber(s.totalPending), 0)
+
+      // Calculate totals based on selected term for display
+      let termTotalDisplay = 0
+      if (selectedTerm === 'First Term') termTotalDisplay = sectionTerm1Total
+      else if (selectedTerm === 'Second Term') termTotalDisplay = sectionTerm2Total
+      else if (selectedTerm === 'Third Term') termTotalDisplay = sectionTerm3Total
+      
+      const totalDisplay = selectedTerm === 'Previous Year' 
+        ? sectionPreviousYearTotal
+        : selectedTerm === 'All'
+          ? sectionGrandTotal
+          : termTotalDisplay + sectionPreviousYearTotal
 
       return `
         <div class="section-page" ${index > 0 ? 'style="page-break-before: always;"' : ''}>
           <!-- School Header (repeated on each page) -->
           <div class="school-header">
-            <h1 class="school-name">${schoolDetails.name}</h1>
-            <div class="school-details">${schoolDetails.address} | ${schoolDetails.phone} | ${schoolDetails.email}</div>
+            <h1 class="school-name">${schoolDetails?.name || 'School Name'}</h1>
+            <div class="school-details">${schoolDetails?.address || ''} | ${schoolDetails?.phone || ''} | ${schoolDetails?.email || ''}</div>
           </div>
 
           <!-- Report Title with Filters -->
           <div class="report-title-section">
             <div class="filter-info">
-              <span class="filter-item"><strong>Class:</strong> ${selectedClass}</span>
-              <span class="filter-item"><strong>Section:</strong> ${selectedSection}</span>
-              <span class="filter-item"><strong>Term:</strong> ${selectedTerm}</span>
+              <span class="filter-item"><strong>Class:</strong> ${selectedClass || 'All'}</span>
+              <span class="filter-item"><strong>Section:</strong> ${selectedSection || 'All'}</span>
+              <span class="filter-item"><strong>Term:</strong> ${selectedTerm || 'All'}</span>
               <span class="filter-item"><strong>Date:</strong> ${formatDate(generatedAt)}</span>
             </div>
           </div>
 
           <!-- Section Header -->
           <div class="section-header">
-            <h2>${section.className} - Section ${section.section}</h2>
+            <h2>${section.className || 'Unknown'} - Section ${section.section || 'Unknown'}</h2>
             <div class="section-summary">
-              <span class="summary-item"><strong>Pending Students:</strong> ${section.pendingCount}</span>
+              <span class="summary-item"><strong>Pending Students:</strong> ${safeNumber(section.pendingCount)}</span>
               ${selectedTerm !== 'Previous Year' && selectedTerm !== 'All' ? `
                 <span class="summary-item"><strong>${selectedTerm === 'First Term' ? 'Term 1' : selectedTerm === 'Second Term' ? 'Term 2' : 'Term 3'}:</strong> ${
-                  formatCurrency(selectedTerm === 'First Term' ? sectionTerm1Total : 
-                                selectedTerm === 'Second Term' ? sectionTerm2Total : 
-                                sectionTerm3Total)
+                  formatCurrency(termTotalDisplay)
                 }</span>
               ` : ''}
               ${selectedTerm === 'All' ? `
@@ -104,10 +129,10 @@ export const generateClassWisePDFHTML = (data) => {
                 <span class="summary-item"><strong>Term 2:</strong> ${formatCurrency(sectionTerm2Total)}</span>
                 <span class="summary-item"><strong>Term 3:</strong> ${formatCurrency(sectionTerm3Total)}</span>
               ` : ''}
-              ${hasPreviousYearFees ? `
+              ${hasPreviousYearFees && sectionPreviousYearTotal > 0 ? `
                 <span class="summary-item" style="background: #FEF3C7;"><strong>Previous Year:</strong> ${formatCurrency(sectionPreviousYearTotal)}</span>
               ` : ''}
-              <span class="summary-item total"><strong>Total:</strong> ${formatCurrency(sectionGrandTotal)}</span>
+              <span class="summary-item total"><strong>Total:</strong> ${formatCurrency(totalDisplay)}</span>
             </div>
           </div>
 
@@ -124,6 +149,14 @@ export const generateClassWisePDFHTML = (data) => {
               </thead>
               <tbody>
                 ${students.map((student) => {
+                  const studentTotal = selectedTerm === 'Previous Year'
+                    ? safeNumber(student.previousYearFee)
+                    : selectedTerm === 'All'
+                      ? safeNumber(student.term1Pending) + safeNumber(student.term2Pending) + safeNumber(student.term3Pending) + safeNumber(student.previousYearFee)
+                      : safeNumber(selectedTerm === 'First Term' ? student.term1Pending : 
+                                  selectedTerm === 'Second Term' ? student.term2Pending : 
+                                  student.term3Pending) + safeNumber(student.previousYearFee)
+
                   const row = `
                     <tr>
                       <td style="text-align: center;">${student.rollNo || 'N/A'}</td>
@@ -132,38 +165,38 @@ export const generateClassWisePDFHTML = (data) => {
                   
                   if (selectedTerm === 'First Term') {
                     return row + `
-                      <td style="text-align: center;">${formatCurrency(student.term1Pending || 0)}</td>
-                      <td style="text-align: center; ${student.previousYearFee > 0 ? 'background: #FEF3C7; font-weight: bold; color: #F59E0B;' : ''}">${formatCurrency(student.previousYearFee || 0)}</td>
-                      <td style="text-align: center; font-weight: bold; color: #EF4444;">${formatCurrency(student.totalPending || 0)}</td>
+                      <td style="text-align: center;">${formatCurrency(safeNumber(student.term1Pending))}</td>
+                      <td style="text-align: center; ${safeNumber(student.previousYearFee) > 0 ? 'background: #FEF3C7; font-weight: bold; color: #F59E0B;' : ''}">${formatCurrency(safeNumber(student.previousYearFee))}</td>
+                      <td style="text-align: center; font-weight: bold; color: #EF4444;">${formatCurrency(studentTotal)}</td>
                     </tr>
                     `
                   } else if (selectedTerm === 'Second Term') {
                     return row + `
-                      <td style="text-align: center;">${formatCurrency(student.term2Pending || 0)}</td>
-                      <td style="text-align: center; ${student.previousYearFee > 0 ? 'background: #FEF3C7; font-weight: bold; color: #F59E0B;' : ''}">${formatCurrency(student.previousYearFee || 0)}</td>
-                      <td style="text-align: center; font-weight: bold; color: #EF4444;">${formatCurrency(student.totalPending || 0)}</td>
+                      <td style="text-align: center;">${formatCurrency(safeNumber(student.term2Pending))}</td>
+                      <td style="text-align: center; ${safeNumber(student.previousYearFee) > 0 ? 'background: #FEF3C7; font-weight: bold; color: #F59E0B;' : ''}">${formatCurrency(safeNumber(student.previousYearFee))}</td>
+                      <td style="text-align: center; font-weight: bold; color: #EF4444;">${formatCurrency(studentTotal)}</td>
                     </tr>
                     `
                   } else if (selectedTerm === 'Third Term') {
                     return row + `
-                      <td style="text-align: center;">${formatCurrency(student.term3Pending || 0)}</td>
-                      <td style="text-align: center; ${student.previousYearFee > 0 ? 'background: #FEF3C7; font-weight: bold; color: #F59E0B;' : ''}">${formatCurrency(student.previousYearFee || 0)}</td>
-                      <td style="text-align: center; font-weight: bold; color: #EF4444;">${formatCurrency(student.totalPending || 0)}</td>
+                      <td style="text-align: center;">${formatCurrency(safeNumber(student.term3Pending))}</td>
+                      <td style="text-align: center; ${safeNumber(student.previousYearFee) > 0 ? 'background: #FEF3C7; font-weight: bold; color: #F59E0B;' : ''}">${formatCurrency(safeNumber(student.previousYearFee))}</td>
+                      <td style="text-align: center; font-weight: bold; color: #EF4444;">${formatCurrency(studentTotal)}</td>
                     </tr>
                     `
                   } else if (selectedTerm === 'Previous Year') {
                     return row + `
-                      <td style="text-align: center; ${student.previousYearFee > 0 ? 'background: #FEF3C7; font-weight: bold; color: #F59E0B;' : ''}">${formatCurrency(student.previousYearFee || 0)}</td>
-                      <td style="text-align: center; font-weight: bold; color: #EF4444;">${formatCurrency(student.totalPending || 0)}</td>
+                      <td style="text-align: center; ${safeNumber(student.previousYearFee) > 0 ? 'background: #FEF3C7; font-weight: bold; color: #F59E0B;' : ''}">${formatCurrency(safeNumber(student.previousYearFee))}</td>
+                      <td style="text-align: center; font-weight: bold; color: #EF4444;">${formatCurrency(safeNumber(student.previousYearFee))}</td>
                     </tr>
                     `
                   } else { // All
                     return row + `
-                      <td style="text-align: center;">${formatCurrency(student.term1Pending || 0)}</td>
-                      <td style="text-align: center;">${formatCurrency(student.term2Pending || 0)}</td>
-                      <td style="text-align: center;">${formatCurrency(student.term3Pending || 0)}</td>
-                      <td style="text-align: center; ${student.previousYearFee > 0 ? 'background: #FEF3C7; font-weight: bold; color: #F59E0B;' : ''}">${formatCurrency(student.previousYearFee || 0)}</td>
-                      <td style="text-align: center; font-weight: bold; color: #EF4444;">${formatCurrency(student.totalPending || 0)}</td>
+                      <td style="text-align: center;">${formatCurrency(safeNumber(student.term1Pending))}</td>
+                      <td style="text-align: center;">${formatCurrency(safeNumber(student.term2Pending))}</td>
+                      <td style="text-align: center;">${formatCurrency(safeNumber(student.term3Pending))}</td>
+                      <td style="text-align: center; ${safeNumber(student.previousYearFee) > 0 ? 'background: #FEF3C7; font-weight: bold; color: #F59E0B;' : ''}">${formatCurrency(safeNumber(student.previousYearFee))}</td>
+                      <td style="text-align: center; font-weight: bold; color: #EF4444;">${formatCurrency(studentTotal)}</td>
                     </tr>
                     `
                   }
@@ -194,7 +227,7 @@ export const generateClassWisePDFHTML = (data) => {
                     <td class="total-label" style="text-align: center;"><strong>${formatCurrency(sectionTerm3Total)}</strong></td>
                     <td class="total-label" style="text-align: center; background: #FEF3C7;"><strong>${formatCurrency(sectionPreviousYearTotal)}</strong></td>
                   ` : ''}
-                  <td class="total-label" style="text-align: center; color: #EF4444;"><strong>${formatCurrency(sectionGrandTotal)}</strong></td>
+                  <td class="total-label" style="text-align: center; color: #EF4444;"><strong>${formatCurrency(totalDisplay)}</strong></td>
                 </tr>
               </tfoot>
             </table>
@@ -206,6 +239,22 @@ export const generateClassWisePDFHTML = (data) => {
         </div>
       `
     }).join('')
+  }
+
+  // Calculate grand totals based on selected term
+  const calculateGrandTotal = () => {
+    if (selectedTerm === 'Previous Year') {
+      return safeNumber(grandTotals?.totalPreviousYearFee)
+    } else if (selectedTerm === 'All') {
+      return safeNumber(grandTotals?.totalAmount)
+    } else {
+      const termTotal = selectedTerm === 'First Term' 
+        ? safeNumber(grandTotals?.term1Total)
+        : selectedTerm === 'Second Term'
+          ? safeNumber(grandTotals?.term2Total)
+          : safeNumber(grandTotals?.term3Total)
+      return termTotal + safeNumber(grandTotals?.totalPreviousYearFee)
+    }
   }
 
   return `
@@ -445,45 +494,45 @@ export const generateClassWisePDFHTML = (data) => {
             <div class="grand-total-grid">
               <div class="grand-total-item">
                 <span class="grand-total-label">Total Sections</span>
-                <span class="grand-total-value">${grandTotals.totalSections}</span>
+                <span class="grand-total-value">${safeNumber(grandTotals?.totalSections)}</span>
               </div>
               <div class="grand-total-item">
                 <span class="grand-total-label">Students with Pending</span>
-                <span class="grand-total-value">${grandTotals.totalStudents}</span>
+                <span class="grand-total-value">${safeNumber(grandTotals?.totalStudents)}</span>
               </div>
               ${selectedTerm !== 'Previous Year' && selectedTerm !== 'All' ? `
                 <div class="grand-total-item">
                   <span class="grand-total-label">${selectedTerm === 'First Term' ? 'Term 1' : selectedTerm === 'Second Term' ? 'Term 2' : 'Term 3'} Total</span>
                   <span class="grand-total-value">${formatCurrency(
-                    selectedTerm === 'First Term' ? grandTotals.totalTerm1Pending :
-                    selectedTerm === 'Second Term' ? grandTotals.totalTerm2Pending :
-                    grandTotals.totalTerm3Pending
+                    selectedTerm === 'First Term' ? grandTotals?.term1Total :
+                    selectedTerm === 'Second Term' ? grandTotals?.term2Total :
+                    grandTotals?.term3Total
                   )}</span>
                 </div>
               ` : ''}
               ${selectedTerm === 'All' ? `
                 <div class="grand-total-item">
                   <span class="grand-total-label">Term 1 Total</span>
-                  <span class="grand-total-value">${formatCurrency(grandTotals.totalTerm1Pending)}</span>
+                  <span class="grand-total-value">${formatCurrency(grandTotals?.term1Total)}</span>
                 </div>
                 <div class="grand-total-item">
                   <span class="grand-total-label">Term 2 Total</span>
-                  <span class="grand-total-value">${formatCurrency(grandTotals.totalTerm2Pending)}</span>
+                  <span class="grand-total-value">${formatCurrency(grandTotals?.term2Total)}</span>
                 </div>
                 <div class="grand-total-item">
                   <span class="grand-total-label">Term 3 Total</span>
-                  <span class="grand-total-value">${formatCurrency(grandTotals.totalTerm3Pending)}</span>
+                  <span class="grand-total-value">${formatCurrency(grandTotals?.term3Total)}</span>
                 </div>
               ` : ''}
-              ${grandTotals.totalPreviousYearFee > 0 ? `
+              ${hasPreviousYearFees ? `
                 <div class="grand-total-item" style="border-left: 4px solid #F59E0B;">
                   <span class="grand-total-label">Previous Year Total</span>
-                  <span class="grand-total-value" style="color: #F59E0B;">${formatCurrency(grandTotals.totalPreviousYearFee)}</span>
+                  <span class="grand-total-value" style="color: #F59E0B;">${formatCurrency(grandTotals?.totalPreviousYearFee)}</span>
                 </div>
               ` : ''}
               <div class="grand-total-item">
                 <span class="grand-total-label">GRAND TOTAL PENDING</span>
-                <span class="grand-total-value total">${formatCurrency(grandTotals.totalAmount)}</span>
+                <span class="grand-total-value total">${formatCurrency(calculateGrandTotal())}</span>
               </div>
             </div>
           </div>

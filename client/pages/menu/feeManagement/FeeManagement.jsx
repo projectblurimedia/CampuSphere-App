@@ -30,7 +30,7 @@ import HeaderComponent from './components/HeaderComponent'
 import ClassFeeCard from './components/ClassFeeCard'
 import BusFeeCard from './components/BusFeeCard'
 import HostelFeeCard from './components/HostelFeeCard'
-import BulkUploadModal from './components/BulkUploadModal'
+import BulkUploadModal from './BulkUploadModal'
 import EmptyState from './components/EmptyState'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')

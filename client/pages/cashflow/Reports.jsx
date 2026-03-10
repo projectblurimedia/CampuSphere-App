@@ -148,7 +148,8 @@ const Reports = ({ visible, onClose }) => {
 
   useEffect(() => {
     if (visible) {
-      fetchRecords(1)
+      setRecords([]) // Clear records when filters change
+      fetchRecords(1, true, false) // Start fresh with page 1, no append
     }
   }, [
     type,
@@ -257,7 +258,7 @@ const Reports = ({ visible, onClose }) => {
     }
   }, [dateRange, selectedDate, startDate, endDate])
 
-  const fetchRecords = async (page = 1, showLoading = true) => {
+  const fetchRecords = async (page = 1, showLoading = true, append = false) => {
     try {
       if (showLoading) setLoading(true)
       const { startDate: start, endDate: end } = getDateParams()
@@ -278,15 +279,41 @@ const Reports = ({ visible, onClose }) => {
       const responseData = response.data || {}
       const recordsList = responseData.data || []
       
-      setRecords(recordsList)
+      // Append to existing records or replace them
+      setRecords(prevRecords => {
+        if (append && page > 1) {
+          // When appending, combine previous records with new ones
+          // Use a Map to ensure no duplicates (in case of overlapping pages)
+          const recordMap = new Map()
+          
+          // Add existing records to map
+          prevRecords.forEach(record => {
+            recordMap.set(record.id || record._id, record)
+          })
+          
+          // Add new records to map
+          recordsList.forEach(record => {
+            recordMap.set(record.id || record._id, record)
+          })
+          
+          // Convert map back to array
+          return Array.from(recordMap.values())
+        } else {
+          // For first page or when filters change, replace records
+          return recordsList
+        }
+      })
       
-      // Calculate detailed summary
+      // Calculate detailed summary for ALL records (including previous ones)
       let totalIncome = 0
       let totalExpense = 0
       let incomeCount = 0
       let expenseCount = 0
 
-      recordsList.forEach(record => {
+      // Get all records (prev + new) for summary calculation
+      const allRecordsForSummary = append ? [...records, ...recordsList] : recordsList
+
+      allRecordsForSummary.forEach(record => {
         if (record.type === 'Income') {
           totalIncome += record.amount || 0
           incomeCount++
@@ -296,8 +323,8 @@ const Reports = ({ visible, onClose }) => {
         }
       })
 
-      const total = recordsList.reduce((sum, record) => sum + (record.amount || 0), 0)
-      const count = recordsList.length
+      const total = allRecordsForSummary.reduce((sum, record) => sum + (record.amount || 0), 0)
+      const count = allRecordsForSummary.length
       const avg = count > 0 ? total / count : 0
       const netBalance = totalIncome - totalExpense
 
@@ -318,26 +345,30 @@ const Reports = ({ visible, onClose }) => {
       }
     } catch (error) {
       console.error('Error fetching records:', error)
-      setRecords([])
-      setSummary({ 
-        total: 0, 
-        count: 0, 
-        avg: 0,
-        totalIncome: 0,
-        totalExpense: 0,
-        incomeCount: 0,
-        expenseCount: 0,
-        netBalance: 0
-      })
+      if (!append) {
+        setRecords([])
+        setSummary({ 
+          total: 0, 
+          count: 0, 
+          avg: 0,
+          totalIncome: 0,
+          totalExpense: 0,
+          incomeCount: 0,
+          expenseCount: 0,
+          netBalance: 0
+        })
+      }
       showToast('Failed to load records', 'error')
     } finally {
       if (showLoading) setLoading(false)
     }
   }
 
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
-    await fetchRecords(1, false)
+    setRecords([]) 
+    await fetchRecords(1, false, false)
     setRefreshing(false)
   }, [type, category, item, dateRange, selectedDate, startDate, endDate])
 
@@ -575,7 +606,7 @@ const Reports = ({ visible, onClose }) => {
 
   const handleLoadMore = () => {
     if (pagination.hasNext && !loading) {
-      fetchRecords(pagination.current + 1)
+      fetchRecords(pagination.current + 1, true, true) 
     }
   }
 

@@ -15,6 +15,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import Dashboard from '@/components/dynamicModals/Dashboard'
+import { schoolDetails } from '@/schoolDetails'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
@@ -167,8 +168,8 @@ export default function CashflowMenu({ visible, onClose }) {
                 <View style={styles.headerLeft}>
                   <Ionicons name="school" size={28} color="#FFFFFF" />
                   <View style={styles.headerText}>
-                    <ThemedText type='subtitle' style={styles.schoolName}>
-                      Bluri High School
+                    <ThemedText style={styles.schoolName} numberOfLines={1}>
+                      {schoolDetails?.name || 'School'}
                     </ThemedText>
                     <ThemedText style={styles.menuTitle}>
                       Cashflow Menu
@@ -300,9 +301,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   schoolName: {
-    fontSize: 20,
+    fontSize: 18,
     color: '#FFFFFF',
-    marginBottom: 2,
+    fontFamily: 'Poppins-Bold',
   },
   menuTitle: {
     fontSize: 12,

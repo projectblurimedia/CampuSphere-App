@@ -551,8 +551,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   schoolName: {
-    fontSize: 20,
+    fontSize: 18,
     color: '#FFFFFF',
+    fontFamily: 'Poppins-Bold',
   },
   menuTitle: {
     fontSize: 12,

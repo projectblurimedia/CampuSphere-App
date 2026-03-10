@@ -229,10 +229,10 @@ export default function ProfileMenu({ visible, onClose }) {
                     {renderAvatar()}
                   </View>
                   <View style={styles.headerText}>
-                    <ThemedText style={styles.schoolName}>
+                    <ThemedText style={styles.employeeName} numberOfLines={1}>
                       {getDisplayName()}
                     </ThemedText>
-                    <ThemedText style={styles.menuTitle}>
+                    <ThemedText style={styles.employeeDesignation}>
                       {getDesignation()}
                     </ThemedText>
                   </View>
@@ -444,13 +444,12 @@ const styles = StyleSheet.create({
   headerText: {
     flex: 1,
   },
-  schoolName: {
+  employeeName: {
     fontSize: 16,
     color: '#FFFFFF',
-    marginBottom: 2,
     fontFamily: 'Poppins-SemiBold',
   },
-  menuTitle: {
+  employeeDesignation: {
     fontSize: 11,
     color: 'rgba(255, 255, 255, 0.9)',
     fontFamily: 'Poppins-Regular',

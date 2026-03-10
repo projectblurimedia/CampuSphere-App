@@ -18,6 +18,7 @@ import UploadMarks from '@/pages/menu/uploadMarks/UploadMarks'
 import BirthdayStudents from '@/pages/menu/birthdays/BirthdayStudents'
 import StudentsMarksStats from '@/pages/student/StudentsMarksStats'
 import StudentsAttendanceStats from '@/pages/student/StudentsAttendanceStats'
+import { schoolDetails } from '@/schoolDetails'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
@@ -235,8 +236,8 @@ export default function StudentsMenu({ visible, onClose }) {
                 <View style={styles.headerLeft}>
                   <Ionicons name="school" size={28} color="#FFFFFF" />
                   <View style={styles.headerText}>
-                    <ThemedText style={styles.schoolName}>
-                      Bluri High School
+                    <ThemedText style={styles.schoolName} numberOfLines={1}>
+                      {schoolDetails?.name || 'School'}
                     </ThemedText>
                     <ThemedText style={styles.menuTitle}>
                       Students Menu
@@ -385,9 +386,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   schoolName: {
-    fontSize: 20,
+    fontSize: 18,
     color: '#FFFFFF',
-    marginBottom: 2,
     fontFamily: 'Poppins-Bold',
   },
   menuTitle: {

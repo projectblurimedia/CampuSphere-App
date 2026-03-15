@@ -51,8 +51,19 @@ const authLimiter = rateLimit({
   message: 'Too many attempts, please try again later'
 })
 
+// Root endpoint
+app.get('/api/', (req, res) => {
+  res.json({
+    message: 'School Management System API',
+    status: 'running',
+    keepAliveEndpoints: [
+      '/health - for uptime monitoring',
+    ]
+  })
+})
+
 // Health check endpoint for uptime monitoring - UPDATED for Prisma
-app.get('/health', async (req, res) => {
+app.get('/api/health', async (req, res) => {
   let dbStatus = "disconnected"
   try {
     // Test database connection with Prisma
@@ -67,17 +78,6 @@ app.get('/health', async (req, res) => {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     database: dbStatus
-  })
-})
-
-// Root endpoint
-app.get('/', (req, res) => {
-  res.json({
-    message: 'School Management System API',
-    status: 'running',
-    keepAliveEndpoints: [
-      '/health - for uptime monitoring',
-    ]
   })
 })
 

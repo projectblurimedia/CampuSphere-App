@@ -1,15 +1,19 @@
-const axios = require('axios')
-
-const axiosBaseUrl = 'http://192.168.31.232:8000/server'
-
-const instance = axios.create({
-    baseURL: axiosBaseUrl
+const express = require('express')
+const http = require('http')
+const app = express()
+const server = http.createServer(app)
+const io = require('socket.io')(server, {
+    cors : {
+        origin : '*'
+    }
 })
 
-const io = require('socket.io')(5000, {
-    cors : {
-        origin : 'http://192.168.31.232:8081'
-    }
+app.get('/socket/health', (req, res) => {
+    res.status(200).json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        users: users.length 
+    })
 })
 
 let users = []

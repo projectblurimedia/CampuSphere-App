@@ -62,16 +62,6 @@ app.get('/api', (req, res) => {
   })
 })
 
-app.get('/api', (req, res) => {
-  res.json({
-    message: 'School Management System API',
-    status: 'running',
-    keepAliveEndpoints: [
-      '/health - for uptime monitoring',
-    ]
-  })
-})
-
 // Health check endpoint for uptime monitoring - UPDATED for Prisma
 app.get('/api/health', async (req, res) => {
   let dbStatus = "disconnected"

@@ -52,7 +52,7 @@ const authLimiter = rateLimit({
 })
 
 // Root endpoint
-app.get('/api/', (req, res) => {
+app.get('/api', (req, res) => {
   res.json({
     message: 'School Management System API',
     status: 'running',

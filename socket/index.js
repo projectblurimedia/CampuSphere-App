@@ -8,6 +8,8 @@ const io = require('socket.io')(server, {
     }
 })
 
+let users = []
+
 app.get('/socket/health', (req, res) => {
     res.status(200).json({ 
         status: 'ok', 
@@ -16,7 +18,6 @@ app.get('/socket/health', (req, res) => {
     })
 })
 
-let users = []
 
 const addUser = (userId, socketId) => {
     if (!userId || users.some(user => user.userId === userId)) {

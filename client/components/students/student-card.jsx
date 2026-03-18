@@ -72,7 +72,7 @@ export default function StudentCard({ student, onPress }) {
               <View style={styles.rollContainer}>
                 <Ionicons name="id-card-outline" size={12} color={colors.textSecondary} />
                 <ThemedText style={[styles.rollText, { color: colors.textSecondary, marginLeft: 4 }]}>
-                  Roll No: {student.rollNo || student.admissionNo || 'N/A'}
+                  Roll No: {student.rollNo || 'N/A'}
                 </ThemedText>
               </View>
             </View>

@@ -123,7 +123,7 @@ export default function Events({ visible, onClose }) {
       justifyContent: 'center',
     },
     title: {
-      fontSize: 20,
+      fontSize: 18,
       color: '#FFFFFF',
       marginBottom: -3,
     },

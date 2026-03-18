@@ -29,8 +29,6 @@ export default function QuickActions() {
   const handleModalClose = (success = true) => {
     setActiveModal(null)
     if (success) {
-      showToast('Operation completed successfully', 'success')
-      // Trigger parent refresh if available
       if (navigation.getParent()?.params?.refresh) {
         navigation.getParent().params.refresh()
       }

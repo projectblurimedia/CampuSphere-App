@@ -132,7 +132,7 @@ export default function SchoolStats({ visible, onClose }) {
       alignItems: 'center',
     },
     title: {
-      fontSize: 20,
+      fontSize: 18,
       color: '#FFFFFF',
     },
     subtitle: {

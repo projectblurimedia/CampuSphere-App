@@ -330,11 +330,10 @@ export default function SchoolProfile({ visible, onClose }) {
       alignItems: 'center',
     },
     title: {
-      fontSize: 20,
+      fontSize: 18,
       color: '#FFFFFF',
     },
     subtitle: {
-      marginTop: 4,
       fontSize: 12,
       color: 'rgba(255,255,255,0.9)',
     },

@@ -752,10 +752,8 @@ export default function Timetable({ visible, onClose }) {
     headerTitle: {
       fontSize: 18,
       color: '#FFFFFF',
-      fontWeight: '600',
     },
     headerSubtitle: {
-      marginTop: 4,
       fontSize: 11,
       color: 'rgba(255,255,255,0.9)',
     },
@@ -1882,7 +1880,7 @@ export default function Timetable({ visible, onClose }) {
                 <FontAwesome5 style={styles.backIcon} name="chevron-left" size={20} color="#FFFFFF" />
               </TouchableOpacity>
               <View style={{ flex: 1, alignItems: 'center' }}>
-                <ThemedText style={styles.headerTitle}>Timetable</ThemedText>
+                <ThemedText style={styles.headerTitle} type='subtitle'>Timetable</ThemedText>
                 <ThemedText style={styles.headerSubtitle}>Manage schedules</ThemedText>
               </View>
               <TouchableOpacity 

@@ -322,9 +322,7 @@ export default function ClassGroup({
     title: {
       fontSize: 18,
       color: '#FFFFFF',
-      marginBottom: 2,
       textAlign: 'center',
-      fontWeight: '600',
     },
     subtitle: {
       fontSize: 11,
@@ -536,7 +534,7 @@ export default function ClassGroup({
                 </TouchableOpacity>
                 
                 <View style={styles.headerInfo}>
-                  <ThemedText style={styles.title}>
+                  <ThemedText style={styles.title} type={'subtitle'}>
                     {currentSection 
                       ? `${modalClassData?.classLabel || modalClassData?.class} - Section ${currentSection}` 
                       : `${modalClassData?.classLabel || modalClassData?.class}`

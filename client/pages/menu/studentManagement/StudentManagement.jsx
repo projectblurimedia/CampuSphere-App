@@ -992,7 +992,7 @@ export default function StudentManagement({ visible, onClose }) {
   return (
     <Modal 
       visible={visible} 
-      animationType="slide" 
+      animationType="fade" 
       onRequestClose={onClose}
       statusBarTranslucent
     >
@@ -1011,11 +1011,11 @@ export default function StudentManagement({ visible, onClose }) {
                 }}
                 activeOpacity={0.9}
               >
-                <FontAwesome5 name="chevron-left" size={20} color="#FFFFFF" />
+                <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
               </TouchableOpacity>
               
               <View style={{ flex: 1, alignItems: 'center' }}>
-                <ThemedText style={[styles.title, { fontFamily: 'Poppins-SemiBold' }]}>
+                <ThemedText style={styles.title} type='subtitle'>
                   Student Management
                 </ThemedText>
                 <ThemedText style={[styles.subtitle, { fontFamily: 'Poppins-Medium' }]}>

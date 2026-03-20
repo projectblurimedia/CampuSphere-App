@@ -5,7 +5,6 @@ import {
   ScrollView,
   TouchableOpacity,
   Platform,
-  Dimensions,
   ActivityIndicator,
   Modal,
 } from 'react-native'

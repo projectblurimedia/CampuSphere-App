@@ -2,34 +2,29 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import {
   View,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Platform,
   StatusBar,
-  Image,
   Animated,
-  Easing,
   ActivityIndicator,
   RefreshControl,
   Dimensions,
-  Modal,
-  SectionList
+  Modal
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
 import { 
   FontAwesome5, 
-  Ionicons, 
   Feather, 
   MaterialIcons, 
-  MaterialCommunityIcons,
-  Entypo 
+  MaterialCommunityIcons 
 } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 import { useSelector } from 'react-redux'
 import axiosApi from '@/utils/axiosApi'
 import { ToastNotification } from '@/components/ui/ToastNotification'
+import { ScrollView } from 'react-native'
 
 const { width, height } = Dimensions.get('window')
 
@@ -57,52 +52,6 @@ const isAcademicYearCompleted = (year) => {
   if (startYear < currentYear) return true
   if (startYear === currentYear && currentMonth < 6) return true
   return false
-}
-
-// Helper function to get class order for sorting
-const getClassOrder = (className) => {
-  const orderMap = {
-    'Pre-Nursery': 1,
-    'Nursery': 2,
-    'LKG': 3,
-    'UKG': 4,
-    'Class 1': 5,
-    'Class 2': 6,
-    'Class 3': 7,
-    'Class 4': 8,
-    'Class 5': 9,
-    'Class 6': 10,
-    'Class 7': 11,
-    'Class 8': 12,
-    'Class 9': 13,
-    'Class 10': 14
-  }
-  return orderMap[className] || 999
-}
-
-// Helper function to get next class
-const getNextClass = (currentClass) => {
-  const classOrder = [
-    'Pre-Nursery',
-    'Nursery',
-    'LKG',
-    'UKG',
-    'Class 1',
-    'Class 2',
-    'Class 3',
-    'Class 4',
-    'Class 5',
-    'Class 6',
-    'Class 7',
-    'Class 8',
-    'Class 9',
-    'Class 10'
-  ]
-
-  const currentIndex = classOrder.indexOf(currentClass)
-  if (currentIndex === -1) return null
-  if (currentIndex === classOrder.length - 1) return 'Graduated'
-  return classOrder[currentIndex + 1]
 }
 
 // Academic Year Picker Modal Component
@@ -173,7 +122,7 @@ const AcademicYearPickerModal = ({
     <Modal
       visible={visible}
       transparent={true}
-      animationType="none"
+      animationType="fade"
       onRequestClose={onClose}
       statusBarTranslucent
     >
@@ -203,11 +152,11 @@ const AcademicYearPickerModal = ({
               Select Academic Year
             </ThemedText>
             <ThemedText style={[styles.pickerModalSubtitle, { color: colors.textSecondary, fontFamily: 'Poppins-Medium' }]}>
-              Choose the academic year for promotion
+              Choose the academic year for end of year processing
             </ThemedText>
           </LinearGradient>
 
-          <ScrollView 
+          <ScrollView
             style={styles.pickerModalScroll}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.pickerModalContent}
@@ -296,8 +245,8 @@ const AcademicYearPickerModal = ({
   )
 }
 
-// Promotion Confirmation Modal Component
-const PromotionConfirmationModal = ({ 
+// Confirmation Modal Component
+const ConfirmationModal = ({ 
   visible, 
   onConfirm, 
   onCancel, 
@@ -371,13 +320,13 @@ const PromotionConfirmationModal = ({
           </View>
 
           <ThemedText style={[styles.confirmModalTitle, { color: colors.text, fontFamily: 'Poppins-Bold' }]}>
-            {isProcessing ? 'Processing Promotion...' : 'Confirm Promotion'}
+            {isProcessing ? 'Processing...' : 'Confirm End of Year Processing'}
           </ThemedText>
 
           <ThemedText style={[styles.confirmModalMessage, { color: colors.textSecondary, fontFamily: 'Poppins-Medium' }]}>
             {isProcessing 
-              ? `Please wait while we promote all ${studentCount} students`
-              : `Are you sure you want to promote all ${studentCount} students to the next academic year?`
+              ? `Please wait while we process ${studentCount} students for the new academic year`
+              : `Are you sure you want to process the end of academic year for all ${studentCount} students?`
             }
           </ThemedText>
 
@@ -449,7 +398,7 @@ const PromotionConfirmationModal = ({
                 </View>
               ) : (
                 <ThemedText style={[styles.confirmActionButtonText, { fontFamily: 'Poppins-SemiBold' }]}>
-                  Promote All
+                  Confirm
                 </ThemedText>
               )}
             </TouchableOpacity>
@@ -464,7 +413,6 @@ const PromotionConfirmationModal = ({
 const SuccessResultModal = ({ 
   visible, 
   onClose, 
-  results,
   summary
 }) => {
   const { colors } = useTheme()
@@ -495,24 +443,6 @@ const SuccessResultModal = ({
 
   const backdropOpacity = fadeAnim
   const modalScale = scaleAnim
-
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'Promoted': return '#10B981'
-      case 'Demoted': return '#F59E0B'
-      case 'Graduated': return '#8B5CF6'
-      default: return colors.textSecondary
-    }
-  }
-
-  const getStatusIcon = (status) => {
-    switch(status) {
-      case 'Promoted': return 'arrow-up'
-      case 'Demoted': return 'arrow-down'
-      case 'Graduated': return 'check'
-      default: return 'circle'
-    }
-  }
 
   return (
     <Modal
@@ -554,12 +484,12 @@ const SuccessResultModal = ({
               </View>
             </View>
             <ThemedText style={[styles.successModalTitle, { color: hasErrors ? '#B91C1C' : '#065F46', fontFamily: 'Poppins-Bold' }]}>
-              {hasErrors ? 'Partial Success' : 'Promotion Complete!'}
+              {hasErrors ? 'Partial Success' : 'End of Year Processing Complete!'}
             </ThemedText>
             <ThemedText style={[styles.successModalSubtitle, { color: hasErrors ? '#991B1B' : '#047857', fontFamily: 'Poppins-Medium' }]}>
               {hasErrors 
-                ? 'Some students were promoted with warnings'
-                : 'All students promoted successfully'
+                ? 'Some students were processed with warnings'
+                : 'All students processed successfully for the new academic year'
               }
             </ThemedText>
           </LinearGradient>
@@ -632,26 +562,6 @@ const SuccessResultModal = ({
                     {summary?.graduated || 0}
                   </ThemedText>
                 </View>
-
-                <View style={styles.successAcademicRow}>
-                  <Feather name="award" size={16} color="#F59E0B" />
-                  <ThemedText style={[styles.successAcademicLabel, { color: colors.textSecondary, fontFamily: 'Poppins-Medium' }]}>
-                    Avg Attendance:
-                  </ThemedText>
-                  <ThemedText style={[styles.successAcademicValue, { color: '#F59E0B', fontFamily: 'Poppins-SemiBold' }]}>
-                    {summary?.averageAttendance || 0}%
-                  </ThemedText>
-                </View>
-
-                <View style={styles.successAcademicRow}>
-                  <Feather name="bar-chart-2" size={16} color="#3B82F6" />
-                  <ThemedText style={[styles.successAcademicLabel, { color: colors.textSecondary, fontFamily: 'Poppins-Medium' }]}>
-                    Avg Marks:
-                  </ThemedText>
-                  <ThemedText style={[styles.successAcademicValue, { color: '#3B82F6', fontFamily: 'Poppins-SemiBold' }]}>
-                    {summary?.averageMarks || 0}%
-                  </ThemedText>
-                </View>
               </View>
             </View>
           </ScrollView>
@@ -671,22 +581,16 @@ const SuccessResultModal = ({
   )
 }
 
-// Main Promote Component
-export default function Promote({ visible, onClose }) {
+// Main End of Academic Year Component
+export default function EndOfAcademicYear({ visible, onClose }) {
   const { colors } = useTheme()
-  
-  // Get employee from Redux
-  const employee = useSelector(state => state.employee.employee)
-  const teacherName = employee ? `${employee.firstName} ${employee.lastName}` : 'Teacher'
   
   // State for filters
   const [academicYear, setAcademicYear] = useState(getCurrentAcademicYear())
   const [showAcademicYearPicker, setShowAcademicYearPicker] = useState(false)
   
   // State for students
-  const [studentsByClassSection, setStudentsByClassSection] = useState([])
-  const [allStudents, setAllStudents] = useState([])
-  const [collapsedSections, setCollapsedSections] = useState({})
+  const [studentCount, setStudentCount] = useState(0)
   
   // State for UI
   const [isLoading, setIsLoading] = useState(false)
@@ -697,12 +601,12 @@ export default function Promote({ visible, onClose }) {
   // State for modals
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
-  const [promotionResults, setPromotionResults] = useState(null)
-  const [promotionSummary, setPromotionSummary] = useState(null)
+  const [processingSummary, setProcessingSummary] = useState(null)
   
   // Animations
   const fadeAnimation = useRef(new Animated.Value(0)).current
   const slideAnimation = useRef(new Animated.Value(50)).current
+  const scaleAnimation = useRef(new Animated.Value(0.9)).current
   
   // Toast notification
   const [toast, setToast] = useState(null)
@@ -721,11 +625,18 @@ export default function Promote({ visible, onClose }) {
           friction: 6,
           tension: 50,
           useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnimation, {
+          toValue: 1,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true,
         })
       ]).start()
     } else {
       fadeAnimation.setValue(0)
       slideAnimation.setValue(50)
+      scaleAnimation.setValue(0.9)
     }
   }, [visible])
 
@@ -738,120 +649,48 @@ export default function Promote({ visible, onClose }) {
     setToast(null)
   }, [])
 
-  // Load all students grouped by class and section
-  const loadAllStudents = useCallback(async () => {
+  // Load student count using dedicated endpoint
+  const loadStudentCount = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     
     try {
-      const response = await axiosApi.get('/students')
+      const response = await axiosApi.get('/students/for-endOfAcademicYear')
       
       if (response.data.success) {
-        const students = response.data.data
-        setAllStudents(students)
-        
-        // Group students by class and section
-        const grouped = {}
-        students.forEach(student => {
-          const className = student.displayClass || student.class
-          const section = student.section
-          const key = `${className}-${section}`
-          
-          if (!grouped[key]) {
-            grouped[key] = {
-              class: className,
-              section: section,
-              displayTitle: `${className} - ${section}`,
-              students: [],
-              nextClass: getNextClass(className)
-            }
-          }
-          
-          grouped[key].students.push({
-            ...student,
-            uniqueId: `${student.id}-${key}`,
-          })
-        })
-        
-        // Convert to array for SectionList with proper sorting
-        const sections = Object.values(grouped)
-          .sort((a, b) => {
-            const classCompare = getClassOrder(a.class) - getClassOrder(b.class)
-            if (classCompare !== 0) return classCompare
-            return a.section.localeCompare(b.section)
-          })
-          .map(section => ({
-            title: section.displayTitle,
-            class: section.class,
-            section: section.section,
-            nextClass: section.nextClass,
-            data: section.students.sort((a, b) => {
-              return (a.rollNo || a.firstName || '').localeCompare(b.rollNo || b.firstName || '')
-            })
-          }))
-        
-        setStudentsByClassSection(sections)
-        
-        // Initialize collapsed sections (all expanded by default)
-        const initialCollapsed = {}
-        sections.forEach(section => {
-          initialCollapsed[section.title] = false
-        })
-        setCollapsedSections(initialCollapsed)
-        
+        setStudentCount(response.data.count || 0)
       } else {
-        throw new Error(response.data.message || 'Failed to load students')
+        throw new Error(response.data.message || 'Failed to load student count')
       }
     } catch (err) {
-      console.error('Error loading students:', err)
-      const errorMsg = err.response?.data?.message || err.message || 'Failed to load students'
+      console.error('Error loading student count:', err)
+      const errorMsg = err.response?.data?.message || err.message || 'Failed to load student count'
       setError(errorMsg)
       showToast(errorMsg, 'error')
-      setStudentsByClassSection([])
-      setAllStudents([])
+      setStudentCount(0)
     } finally {
       setIsLoading(false)
       setRefreshing(false)
     }
   }, [])
 
-  // Load students when component mounts
+  // Load data when component mounts
   useEffect(() => {
     if (visible) {
-      loadAllStudents()
+      loadStudentCount()
     }
-  }, [visible])
+  }, [visible, loadStudentCount])
 
   // Refresh data
   const handleRefresh = useCallback(() => {
     setRefreshing(true)
-    loadAllStudents()
-  }, [])
+    loadStudentCount()
+  }, [loadStudentCount])
 
-  // Toggle section collapse/expand
-  const toggleSection = useCallback((sectionTitle) => {
-    setCollapsedSections(prev => ({
-      ...prev,
-      [sectionTitle]: !prev[sectionTitle]
-    }))
-  }, [])
-
-  // Get all student IDs
-  const getAllStudentIds = useCallback(() => {
-    return allStudents.map(student => student.id)
-  }, [allStudents])
-
-  // Get total student count
-  const getTotalStudentCount = useCallback(() => {
-    return allStudents.length
-  }, [allStudents])
-
-  // Handle promote button press
-  const handlePromotePress = useCallback(() => {
-    const totalStudents = getTotalStudentCount()
-    
-    if (totalStudents === 0) {
-      showToast('No students available to promote', 'warning')
+  // Handle process button press
+  const handleProcessPress = useCallback(() => {
+    if (studentCount === 0) {
+      showToast('No students available to process', 'warning')
       return
     }
 
@@ -861,159 +700,60 @@ export default function Promote({ visible, onClose }) {
     }
 
     setShowConfirmModal(true)
-  }, [getTotalStudentCount, academicYear])
+  }, [studentCount, academicYear])
 
-  // Handle promotion confirmation
-  const handlePromoteConfirm = useCallback(async () => {
+  // Handle confirmation
+  const handleConfirm = useCallback(async () => {
     setShowConfirmModal(false)
     setIsProcessing(true)
 
-    const studentIds = getAllStudentIds()
-
     try {
       const payload = {
-        studentIds: studentIds,
         academicYear,
-        action: 'promote' // Always promote
       }
 
-      const response = await axiosApi.post('/students/promote', payload)
+      const response = await axiosApi.post('/students/endOfAcademicYear', payload)
 
       if (response.data.success || response.status === 207) {
-        setPromotionResults(response.data.data?.results || [])
-        setPromotionSummary(response.data.summary)
+        setProcessingSummary(response.data.summary)
         setShowSuccessModal(true)
         
-        // Reload students after promotion
+        // Reload student count after processing
         setTimeout(() => {
-          loadAllStudents()
+          loadStudentCount()
         }, 1000)
       }
     } catch (err) {
       if (err.response?.status === 207) {
-        setPromotionResults(err.response.data.data?.results || [])
-        setPromotionSummary(err.response.data.summary)
+        setProcessingSummary(err.response.data.summary)
         setShowSuccessModal(true)
       } else {
         showToast(
-          err.response?.data?.message || err.message || 'Failed to promote students',
+          err.response?.data?.message || err.message || 'Failed to process end of academic year',
           'error'
         )
       }
     } finally {
       setIsProcessing(false)
     }
-  }, [getAllStudentIds, academicYear])
+  }, [academicYear, loadStudentCount])
 
-  const handlePromoteCancel = useCallback(() => {
+  const handleCancel = useCallback(() => {
     setShowConfirmModal(false)
   }, [])
 
   const handleSuccessModalClose = useCallback(() => {
     setShowSuccessModal(false)
-    setPromotionResults(null)
-    setPromotionSummary(null)
+    setProcessingSummary(null)
     onClose()
   }, [])
 
-  const totalStudents = getTotalStudentCount()
   const isYearCompleted = isAcademicYearCompleted(academicYear)
-
-  // Render section header with dropdown toggle
-  const renderSectionHeader = useCallback(({ section: { title, class: className, section: sectionName, nextClass } }) => {
-    const isCollapsed = collapsedSections[title] || false
-    const sectionData = studentsByClassSection.find(s => s.title === title)
-    const studentCount = sectionData?.data.length || 0
-    
-    return (
-      <TouchableOpacity 
-        style={[styles.sectionHeader, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
-        onPress={() => toggleSection(title)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.sectionHeaderLeft}>
-          <View style={[
-            styles.sectionToggleIcon,
-            { backgroundColor: colors.primary + '20' }
-          ]}>
-            <Feather 
-              name={isCollapsed ? 'chevron-right' : 'chevron-down'} 
-              size={18} 
-              color={colors.primary} 
-            />
-          </View>
-          <View>
-            <ThemedText style={[styles.sectionHeaderTitle, { color: colors.text, fontFamily: 'Poppins-SemiBold' }]}>
-              {className} - {sectionName}
-            </ThemedText>
-            {nextClass && nextClass !== 'Graduated' && (
-              <View style={styles.nextClassBadge}>
-                <MaterialIcons name="arrow-forward" size={12} color={colors.primary} />
-                <ThemedText style={[styles.nextClassText, { color: colors.primary, fontFamily: 'Poppins-Medium' }]}>
-                  Next: {nextClass}
-                </ThemedText>
-              </View>
-            )}
-            {nextClass === 'Graduated' && (
-              <View style={[styles.graduationBadge, { backgroundColor: '#8B5CF620' }]}>
-                <Feather name="graduation-cap" size={12} color="#8B5CF6" />
-                <ThemedText style={[styles.graduationText, { color: '#8B5CF6', fontFamily: 'Poppins-Medium' }]}>
-                  Graduating
-                </ThemedText>
-              </View>
-            )}
-          </View>
-        </View>
-        <View style={styles.sectionHeaderRight}>
-          <View style={[styles.studentCountBadge, { backgroundColor: colors.primary + '20' }]}>
-            <ThemedText style={[styles.studentCountText, { color: colors.primary, fontFamily: 'Poppins-Medium' }]}>
-              {studentCount} {studentCount === 1 ? 'student' : 'students'}
-            </ThemedText>
-          </View>
-        </View>
-      </TouchableOpacity>
-    )
-  }, [collapsedSections, studentsByClassSection, toggleSection])
-
-  // Render student item - SIMPLIFIED: Only avatar and name (no checkbox)
-  const renderStudent = useCallback(({ item, section }) => {
-    // Don't render if section is collapsed
-    if (collapsedSections[section.title]) {
-      return null
-    }
-    
-    return (
-      <View style={[styles.studentCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-        <View style={styles.studentAvatar}>
-          {item.profilePicUrl ? (
-            <Image source={{ uri: item.profilePicUrl }} style={styles.studentAvatarImage} />
-          ) : (
-            <View style={[styles.studentAvatarPlaceholder, { backgroundColor: '#1d9bf0' }]}>
-              <ThemedText style={[styles.studentAvatarText, { fontFamily: 'Poppins-SemiBold' }]}>
-                {(item.firstName?.[0] || '') + (item.lastName?.[0] || '')}
-              </ThemedText>
-            </View>
-          )}
-        </View>
-        
-        <View style={styles.studentInfo}>
-          <ThemedText type='subtitle' style={[styles.studentName, { color: colors.text }]} numberOfLines={1}>
-            {item.firstName} {item.lastName}
-          </ThemedText>
-          {item.rollNo && (
-            <ThemedText  style={[styles.studentRollNo, { color: colors.textSecondary }]}>
-              Roll No: {item.rollNo}
-            </ThemedText>
-          )}
-        </View>
-      </View>
-    )
-  }, [collapsedSections])
 
   return (
     <Modal 
       visible={visible} 
-      animationType="slide" 
+      animationType="fade" 
       onRequestClose={onClose}
       statusBarTranslucent
     >
@@ -1031,16 +771,16 @@ export default function Promote({ visible, onClose }) {
                 onPress={onClose}
                 activeOpacity={0.9}
               >
-                <FontAwesome5 name="chevron-left" size={20} color="#FFFFFF" />
+                <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
               </TouchableOpacity>
               
               <View style={styles.headerTitle}>
                 <ThemedText style={[styles.title, { fontFamily: 'Poppins-SemiBold' }]}>
-                  Promote Students
+                  End of Academic Year
                 </ThemedText>
                 <ThemedText style={[styles.subtitle, { fontFamily: 'Poppins-Medium' }]}>
-                  {totalStudents > 0 
-                    ? `${totalStudents} total student${totalStudents !== 1 ? 's' : ''}` 
+                  {studentCount > 0 
+                    ? `${studentCount} total student${studentCount !== 1 ? 's' : ''}` 
                     : 'No students available'
                   }
                 </ThemedText>
@@ -1057,7 +797,7 @@ export default function Promote({ visible, onClose }) {
             <View style={[styles.loadingCard, { backgroundColor: colors.cardBackground }]}>
               <ActivityIndicator size="large" color={colors.primary} />
               <ThemedText style={[styles.loadingText, { color: colors.text, fontFamily: 'Poppins-SemiBold' }]}>
-                {isProcessing ? 'Processing Promotion...' : 'Loading Students...'}
+                {isProcessing ? 'Processing End of Year...' : 'Loading...'}
               </ThemedText>
               <ThemedText style={[styles.loadingSubtext, { color: colors.textSecondary, fontFamily: 'Poppins-Medium' }]}>
                 {isProcessing ? 'This may take a few moments' : 'Fetching student data'}
@@ -1088,119 +828,122 @@ export default function Promote({ visible, onClose }) {
               />
             }
           >
-            {/* Academic Year Section */}
-            <View style={[styles.sectionCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-              <View style={[styles.sectionHeaderContainer, { borderColor: colors.border }]}>
-                <View style={[styles.sectionIcon, { backgroundColor: colors.primary + '20' }]}>
-                  <MaterialCommunityIcons name="calendar-range" size={20} color={colors.primary} />
-                </View>
-                <ThemedText style={[styles.sectionTitle, { color: colors.text, fontFamily: 'Poppins-SemiBold' }]}>
-                  Academic Year
-                </ThemedText>
-              </View>
-
-              <TouchableOpacity
-                style={[styles.yearSelector, { borderColor: colors.border, backgroundColor: colors.inputBackground }]}
-                onPress={() => setShowAcademicYearPicker(true)}
-                activeOpacity={0.8}
+            {/* Main Content - Centered Student Count Card */}
+            <View style={styles.centerContainer}>
+              <Animated.View 
+                style={[
+                  styles.mainCard,
+                  { 
+                    backgroundColor: colors.cardBackground,
+                    borderColor: colors.border,
+                    transform: [{ scale: scaleAnimation }]
+                  }
+                ]}
               >
-                <View style={styles.yearSelectorLeft}>
-                  <Feather name="calendar" size={20} color={colors.primary} />
-                  <View>
-                    <ThemedText style={[styles.yearSelectorLabel, { color: colors.text, fontFamily: 'Poppins-Medium' }]}>
-                      {academicYear}
-                    </ThemedText>
-                    {isYearCompleted && (
-                      <View style={[styles.yearCompletedBadge, { backgroundColor: colors.textSecondary + '20' }]}>
-                        <Feather name="check-circle" size={12} color={colors.textSecondary} />
-                        <ThemedText style={[styles.yearCompletedText, { color: colors.textSecondary, fontFamily: 'Poppins-Medium' }]}>
-                          Completed
-                        </ThemedText>
-                      </View>
-                    )}
-                  </View>
-                </View>
-                <Feather name="chevron-down" size={20} color={colors.primary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Students List Section */}
-            {studentsByClassSection.length > 0 ? (
-              <View style={[styles.sectionCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-                <View style={[styles.sectionHeaderContainer, { borderColor: colors.border }]}>
-                  <View style={[styles.sectionIcon, { backgroundColor: colors.primary + '20' }]}>
-                    <Ionicons name="people" size={20} color={colors.primary} />
-                  </View>
-                  <ThemedText style={[styles.sectionTitle, { color: colors.text, fontFamily: 'Poppins-SemiBold' }]}>
-                    All Students
-                  </ThemedText>
-                  <View style={[styles.sectionBadge, { backgroundColor: colors.primary + '20' }]}>
-                    <ThemedText style={[styles.sectionBadgeText, { color: colors.primary, fontFamily: 'Poppins-Medium' }]}>
-                      {totalStudents} Total
-                    </ThemedText>
-                  </View>
-                </View>
-
-                <SectionList
-                  sections={studentsByClassSection}
-                  renderItem={renderStudent}
-                  renderSectionHeader={renderSectionHeader}
-                  keyExtractor={(item) => item.uniqueId || item.id}
-                  scrollEnabled={false}
-                  SectionSeparatorComponent={() => <View style={{ height: 16 }} />}
-                  ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-                  extraData={collapsedSections}
-                />
-              </View>
-            ) : !isLoading && (
-              <View style={[styles.emptyStateCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
-                <MaterialCommunityIcons name="school" size={60} color={colors.textSecondary} />
-                <ThemedText style={[styles.emptyStateTitle, { color: colors.text, fontFamily: 'Poppins-SemiBold' }]}>
-                  No Students Found
-                </ThemedText>
-                <ThemedText style={[styles.emptyStateText, { color: colors.textSecondary, fontFamily: 'Poppins-Medium' }]}>
-                  There are no active students in the system to promote
-                </ThemedText>
-              </View>
-            )}
-
-            {error && (
-              <View style={[styles.errorCard, { backgroundColor: '#FEE2E2', borderColor: '#FECACA' }]}>
-                <Feather name="alert-triangle" size={24} color="#DC2626" />
-                <ThemedText style={[styles.errorText, { color: '#B91C1C', fontFamily: 'Poppins-Medium' }]}>
-                  {error}
-                </ThemedText>
+                {/* Academic Year Section */}
                 <TouchableOpacity
-                  style={[styles.errorRetryButton, { backgroundColor: '#DC2626' }]}
-                  onPress={loadAllStudents}
+                  style={[styles.yearSelector, { borderColor: colors.border, backgroundColor: colors.inputBackground }]}
+                  onPress={() => setShowAcademicYearPicker(true)}
+                  activeOpacity={0.8}
                 >
-                  <ThemedText style={[styles.errorRetryText, { fontFamily: 'Poppins-Medium' }]}>
-                    Try Again
-                  </ThemedText>
+                  <View style={styles.yearSelectorLeft}>
+                    <Feather name="calendar" size={24} color={colors.primary} />
+                    <View>
+                      <ThemedText style={[styles.yearSelectorLabel, { color: colors.textSecondary, fontFamily: 'Poppins-Medium' }]}>
+                        Academic Year
+                      </ThemedText>
+                      <ThemedText style={[styles.yearSelectorValue, { color: colors.text, fontFamily: 'Poppins-SemiBold' }]}>
+                        {academicYear}
+                      </ThemedText>
+                      {isYearCompleted && (
+                        <View style={[styles.yearCompletedBadge, { backgroundColor: colors.textSecondary + '20' }]}>
+                          <Feather name="check-circle" size={12} color={colors.textSecondary} />
+                          <ThemedText style={[styles.yearCompletedText, { color: colors.textSecondary, fontFamily: 'Poppins-Medium' }]}>
+                            Completed
+                          </ThemedText>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                  <Feather name="chevron-down" size={20} color={colors.primary} />
                 </TouchableOpacity>
-              </View>
-            )}
+
+                {/* Student Count Display */}
+                <View style={styles.studentCountContainer}>
+                  <View style={[styles.studentCountIcon, { backgroundColor: colors.primary + '15' }]}>
+                    <MaterialCommunityIcons name="account-group" size={48} color={colors.primary} />
+                  </View>
+                  
+                  <View style={styles.studentCountNumbers}>
+                    <ThemedText style={[styles.studentCountNumber, { color: colors.text, fontFamily: 'Poppins-Bold' }]}>
+                      {studentCount}
+                    </ThemedText>
+                    <ThemedText style={[styles.studentCountLabel, { color: colors.textSecondary, fontFamily: 'Poppins-Medium' }]}>
+                      {studentCount === 1 ? 'Student Ready for Processing' : 'Students Ready for Processing'}
+                    </ThemedText>
+                  </View>
+
+                  {studentCount > 0 && (
+                    <View style={[styles.promotionInfo, { backgroundColor: colors.primary + '08', borderColor: colors.primary + '20' }]}>
+                      <MaterialIcons name="info-outline" size={16} color={colors.primary} />
+                      <ThemedText style={[styles.promotionInfoText, { color: colors.textSecondary, fontFamily: 'Poppins-Medium' }]}>
+                        All active students will be promoted to the next class
+                      </ThemedText>
+                    </View>
+                  )}
+                </View>
+
+                {error && (
+                  <View style={[styles.errorCard, { backgroundColor: '#FEE2E2', borderColor: '#FECACA' }]}>
+                    <Feather name="alert-triangle" size={20} color="#DC2626" />
+                    <ThemedText style={[styles.errorText, { color: '#B91C1C', fontFamily: 'Poppins-Medium', flex: 1 }]}>
+                      {error}
+                    </ThemedText>
+                    <TouchableOpacity
+                      style={[styles.errorRetryButton, { backgroundColor: '#DC2626' }]}
+                      onPress={loadStudentCount}
+                    >
+                      <ThemedText style={[styles.errorRetryText, { fontFamily: 'Poppins-Medium' }]}>
+                        Retry
+                      </ThemedText>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {!isLoading && studentCount === 0 && !error && (
+                  <View style={styles.emptyStateContainer}>
+                    <MaterialCommunityIcons name="school-off" size={60} color={colors.textSecondary} />
+                    <ThemedText style={[styles.emptyStateTitle, { color: colors.text, fontFamily: 'Poppins-SemiBold' }]}>
+                      No Students Available
+                    </ThemedText>
+                    <ThemedText style={[styles.emptyStateText, { color: colors.textSecondary, fontFamily: 'Poppins-Medium' }]}>
+                      There are no active students to process at this time
+                    </ThemedText>
+                  </View>
+                )}
+              </Animated.View>
+            </View>
           </ScrollView>
         </Animated.View>
 
         {/* Bottom Action Button */}
-        {studentsByClassSection.length > 0 && (
+        {studentCount > 0 && !error && (
           <View style={styles.footer}>
             <LinearGradient
-              colors={totalStudents === 0 ? ['#D1D5DB', '#9CA3AF'] : [colors.gradientStart, colors.gradientEnd]}
+              colors={[colors.gradientStart, colors.gradientEnd]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.footerGradient}
             >
               <TouchableOpacity
                 style={styles.footerButton}
-                onPress={handlePromotePress}
+                onPress={handleProcessPress}
                 activeOpacity={0.9}
-                disabled={isLoading || isProcessing || totalStudents === 0}
+                disabled={isLoading || isProcessing}
               >
                 <MaterialCommunityIcons name="school" size={22} color="#FFFFFF" />
                 <ThemedText style={[styles.footerButtonText, { fontFamily: 'Poppins-SemiBold' }]}>
-                  Promote All ({totalStudents})
+                  Process End of Year ({studentCount})
                 </ThemedText>
               </TouchableOpacity>
             </LinearGradient>
@@ -1216,21 +959,20 @@ export default function Promote({ visible, onClose }) {
         currentYear={academicYear}
       />
 
-      <PromotionConfirmationModal
+      <ConfirmationModal
         visible={showConfirmModal}
-        onConfirm={handlePromoteConfirm}
-        onCancel={handlePromoteCancel}
-        studentCount={totalStudents}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+        studentCount={studentCount}
         academicYear={academicYear}
         isProcessing={isProcessing}
       />
 
-      {promotionSummary && (
+      {processingSummary && (
         <SuccessResultModal
           visible={showSuccessModal}
           onClose={handleSuccessModalClose}
-          results={promotionResults}
-          summary={promotionSummary}
+          summary={processingSummary}
         />
       )}
 
@@ -1295,62 +1037,46 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
     padding: 16,
-    paddingBottom: 100,
   },
-  sectionCard: {
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  sectionHeaderContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    gap: 12,
-  },
-  sectionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+  centerContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  sectionTitle: {
-    flex: 1,
-    fontSize: 16,
-  },
-  sectionBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 16,
-  },
-  sectionBadgeText: {
-    fontSize: 12,
+  mainCard: {
+    width: '100%',
+    borderRadius: 28,
+    padding: 24,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
   },
   yearSelector: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 16,
+    borderRadius: 20,
+    paddingHorizontal: 18,
     paddingVertical: 14,
+    marginBottom: 32,
   },
   yearSelectorLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
   yearSelectorLabel: {
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  yearSelectorValue: {
     fontSize: 16,
   },
   yearCompletedBadge: {
@@ -1360,145 +1086,83 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 12,
-    marginTop: 2,
+    marginTop: 4,
   },
   yearCompletedText: {
     fontSize: 10,
   },
-  sectionHeader: {
+  studentCountContainer: {
+    alignItems: 'center',
+    gap: 20,
+  },
+  studentCountIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  studentCountNumbers: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  studentCountNumber: {
+    fontSize: 64,
+    lineHeight: 72,
+  },
+  studentCountLabel: {
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  promotionInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
+    gap: 10,
     paddingHorizontal: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  sectionHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  sectionToggleIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sectionHeaderTitle: {
-    fontSize: 16,
-  },
-  nextClassBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  nextClassText: {
-    fontSize: 11,
-  },
-  graduationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-    marginTop: 2,
-  },
-  graduationText: {
-    fontSize: 10,
-  },
-  sectionHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  studentCountBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 12,
     borderRadius: 16,
-  },
-  studentCountText: {
-    fontSize: 12,
-  },
-  studentCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 14,
     borderWidth: 1,
+    marginTop: 8,
   },
-  studentAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    marginRight: 12,
-    overflow: 'hidden',
-  },
-  studentAvatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-  studentAvatarPlaceholder: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  studentAvatarText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-  },
-  studentInfo: {
+  promotionInfoText: {
     flex: 1,
+    fontSize: 13,
+    textAlign: 'center',
   },
-  studentName: {
-    fontSize: 15,
-  },
-  studentRollNo: {
-    fontSize: 12,
-    marginTop: -2,
-  },
-  emptyStateCard: {
+  emptyStateContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 40,
-    borderRadius: 20,
-    borderWidth: 1,
+    paddingVertical: 40,
+    gap: 16,
   },
   emptyStateTitle: {
-    fontSize: 18,
-    marginTop: 16,
-    marginBottom: 8,
+    fontSize: 20,
+    marginTop: 8,
   },
   emptyStateText: {
     fontSize: 14,
     textAlign: 'center',
   },
   errorCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
+    gap: 12,
+    padding: 14,
     borderRadius: 16,
     borderWidth: 1,
+    marginTop: 24,
   },
   errorText: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 8,
-    marginBottom: 16,
+    fontSize: 13,
   },
   errorRetryButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 12,
   },
   errorRetryText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13,
   },
   footer: {
     position: 'absolute',
@@ -1544,7 +1208,6 @@ const styles = StyleSheet.create({
   loadingSubtext: {
     fontSize: 13,
   },
-  // Centered Modal Styles
   modalOverlayCentered: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1557,26 +1220,6 @@ const styles = StyleSheet.create({
     maxHeight: height * 0.8,
     borderRadius: 30,
     overflow: 'hidden',
-  },
-  confirmModalContainerCentered: {
-    width: width * 0.9,
-    maxWidth: 400,
-    borderRadius: 30,
-    padding: 24,
-    alignItems: 'center',
-  },
-  successModalContainerCentered: {
-    width: width * 0.9,
-    maxWidth: 400,
-    maxHeight: height * 0.8,
-    borderRadius: 30,
-    overflow: 'hidden',
-  },
-  successModalScroll: {
-    maxHeight: height * 0.5,
-  },
-  successModalContent: {
-    padding: 20,
   },
   pickerModalHeader: {
     padding: 24,
@@ -1692,6 +1335,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
   },
+  confirmModalContainerCentered: {
+    width: width * 0.9,
+    maxWidth: 400,
+    borderRadius: 30,
+    padding: 24,
+    alignItems: 'center',
+  },
   confirmModalIconContainer: {
     marginBottom: 16,
   },
@@ -1802,6 +1452,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  successModalContainerCentered: {
+    width: width * 0.9,
+    maxWidth: 400,
+    maxHeight: height * 0.8,
+    borderRadius: 30,
+    overflow: 'hidden',
+  },
+  successModalScroll: {
+    maxHeight: height * 0.5,
+  },
+  successModalContent: {
+    padding: 20,
+  },
   successModalHeader: {
     padding: 24,
     alignItems: 'center',
@@ -1861,87 +1524,6 @@ const styles = StyleSheet.create({
   },
   successAcademicValue: {
     fontSize: 14,
-  },
-  successResultsContainer: {
-    marginTop: 16,
-  },
-  successResultsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  successResultsTitle: {
-    flex: 1,
-    fontSize: 16,
-  },
-  successResultsBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 16,
-  },
-  successResultsCount: {
-    fontSize: 12,
-  },
-  successResultsList: {
-    maxHeight: 200,
-  },
-  successResultItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  successResultLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  successResultIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  successResultInfo: {
-    flex: 1,
-  },
-  successResultName: {
-    fontSize: 14,
-    marginBottom: 2,
-  },
-  successResultMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  successResultClass: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  successResultClassText: {
-    fontSize: 11,
-  },
-  successResultAttendance: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  successResultMetaText: {
-    fontSize: 11,
-  },
-  successResultStatus: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginLeft: 8,
-  },
-  successResultStatusText: {
-    fontSize: 11,
   },
   successCloseButton: {
     marginHorizontal: 20,

@@ -18,19 +18,9 @@ import {
 
   getAllPaymentHistory,
   getClassWiseFeePending,
-  promoteStudent,
-  demoteStudent,
-  inactivateStudent,
-  getStudentProgressionHistory,
 } from '../controllers/feeController.js'
 
 const router = express.Router()
-
-// ========== STUDENT FEE OPERATIONS ==========
-router.post('/promote/:studentId', promoteStudent)
-router.post('/demote/:studentId', demoteStudent)
-router.post('/inactivate/:studentId', inactivateStudent)
-router.get('/progression-history/:studentId', getStudentProgressionHistory)
 
 router.get('/students/search', searchStudentsForFee)
 router.get('/students/:studentId/fee-details', getStudentFeeDetails)

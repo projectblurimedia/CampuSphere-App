@@ -15,13 +15,22 @@ import {
   getTodayBirthdays,
   getAttendanceStatsByClassSection,
   getMarksStatsByClassSection,
-  promoteStudents,
-  getPromotionPreview,
   getStudentPromotionHistory,
   bulkImportStudents,
+  getStudentsForEndOfAcademicYear,
+  endOfAcademicYear,
+  promoteStudent,
+  demoteStudent,
+  inactivateStudent,
+  getStudentProgressionHistory,
 } from '../controllers/studentController.js'
 
 const router = express.Router()
+
+router.post('/promote/:studentId', promoteStudent)
+router.post('/demote/:studentId', demoteStudent)
+router.post('/inactivate/:studentId', inactivateStudent)
+router.get('/progression-history/:studentId', getStudentProgressionHistory)
 
 router.use('/bulk-import', bulkImportStudents)
 router.get('/birthdays', getTodayBirthdays)
@@ -35,8 +44,8 @@ router.get('/classes-summary', getClassesSummary)
 router.get('/class-details', getClassDetails)
 router.get('/class-section-students', getStudentsByClassAndSection)
 
-router.post('/promote', promoteStudents)
-router.post('/promote/preview', getPromotionPreview)
+router.post('/endOfAcademicYear', endOfAcademicYear)
+router.get('/for-endOfAcademicYear', getStudentsForEndOfAcademicYear)
 router.get('/:id/promotion-history', getStudentPromotionHistory)
 
 router.get('', getAllStudents)

@@ -999,10 +999,9 @@ export default function Timetable({ visible, onClose }) {
     importModalTitle: {
       fontSize: 18,
       color: '#FFFFFF',
-      fontWeight: '600',
+      fontFamily: 'Poppins-SemiBold',
     },
     importModalSubtitle: {
-      marginTop: 4,
       fontSize: 11,
       color: 'rgba(255,255,255,0.9)',
     },
@@ -1651,7 +1650,7 @@ export default function Timetable({ visible, onClose }) {
                 <FontAwesome5 style={styles.backIcon} name="chevron-left" size={20} color="#FFFFFF" />
               </TouchableOpacity>
               <View style={{ flex: 1, alignItems: 'center' }}>
-                <ThemedText style={styles.importModalTitle}>Bulk Import</ThemedText>
+                <ThemedText style={styles.importModalTitle}>Bulk Import Timetables</ThemedText>
                 <ThemedText style={styles.importModalSubtitle}>Upload timetable data</ThemedText>
               </View>
               <View style={styles.headerPlaceholder} />

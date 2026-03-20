@@ -956,8 +956,6 @@ export default function Attendance({ visible, onClose }) {
         })
         
         setAttendance(newAttendance)
-        
-        showToast(`${formattedStudents.length} students loaded`, 'success', 2000)
       }
       
     } catch (err) {

@@ -1198,120 +1198,17 @@ export const getEmployeeStatistics = async (req, res) => {
   }
 }
 
-// ==================== BULK IMPORT ====================
 
-// Generate Excel template for bulk import
-export const downloadEmployeeTemplate = async (req, res) => {
-  try {
-    // Create workbook
-    const workbook = xlsx.utils.book_new()
-    
-    // Define headers with descriptions
-    const headers = [
-      ['firstName*', 'lastName*', 'gender* (MALE/FEMALE/NOT_SPECIFIED)', 'dob* (YYYY-MM-DD)', 
-       'email*', 'phone* (10 digits)', 'address*', 'village', 'designation* (Chairperson/Principal/Vice_Principal/Accountant/Teacher/Other)', 
-        'joiningDate (YYYY-MM-DD)', 'qualification', 
-       'aadharNumber (12 digits)', 'panNumber (10 characters)']
-    ]
-    
-    // Add sample data for guidance
-    const sampleData = [
-      ['John', 'Doe', 'MALE', '1985-05-15', 'john.doe@school.com', '9876543210', 
-       '123 Main St', 'Mumbai', 'Teacher', '2023-06-01', 'M.Sc, B.Ed',
-       '123456789012', 'ABCDE1234F'],
-      ['Jane', 'Smith', 'FEMALE', '1990-08-20', 'jane.smith@school.com', '9123456780', 
-       '456 Oak Ave', 'Delhi', 'Principal', '2024-01-15', 'MBA',
-       '987654321098', 'XYZAB1234C']
-    ]
-    
-    // Create worksheet
-    const worksheet = xlsx.utils.aoa_to_sheet([...headers, ...sampleData])
-    
-    // Set column widths
-    const colWidths = [
-      { wch: 12 }, // firstName
-      { wch: 12 }, // lastName
-      { wch: 15 }, // gender
-      { wch: 12 }, // dob
-      { wch: 25 }, // email
-      { wch: 12 }, // phone
-      { wch: 25 }, // address
-      { wch: 15 }, // village
-      { wch: 20 }, // designation
-      { wch: 12 }, // joiningDate
-      { wch: 20 }, // qualification
-      { wch: 15 }, // aadharNumber
-      { wch: 12 }  // panNumber
-    ]
-    worksheet['!cols'] = colWidths
-    
-    // Add worksheet to workbook
-    xlsx.utils.book_append_sheet(workbook, worksheet, 'Employee Template')
-    
-    // Add instructions sheet
-    const instructions = [
-      ['EMPLOYEE BULK IMPORT - TEMPLATE INSTRUCTIONS'],
-      [''],
-      ['IMPORTANT NOTES:'],
-      ['1. Columns marked with * are REQUIRED'],
-      ['2. Do not modify the column headers in the first row'],
-      ['3. Delete the sample rows (2-3) before adding your data'],
-      ['4. Save file as .xlsx format'],
-      [''],
-      ['FIELD DETAILS:'],
-      ['firstName*: Employee first name (required)'],
-      ['lastName*: Employee last name (required)'],
-      ['gender*: Gender (MALE, FEMALE, or NOT_SPECIFIED)'],
-      ['dob*: Date of birth (format: YYYY-MM-DD)'],
-      ['email*: Email address (must be unique)'],
-      ['phone*: Phone number (10 digits, must be unique)'],
-      ['address*: Complete address'],
-      ['village: Village/Town name'],
-      ['designation*: Job designation (Chairperson, Principal, Vice_Principal, Accountant, Teacher, or Other)'],
-      ['joiningDate: Date of joining (format: YYYY-MM-DD)'],
-      ['qualification: Educational qualifications'],
-      ['aadharNumber: 12-digit Aadhar number (must be unique if provided)'],
-      ['panNumber: PAN card number (10 characters)'],
-      [''],
-      ['VALIDATION RULES:'],
-      ['- email and phone must be UNIQUE'],
-      ['- Phone numbers must be 10 digits'],
-      ['- Aadhar number must be 12 digits if provided'],
-      ['- Dates must be in YYYY-MM-DD format'],
-      ['- Designation must be from the predefined list'],
-      ['- Maximum file size: 10MB'],
-      ['- Save file before uploading']
-    ]
-    
-    const instructionSheet = xlsx.utils.aoa_to_sheet(instructions)
-    instructionSheet['!cols'] = [{ wch: 100 }]
-    xlsx.utils.book_append_sheet(workbook, instructionSheet, 'Instructions')
-    
-    // Generate buffer
-    const excelBuffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' })
-    
-    // Set headers
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    res.setHeader('Content-Disposition', 'attachment; filename=employee_bulk_import_template.xlsx')
-    
-    // Send file
-    res.send(excelBuffer)
-    
-  } catch (error) {
-    console.error('Template generation error:', error)
-    res.status(500).json({
-      success: false,
-      message: 'Failed to generate Excel template',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    })
-  }
-}
-
-// Bulk import employees from Excel
+/**
+ * @desc    Bulk import employees from Excel with optimized batch processing
+ * @route   POST /api/employees/bulk-import
+ * @access  Private
+ */
 export const bulkImportEmployees = [
   upload.single('excelFile'),
   async (req, res) => {
-    console.log('=== EMPLOYEE BULK IMPORT STARTED ===')
+    console.log('=== EMPLOYEE BULK IMPORT STARTED (OPTIMIZED) ===')
+    const startTime = Date.now()
     
     try {
       if (!req.file) {
@@ -1323,33 +1220,61 @@ export const bulkImportEmployees = [
       
       console.log('File received:', req.file.originalname)
       console.log('File size:', req.file.size, 'bytes')
-      console.log('File path:', req.file.path)
       
-      // Verify file exists
-      if (!fs.existsSync(req.file.path)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Uploaded file not found on server'
-        })
-      }
-      
-      let workbook, data
+      // Parse Excel file with raw data handling
+      let workbook, rows
       try {
-        // Read the Excel file
-        workbook = xlsx.readFile(req.file.path)
-        console.log('Excel sheets:', workbook.SheetNames)
-        
-        const sheetName = workbook.SheetNames[0] || workbook.SheetNames
+        workbook = xlsx.readFile(req.file.path, {
+          cellDates: true,      // Parse dates
+          cellNF: true,         // Keep number formatting
+          cellText: false,      // Don't convert to text
+          raw: true             // Keep raw values for numbers
+        })
+        const sheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[sheetName]
         
-        // Convert to JSON
-        data = xlsx.utils.sheet_to_json(worksheet, {
-          raw: false,
+        // Use raw data parsing to handle scientific notation
+        rows = xlsx.utils.sheet_to_json(worksheet, {
+          raw: true,            // Keep raw values
           defval: '',
-          blankrows: false
+          blankrows: false,
+          header: 1              // Get as array first to handle formatting
         })
         
-        console.log('Rows found in Excel:', data.length)
+        // Get headers from first row
+        const headers = rows[0]
+        const dataRows = rows.slice(1)
+        
+        // Convert to objects with proper handling of numbers
+        rows = dataRows.map(row => {
+          const obj = {}
+          headers.forEach((header, index) => {
+            let value = row[index]
+            
+            // Handle scientific notation numbers (like Aadhar)
+            if (typeof value === 'number' && header === 'aadharNumber') {
+              // Convert to string without scientific notation
+              value = value.toString().replace(/[^0-9]/g, '')
+            }
+            // Handle Excel date numbers
+            else if (typeof value === 'number' && (header === 'dob' || header === 'joiningDate')) {
+              // Excel dates are numbers starting from 1900-01-01
+              const excelDate = new Date((value - 25569) * 86400 * 1000)
+              if (!isNaN(excelDate.getTime())) {
+                value = excelDate.toISOString().split('T')[0]
+              }
+            }
+            // Handle regular numbers (like phone)
+            else if (typeof value === 'number' && header === 'phone') {
+              value = value.toString()
+            }
+            
+            obj[header] = value || ''
+          })
+          return obj
+        }).filter(row => row.firstName || row.lastName || row.email) // Filter empty rows
+        
+        console.log(`Found ${rows.length} valid rows in Excel file`)
         
       } catch (excelError) {
         console.error('Excel read error:', excelError)
@@ -1361,33 +1286,91 @@ export const bulkImportEmployees = [
         })
       }
       
-      if (data.length === 0) {
+      if (rows.length === 0) {
         cleanupTempFiles(req.file)
         return res.status(400).json({
           success: false,
-          message: 'Excel file is empty. Please add employee data to the template.'
+          message: 'Excel file is empty. Please add employee data.'
         })
       }
       
+      // ========== STEP 1: Pre-fetch all existing data for duplicate checks ==========
+      console.log('Pre-fetching existing employee data...')
+      
+      // Extract all emails, phones, and aadhar numbers from Excel with proper formatting
+      const emailsToCheck = new Set()
+      const phonesToCheck = new Set()
+      const aadharNumbersToCheck = new Set()
+      
+      for (const row of rows) {
+        // Handle email
+        if (row.email && row.email.toString().trim()) {
+          emailsToCheck.add(row.email.toString().toLowerCase().trim())
+        }
+        
+        // Handle phone - clean to 10 digits
+        if (row.phone) {
+          let phoneStr = row.phone.toString().replace(/\D/g, '')
+          if (phoneStr.length > 10) phoneStr = phoneStr.slice(-10)
+          if (phoneStr.length === 10) phonesToCheck.add(phoneStr)
+        }
+        
+        // Handle Aadhar - clean to 12 digits
+        if (row.aadharNumber) {
+          let aadharStr = row.aadharNumber.toString().replace(/[^0-9]/g, '')
+          if (aadharStr.length > 12) aadharStr = aadharStr.slice(0, 12)
+          if (aadharStr.length === 12) aadharNumbersToCheck.add(aadharStr)
+        }
+      }
+      
+      // Fetch all existing records in a single query each
+      const [existingEmails, existingPhones, existingAadharNumbers] = await Promise.all([
+        emailsToCheck.size > 0 
+          ? prisma.employee.findMany({
+              where: { email: { in: Array.from(emailsToCheck) } },
+              select: { email: true }
+            }).then(results => new Set(results.map(r => r.email)))
+          : Promise.resolve(new Set()),
+        phonesToCheck.size > 0
+          ? prisma.employee.findMany({
+              where: { phone: { in: Array.from(phonesToCheck) } },
+              select: { phone: true }
+            }).then(results => new Set(results.map(r => r.phone)))
+          : Promise.resolve(new Set()),
+        aadharNumbersToCheck.size > 0
+          ? prisma.employee.findMany({
+              where: { aadharNumber: { in: Array.from(aadharNumbersToCheck) } },
+              select: { aadharNumber: true }
+            }).then(results => new Set(results.map(r => r.aadharNumber)))
+          : Promise.resolve(new Set())
+      ])
+      
+      console.log(`Found ${existingEmails.size} existing emails, ${existingPhones.size} existing phones, ${existingAadharNumbers.size} existing Aadhar numbers`)
+      
+      // ========== STEP 2: Process all rows in memory ==========
+      console.log('Processing rows in memory...')
+      const employeesToCreate = []
       const errors = []
-      let successCount = 0
       let skippedCount = 0
       
-      // Process each row
-      for (const [index, row] of data.entries()) {
+      // Track duplicates within the same file
+      const fileEmails = new Set()
+      const filePhones = new Set()
+      const fileAadharNumbers = new Set()
+      
+      for (const [index, row] of rows.entries()) {
         const rowNumber = index + 2 // +2 for header row and 1-based index
         
         try {
-          console.log(`Processing row ${rowNumber}:`, row.email || 'No email')
-          
           // Skip empty rows
           if (!row.firstName && !row.lastName && !row.email) {
-            console.log(`Row ${rowNumber} skipped: Empty row`)
             skippedCount++
             continue
           }
           
-          // Validate required fields
+          // ========== VALIDATION (No DB calls) ==========
+          
+          // Check required fields
           const requiredFields = [
             'firstName', 'lastName', 'gender', 'dob', 'email', 'phone',
             'address', 'designation'
@@ -1404,55 +1387,84 @@ export const bulkImportEmployees = [
             continue
           }
           
-          // Trim all string fields
+          // Clean and validate data
           const firstName = row.firstName.toString().trim()
           const lastName = row.lastName.toString().trim()
           const email = row.email.toString().toLowerCase().trim()
-          const phone = cleanPhoneNumber(row.phone)
-          const aadharNumber = row.aadharNumber ? row.aadharNumber.toString().replace(/\D/g, '').substring(0, 12) : null
           
-          // Check for duplicate email
-          const existingEmployeeByEmail = await prisma.employee.findUnique({
-            where: { email }
-          })
-          if (existingEmployeeByEmail) {
+          // Clean phone number - remove all non-digits and take last 10
+          let phoneRaw = row.phone.toString().replace(/\D/g, '')
+          if (phoneRaw.length > 10) phoneRaw = phoneRaw.slice(-10)
+          const phone = phoneRaw
+          
+          // Clean Aadhar number - remove all non-digits and take first 12
+          let aadharNumber = null
+          if (row.aadharNumber && row.aadharNumber.toString().trim()) {
+            let aadharRaw = row.aadharNumber.toString().replace(/[^0-9]/g, '')
+            if (aadharRaw.length > 12) aadharRaw = aadharRaw.slice(0, 12)
+            aadharNumber = aadharRaw.length === 12 ? aadharRaw : null
+          }
+          
+          // Check for duplicate email (in file and existing)
+          if (fileEmails.has(email)) {
             errors.push({
               row: rowNumber,
               email: email,
-              error: `Duplicate email: ${email}`
+              error: `Duplicate email within file: ${email}`
             })
             continue
           }
           
-          // Check for duplicate phone
-          const existingEmployeeByPhone = await prisma.employee.findUnique({
-            where: { phone }
-          })
-          if (existingEmployeeByPhone) {
+          if (existingEmails.has(email)) {
             errors.push({
               row: rowNumber,
               email: email,
-              error: `Duplicate phone number: ${row.phone}`
+              error: `Email already exists in system: ${email}`
             })
             continue
           }
           
-          // Check for duplicate Aadhar if provided
+          // Check for duplicate phone (in file and existing)
+          if (filePhones.has(phone)) {
+            errors.push({
+              row: rowNumber,
+              email: email,
+              error: `Duplicate phone number within file: ${row.phone}`
+            })
+            continue
+          }
+          
+          if (existingPhones.has(phone)) {
+            errors.push({
+              row: rowNumber,
+              email: email,
+              error: `Phone number already exists in system: ${row.phone}`
+            })
+            continue
+          }
+          
+          // Check for duplicate Aadhar (in file and existing)
           if (aadharNumber) {
-            const existingEmployeeByAadhar = await prisma.employee.findUnique({
-              where: { aadharNumber }
-            })
-            if (existingEmployeeByAadhar) {
+            if (fileAadharNumbers.has(aadharNumber)) {
               errors.push({
                 row: rowNumber,
                 email: email,
-                error: `Duplicate Aadhar number: ${aadharNumber}`
+                error: `Duplicate Aadhar number within file: ${aadharNumber}`
+              })
+              continue
+            }
+            
+            if (existingAadharNumbers.has(aadharNumber)) {
+              errors.push({
+                row: rowNumber,
+                email: email,
+                error: `Aadhar number already exists in system: ${aadharNumber}`
               })
               continue
             }
           }
           
-          // Validate email
+          // Validate email format
           if (!validateEmail(email)) {
             errors.push({
               row: rowNumber,
@@ -1462,8 +1474,8 @@ export const bulkImportEmployees = [
             continue
           }
           
-          // Validate phone
-          if (!validatePhoneNumber(row.phone)) {
+          // Validate phone format
+          if (!validatePhoneNumber(phone)) {
             errors.push({
               row: rowNumber,
               email: email,
@@ -1472,7 +1484,7 @@ export const bulkImportEmployees = [
             continue
           }
           
-          // Validate Aadhar if provided
+          // Validate Aadhar format
           if (aadharNumber && !validateAadharNumber(aadharNumber)) {
             errors.push({
               row: rowNumber,
@@ -1484,18 +1496,33 @@ export const bulkImportEmployees = [
           
           // Validate gender
           const validGenders = ['MALE', 'FEMALE', 'NOT_SPECIFIED']
-          const gender = row.gender.toString().trim().toUpperCase()
+          let gender = row.gender.toString().trim().toUpperCase()
           if (!validGenders.includes(gender)) {
-            errors.push({
-              row: rowNumber,
-              email: email,
-              error: `Invalid gender: ${row.gender}. Must be MALE, FEMALE, or NOT_SPECIFIED.`
-            })
-            continue
+            // Try to map common variations
+            if (gender === 'M' || gender === 'MALE') gender = 'MALE'
+            else if (gender === 'F' || gender === 'FEMALE') gender = 'FEMALE'
+            else gender = 'NOT_SPECIFIED'
           }
           
           // Validate and map designation
-          const designationEnum = mapDesignationToEnum(row.designation)
+          let designationStr = row.designation.toString().trim()
+          // Handle various formats
+          const designationMap = {
+            'chairperson': 'Chairperson',
+            'principal': 'Principal',
+            'vice_principal': 'Vice_Principal',
+            'vice principal': 'Vice_Principal',
+            'vice-principal': 'Vice_Principal',
+            'accountant': 'Accountant',
+            'teacher': 'Teacher',
+            'other': 'Other'
+          }
+          
+          let designationEnum = designationMap[designationStr.toLowerCase()]
+          if (!designationEnum) {
+            designationEnum = mapDesignationToEnum(designationStr)
+          }
+          
           if (!designationEnum) {
             errors.push({
               row: rowNumber,
@@ -1505,71 +1532,180 @@ export const bulkImportEmployees = [
             continue
           }
           
-          // Parse dates
-          const dob = parseDate(row.dob)
-          const joiningDate = row.joiningDate ? parseDate(row.joiningDate) : new Date()
+          // Parse dates with better handling
+          let dob, joiningDate
           
-          // Prepare employee data
-          const employeeData = {
-            firstName: firstName,
-            lastName: lastName,
-            gender: gender,
-            dob: dob,
-            email: email,
-            phone: phone,
-            address: row.address.toString().trim(),
-            village: row.village ? row.village.toString().trim() : null,
-            designation: designationEnum,
-            joiningDate: joiningDate,
-            qualification: row.qualification ? row.qualification.toString().trim() : null,
-            aadharNumber: aadharNumber,
-            panNumber: row.panNumber ? row.panNumber.toString().toUpperCase().trim() : null,
-            isActive: true
+          try {
+            // Handle date parsing
+            if (row.dob) {
+              if (row.dob instanceof Date) {
+                dob = row.dob
+              } else {
+                dob = parseDate(row.dob.toString())
+              }
+            } else {
+              dob = new Date('2000-01-01')
+            }
+            
+            if (row.joiningDate) {
+              if (row.joiningDate instanceof Date) {
+                joiningDate = row.joiningDate
+              } else if (row.joiningDate.toString().trim()) {
+                joiningDate = parseDate(row.joiningDate.toString())
+              } else {
+                joiningDate = new Date()
+              }
+            } else {
+              joiningDate = new Date()
+            }
+            
+            // Validate date is not in future
+            if (dob > new Date()) {
+              dob = new Date('2000-01-01')
+            }
+            
+          } catch (dateError) {
+            errors.push({
+              row: rowNumber,
+              email: email,
+              error: `Invalid date format: DOB=${row.dob}, Joining=${row.joiningDate}. Use YYYY-MM-DD`
+            })
+            continue
           }
           
-          // Save employee
-          await prisma.employee.create({
-            data: employeeData
-          })
-          successCount++
-          console.log(`✓ Row ${rowNumber} saved: ${email} - ${firstName} ${lastName}`)
+          // Prepare employee data
+          const employeeId = crypto.randomUUID()
+          
+          const employeeData = {
+            id: employeeId,
+            firstName,
+            lastName,
+            gender,
+            dob,
+            email,
+            phone,
+            address: row.address.toString().trim(),
+            village: row.village ? row.village.toString().trim() : 'Guntur', // Default village
+            designation: designationEnum,
+            joiningDate,
+            qualification: row.qualification ? row.qualification.toString().trim() : null,
+            aadharNumber: aadharNumber || null,
+            panNumber: row.panNumber ? row.panNumber.toString().toUpperCase().trim() : null,
+            isActive: true,
+            profilePicUrl: null,
+            profilePicPublicId: null,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+          
+          employeesToCreate.push(employeeData)
+          
+          // Track duplicates within file
+          fileEmails.add(email)
+          filePhones.add(phone)
+          if (aadharNumber) fileAadharNumbers.add(aadharNumber)
+          
+          console.log(`✓ Row ${rowNumber} validated: ${firstName} ${lastName} - ${email}`)
           
         } catch (error) {
           console.error(`Error processing row ${rowNumber}:`, error)
           errors.push({
             row: rowNumber,
             email: row.email || 'N/A',
-            error: error.code === 'P2002' ? 'Duplicate entry (email or phone)' : 
-                  error.message || 'Database error. Check data format.'
+            error: error.message || 'Validation error'
           })
         }
       }
       
-      // Cleanup temp file
-      cleanupTempFiles(req.file)
+      // ========== STEP 3: Execute BULK insert in chunks ==========
+      if (employeesToCreate.length === 0) {
+        cleanupTempFiles(req.file)
+        return res.status(200).json({
+          success: true,
+          message: 'No valid employees to import',
+          summary: {
+            total: rows.length,
+            success: 0,
+            failed: errors.length,
+            skipped: skippedCount
+          },
+          errors: errors.slice(0, 100),
+          debug: {
+            sampleData: rows.slice(0, 2),
+            sampleValidated: employeesToCreate.slice(0, 2)
+          }
+        })
+      }
       
-      console.log('=== IMPORT SUMMARY ===')
-      console.log(`Total rows processed: ${data.length}`)
-      console.log(`Successfully imported: ${successCount}`)
-      console.log(`Failed: ${errors.length}`)
-      console.log(`Skipped (empty): ${skippedCount}`)
+      console.log(`Preparing to insert ${employeesToCreate.length} employees in chunks...`)
       
-      // Prepare response
-      const response = {
-        success: true,
-        message: `Bulk import completed. ${successCount} employees imported successfully.`,
-        summary: {
-          total: data.length,
-          success: successCount,
-          failed: errors.length,
-          skipped: skippedCount,
-          errors: errors.slice(0, 100) // Limit to 100 errors
+      // Split into chunks of 500 for better performance
+      const chunkSize = 500
+      let insertedCount = 0
+      const failedInserts = []
+      
+      for (let i = 0; i < employeesToCreate.length; i += chunkSize) {
+        const chunk = employeesToCreate.slice(i, i + chunkSize)
+        
+        try {
+          // Use createMany for maximum performance
+          const result = await prisma.employee.createMany({
+            data: chunk,
+            skipDuplicates: true
+          })
+          insertedCount += result.count
+          console.log(`Inserted chunk ${Math.floor(i / chunkSize) + 1}: ${result.count} employees`)
+        } catch (chunkError) {
+          console.error(`Error inserting chunk at index ${i}:`, chunkError)
+          
+          // Fallback: Insert one by one for this chunk to identify problematic records
+          for (const employee of chunk) {
+            try {
+              await prisma.employee.create({ data: employee })
+              insertedCount++
+            } catch (singleError) {
+              failedInserts.push({
+                email: employee.email,
+                error: singleError.message
+              })
+            }
+          }
         }
       }
       
-      // Add warning if there were failures
-      if (errors.length > 0) {
-        response.message += ` ${errors.length} records failed.`
+      // ========== STEP 4: Cleanup and response ==========
+      cleanupTempFiles(req.file)
+      
+      const endTime = Date.now()
+      const duration = ((endTime - startTime) / 1000).toFixed(2)
+      
+      console.log('=== IMPORT SUMMARY ===')
+      console.log(`Total rows: ${rows.length}`)
+      console.log(`Successfully imported: ${insertedCount}`)
+      console.log(`Failed: ${errors.length + failedInserts.length}`)
+      console.log(`Skipped (empty): ${skippedCount}`)
+      console.log(`Duration: ${duration} seconds`)
+      
+      const allErrors = [...errors, ...failedInserts.map(f => ({ 
+        email: f.email, 
+        error: f.error 
+      }))]
+      
+      const response = {
+        success: true,
+        message: `Bulk import completed. ${insertedCount} employees imported successfully in ${duration}s.`,
+        summary: {
+          total: rows.length,
+          success: insertedCount,
+          failed: allErrors.length,
+          skipped: skippedCount,
+          duration: `${duration}s`
+        }
+      }
+      
+      if (allErrors.length > 0) {
+        response.message += ` ${allErrors.length} records failed.`
+        response.errors = allErrors.slice(0, 100)
       }
       
       res.status(200).json(response)
@@ -1578,7 +1714,6 @@ export const bulkImportEmployees = [
       console.error('Bulk import overall error:', error)
       console.error('Error stack:', error.stack)
       
-      // Cleanup temp file if exists
       cleanupTempFiles(req.file)
       
       res.status(500).json({
@@ -1586,74 +1721,6 @@ export const bulkImportEmployees = [
         message: 'Bulk import failed due to server error',
         error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
         errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      })
-    }
-  }
-]
-
-// Test endpoint for debugging
-export const testImport = [
-  upload.single('excelFile'),
-  async (req, res) => {
-    try {
-      console.log('Test import endpoint called')
-      
-      if (!req.file) {
-        return res.status(400).json({
-          success: false,
-          message: 'No file received'
-        })
-      }
-      
-      const fileInfo = {
-        originalName: req.file.originalname,
-        size: req.file.size,
-        path: req.file.path,
-        mimetype: req.file.mimetype,
-        exists: fs.existsSync(req.file.path)
-      }
-      
-      // Try to read the Excel file
-      try {
-        const workbook = xlsx.readFile(req.file.path)
-        const sheetNames = workbook.SheetNames
-        const firstSheet = workbook.Sheets[sheetNames[0]]
-        const data = xlsx.utils.sheet_to_json(firstSheet, { 
-          raw: false,
-          defval: '',
-          blankrows: false 
-        })
-        
-        fileInfo.sheetCount = sheetNames.length
-        fileInfo.rowCount = data.length
-        
-        // Show column names from first row
-        if (data.length > 0) {
-          fileInfo.columns = Object.keys(data[0])
-          fileInfo.sampleData = data.slice(0, 2)
-        }
-        
-      } catch (excelError) {
-        fileInfo.excelError = excelError.message
-      }
-      
-      // Cleanup
-      cleanupTempFiles(req.file)
-      
-      res.status(200).json({
-        success: true,
-        message: 'Test successful',
-        fileInfo: fileInfo
-      })
-      
-    } catch (error) {
-      console.error('Test error:', error)
-      cleanupTempFiles(req.file)
-      
-      res.status(500).json({
-        success: false,
-        message: 'Test failed',
-        error: error.message
       })
     }
   }

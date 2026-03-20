@@ -9,9 +9,7 @@ import {
   quickSearchEmployees,
   getEmployeeStatistics,
   getTodayBirthdays,
-  downloadEmployeeTemplate,
   bulkImportEmployees,
-  testImport
 } from '../controllers/employeeController.js'
 
 const router = express.Router()
@@ -30,8 +28,6 @@ router.put('/:id', updateEmployee)
 router.delete('/:id', deleteEmployee)
 
 // Bulk import routes
-router.get('/download-template', downloadEmployeeTemplate)
 router.post('/bulk-import', bulkImportEmployees)
-router.post('/test-import', testImport) 
 
 export default router

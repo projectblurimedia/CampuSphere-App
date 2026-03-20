@@ -140,11 +140,11 @@ export default function DashboardMenu({ visible, onClose }) {
     // Student Progress
     { 
       id: 8, 
-      title: 'Promote Students', 
+      title: 'End Of Academic Year', 
       icon: 'graduation-cap', 
       iconType: 'FontAwesome5', 
       gradient: ['#f97316', '#ea580c'], 
-      componentName: 'promote'
+      componentName: 'endOfAcademicYear'
     },
     
     // Uploads

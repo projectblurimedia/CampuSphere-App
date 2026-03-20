@@ -176,6 +176,7 @@ export default function Students() {
     scrollContent: {
       paddingHorizontal: 12,
       paddingTop: 4,
+      paddingBottom: 100,
     },
     classGroupsContainer: {
       flexDirection: 'column',

@@ -607,12 +607,11 @@ export default function StudentManagement({ visible, onClose }) {
     setToast((prev) => ({ ...prev, visible: false }))
   }, [])
 
-  // Get API endpoint based on active tab (Under /fees/)
   const getApiEndpoint = useCallback(() => {
     switch(activeTab) {
-      case 'promote': return '/fees/promote'
-      case 'demote': return '/fees/demote'
-      case 'inactive': return '/fees/inactivate'
+      case 'promote': return '/students/promote'
+      case 'demote': return '/students/demote'
+      case 'inactive': return '/students/inactivate'
       default: return null
     }
   }, [activeTab])
@@ -631,7 +630,7 @@ export default function StudentManagement({ visible, onClose }) {
 
     try {
       // Use the same search endpoint as FeeDetails
-      const response = await axiosApi.get('/fees/students/search', {
+      const response = await axiosApi.get('/students/search', {
         params: {
           search: query,
           page: 1,
@@ -741,7 +740,6 @@ export default function StudentManagement({ visible, onClose }) {
         throw new Error('Invalid action')
       }
 
-      // Use studentId in URL like /fees/:studentId/promote
       const url = `${endpoint}/${selectedStudent.id}`
       
       const payload = {
@@ -1090,7 +1088,7 @@ export default function StudentManagement({ visible, onClose }) {
               />
               <TextInput
                 ref={searchInputRef}
-                placeholder={`Search by name, class, or section...`}
+                placeholder={`Search by student name`}
                 placeholderTextColor={colors.textSecondary}
                 value={searchQuery}
                 onChangeText={setSearchQuery}

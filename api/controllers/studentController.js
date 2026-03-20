@@ -114,30 +114,27 @@ const parseDate = (dateStr) => {
   return date
 }
 
-// Helper function to calculate term distribution
-const calculateTermDistribution = (discountedSchoolFee, discountedTransportFee, discountedHostelFee, terms = 3) => {
-  if (terms <= 0) return {}
-  
+// Fast term distribution calculation (pure function)
+function calculateTermDistribution(schoolFee, transportFee, hostelFee, terms = 3) {
   const distribution = {}
   
-  const baseSchoolFee = Math.floor(discountedSchoolFee / terms)
-  const baseTransportFee = Math.floor(discountedTransportFee / terms)
-  const baseHostelFee = Math.floor(discountedHostelFee / terms)
+  const baseSchool = Math.floor(schoolFee / terms)
+  const baseTransport = Math.floor(transportFee / terms)
+  const baseHostel = Math.floor(hostelFee / terms)
   
-  const remainderSchool = discountedSchoolFee - (baseSchoolFee * terms)
-  const remainderTransport = discountedTransportFee - (baseTransportFee * terms)
-  const remainderHostel = discountedHostelFee - (baseHostelFee * terms)
+  const remSchool = schoolFee - (baseSchool * terms)
+  const remTransport = transportFee - (baseTransport * terms)
+  const remHostel = hostelFee - (baseHostel * terms)
   
   for (let i = 1; i <= terms; i++) {
-    const schoolFee = baseSchoolFee + (i <= remainderSchool ? 1 : 0)
-    const transportFee = baseTransportFee + (i <= remainderTransport ? 1 : 0)
-    const hostelFee = baseHostelFee + (i <= remainderHostel ? 1 : 0)
-    
     distribution[i] = {
-      schoolFee,
-      transportFee,
-      hostelFee,
-      total: schoolFee + transportFee + hostelFee,
+      schoolFee: baseSchool + (i <= remSchool ? 1 : 0),
+      transportFee: baseTransport + (i <= remTransport ? 1 : 0),
+      hostelFee: baseHostel + (i <= remHostel ? 1 : 0),
+      total: baseSchool + baseTransport + baseHostel + 
+             (i <= remSchool ? 1 : 0) + 
+             (i <= remTransport ? 1 : 0) + 
+             (i <= remHostel ? 1 : 0),
       schoolFeePaid: 0,
       transportFeePaid: 0,
       hostelFeePaid: 0,
@@ -153,6 +150,127 @@ const calculateDiscountedFees = (originalAmount, discountPercent) => {
   if (!originalAmount || originalAmount <= 0) return 0
   const discountAmount = Math.floor((originalAmount * discountPercent) / 100)
   return originalAmount - discountAmount
+}
+
+/**
+ * Get current academic year
+ */
+const getAcademicYear = () => {
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1
+  
+  // Academic year typically starts in June (month 6)
+  if (currentMonth >= 6) {
+    return `${currentYear}-${currentYear + 1}`
+  } else {
+    return `${currentYear - 1}-${currentYear}`
+  }
+}
+
+/**
+ * Archive current year's attendance records before clearing
+ */
+const clearAttendanceRecords = async (tx, studentId) => {
+  const result = await tx.attendance.deleteMany({
+    where: { studentId }
+  })
+  return result.count
+}
+
+/**
+ * Archive current year's marks records before clearing
+ */
+const clearMarksRecords = async (tx, studentId) => {
+  const result = await tx.marks.deleteMany({
+    where: { studentId }
+  })
+  return result.count
+}
+
+/**
+ * Reset current year fee details while preserving previous year history
+ * IMPORTANT: Previous year fees should NEVER be modified
+ */
+const resetCurrentYearFeeDetails = async (tx, studentId, action, updatedBy, targetClass = null) => {
+  console.log('Resetting fee details for student:', studentId, 'action:', action, 'targetClass:', targetClass)
+  
+  // Get the latest fee record
+  const currentFeeRecord = await tx.feeDetails.findFirst({
+    where: { studentId },
+    orderBy: { createdAt: 'desc' }
+  })
+
+  console.log('Current fee record found:', currentFeeRecord ? 'Yes' : 'No')
+
+  // Get student details
+  const student = await tx.student.findUnique({
+    where: { id: studentId },
+    select: {
+      class: true,
+      section: true,
+      studentType: true,
+      isUsingSchoolTransport: true,
+      isUsingSchoolHostel: true,
+      schoolFeeDiscount: true,
+      transportFeeDiscount: true,
+      hostelFeeDiscount: true
+    }
+  })
+
+  // Determine which class fee to apply
+  let classForNewFee = student.class
+  if (action === 'PROMOTED' && targetClass) {
+    classForNewFee = targetClass // For promotion, use next class
+  }
+  // For demotion, keep same class (classForNewFee = student.class)
+
+  // Get previous year details from current record if it exists
+  let previousYearDetails = []
+  let previousYearFee = 0
+  
+  if (currentFeeRecord) {
+    // Parse existing previous year details - KEEP THEM UNCHANGED
+    try {
+      previousYearDetails = typeof currentFeeRecord.previousYearDetails === 'string'
+        ? JSON.parse(currentFeeRecord.previousYearDetails)
+        : currentFeeRecord.previousYearDetails || []
+    } catch (e) {
+      console.error('Error parsing previousYearDetails:', e)
+      previousYearDetails = []
+    }
+
+    // Ensure it's an array
+    if (!Array.isArray(previousYearDetails)) {
+      previousYearDetails = []
+    }
+
+    // Calculate previous year fee from existing records - UNCHANGED
+    previousYearFee = previousYearDetails.reduce((sum, record) => sum + (record.totalDue || 0), 0)
+
+    // Delete the current fee record (we'll create a new one)
+    await tx.feeDetails.delete({
+      where: { id: currentFeeRecord.id }
+    })
+  }
+
+  // Create new fee record with the appropriate class fee structure
+  const newFeeRecord = await createOrUpdateFeeRecord(
+    tx,
+    studentId,
+    classForNewFee,
+    student.studentType,
+    student.isUsingSchoolTransport,
+    student.isUsingSchoolHostel,
+    updatedBy,
+    previousYearDetails, // Pass existing previous year details
+    previousYearFee // Pass existing previous year fee
+  )
+
+  return {
+    resetFeeRecord: newFeeRecord,
+    archivedYearRecord: null // No need to return archived record
+  }
 }
 
 /**
@@ -2530,29 +2648,51 @@ async function calculateWorkingDaysInRange(startDate, endDate) {
 }
 
 /**
- * @desc    Promote students to next class with proper data archiving
- * @route   POST /api/students/promote
+ * @desc    End of academic year promotion - promotes all active students to next class
+ * @route   POST /api/students/end-of-academics
  * @access  Private
  */
-export const promoteStudents = async (req, res) => {
+export const endOfAcademicYear = async (req, res) => {
   try {
-    const { 
-      studentIds, 
-      academicYear,
-      action = 'promote', // 'promote', 'demote', or 'graduate'
-      newSection // Optional: assign new section for promoted students
-    } = req.body
-
-    // Validate input
-    if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide an array of student IDs to promote'
-      })
-    }
+    const { academicYear } = req.body
 
     // Get current academic year if not provided
     const targetAcademicYear = academicYear || getCurrentAcademicYear()
+
+    // Fetch all active student IDs
+    const eligibleStudents = await prisma.student.findMany({
+      where: {
+        isActive: true
+      },
+      select: {
+        id: true
+      }
+    })
+
+    if (eligibleStudents.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'No active students found to promote',
+        summary: {
+          totalProcessed: 0,
+          successful: 0,
+          failed: 0,
+          academicYear: targetAcademicYear,
+          promoted: 0,
+          demoted: 0,
+          graduated: 0,
+          averageAttendance: 0,
+          averageMarks: 0,
+          totalPreviousYearFees: 0,
+          totalNewYearFees: 0,
+          studentsWithPendingFees: 0,
+          studentsWithCurrentYearFee: 0
+        },
+        data: { results: [], errors: [] }
+      })
+    }
+
+    const studentIds = eligibleStudents.map(s => s.id)
 
     // Fetch all students with their current data
     const students = await prisma.student.findMany({
@@ -2567,13 +2707,6 @@ export const promoteStudents = async (req, res) => {
         }
       }
     })
-
-    if (students.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'No active students found with the provided IDs'
-      })
-    }
 
     const promotionResults = []
     const errors = []
@@ -2655,7 +2788,7 @@ export const promoteStudents = async (req, res) => {
           class: student.class,
           classLabel: mapEnumToDisplayName(student.class),
           section: student.section,
-          action: action,
+          action: 'promote',
           promotedAt: new Date().toISOString(),
           summary: {
             overallResult: overallResult,
@@ -2763,7 +2896,6 @@ export const promoteStudents = async (req, res) => {
           }
 
           // Create FEE-ONLY record for THIS academic year
-          // This object contains ONLY this year's fee data with class info
           const feeYearRecord = {
             academicYear: targetAcademicYear,
             class: student.class,
@@ -2773,8 +2905,8 @@ export const promoteStudents = async (req, res) => {
             discountedTotalFee: currentFee.discountedSchoolFee + currentFee.discountedTransportFee + currentFee.discountedHostelFee,
             totalPaid: totalPaidFromTerms,
             totalDue: (currentFee.discountedSchoolFee + currentFee.discountedTransportFee + currentFee.discountedHostelFee) - totalPaidFromTerms,
-            termDistribution: currentFee.termDistribution, // ✅ Use the full termDistribution object
-            termPayments: termPayments, // ✅ Detailed term-wise breakdown
+            termDistribution: currentFee.termDistribution,
+            termPayments: termPayments,
             discounts: {
               school: currentFee.schoolFeeDiscountApplied,
               transport: currentFee.transportFeeDiscountApplied,
@@ -2791,27 +2923,11 @@ export const promoteStudents = async (req, res) => {
           totalPreviousYearPending = previousYearDetailsArray.reduce((sum, record) => {
             return sum + (record.totalDue || 0)
           }, 0)
-          
-          console.log('Previous Year Details Array:', JSON.stringify(previousYearDetailsArray, null, 2))
-          console.log('Total Previous Year Pending:', totalPreviousYearPending)
         }
 
         // ========== 7. DETERMINE NEXT CLASS ==========
-        let nextClass = null
-        let isActive = true
-
-        if (action === 'graduate') {
-          isActive = false
-          nextClass = student.class
-        } else if (action === 'demote') {
-          nextClass = student.class
-        } else {
-          nextClass = getNextClass(student.class)
-          if (nextClass === 'GRADUATED') {
-            isActive = false
-            nextClass = student.class
-          }
-        }
+        const nextClass = getNextClass(student.class)
+        const isActive = nextClass !== 'GRADUATED'
 
         // ========== 8. UPDATE STUDENT ==========
         const studentUpdateData = {
@@ -2820,9 +2936,6 @@ export const promoteStudents = async (req, res) => {
 
         if (isActive && nextClass && nextClass !== 'GRADUATED') {
           studentUpdateData.class = nextClass
-          if (newSection) {
-            studentUpdateData.section = newSection
-          }
         } else {
           studentUpdateData.isActive = false
         }
@@ -2842,7 +2955,7 @@ export const promoteStudents = async (req, res) => {
         })
 
         // ========== 10. UPDATE FEE DETAILS ==========
-        let newYearFee = 0 // Fee for the upcoming academic year
+        let newYearFee = 0
         
         if (currentFee) {
           if (!isActive) {
@@ -2853,7 +2966,6 @@ export const promoteStudents = async (req, res) => {
                 previousYearDetails: previousYearDetailsArray,
                 previousYearFee: totalPreviousYearPending,
                 
-                // Reset all current year amounts to 0
                 originalSchoolFee: 0,
                 originalTransportFee: 0,
                 originalHostelFee: 0,
@@ -2866,7 +2978,7 @@ export const promoteStudents = async (req, res) => {
                 transportFeePaid: 0,
                 hostelFeePaid: 0,
                 totalPaid: 0,
-                totalDue: 0, // Graduates have no current year fee
+                totalDue: 0,
                 termDistribution: {},
                 term1Due: 0,
                 term2Due: 0,
@@ -2888,7 +3000,6 @@ export const promoteStudents = async (req, res) => {
           } else if (nextClass && nextClass !== 'GRADUATED') {
             // PROMOTION CASE: Set up new class fees for NEXT academic year
             
-            // Get new class fee structure for the NEXT class
             const classFeeStructure = await prisma.classFeeStructure.findFirst({
               where: {
                 className: nextClass,
@@ -2896,7 +3007,6 @@ export const promoteStudents = async (req, res) => {
               }
             })
 
-            // Calculate transport fee if applicable
             let transportFee = 0
             if (student.isUsingSchoolTransport && student.village) {
               const busFeeStructure = await prisma.busFeeStructure.findFirst({
@@ -2908,7 +3018,6 @@ export const promoteStudents = async (req, res) => {
               transportFee = busFeeStructure?.feeAmount || 5000
             }
 
-            // Calculate hostel fee if applicable
             let hostelFee = 0
             if (student.studentType === 'HOSTELLER') {
               const hostelFeeStructure = await prisma.hostelFeeStructure.findFirst({
@@ -2920,12 +3029,10 @@ export const promoteStudents = async (req, res) => {
               hostelFee = hostelFeeStructure?.totalAnnualFee || 0
             }
 
-            // Keep existing discounts
             const schoolFeeDiscount = student.schoolFeeDiscount
             const transportFeeDiscount = student.transportFeeDiscount
             const hostelFeeDiscount = student.hostelFeeDiscount
 
-            // Calculate new year fees (for the upcoming academic year)
             const originalSchoolFee = classFeeStructure?.totalAnnualFee || 0
             const originalTransportFee = transportFee
             const originalHostelFee = hostelFee
@@ -2936,7 +3043,6 @@ export const promoteStudents = async (req, res) => {
             const discountedHostelFee = calculateDiscountedFees(originalHostelFee, hostelFeeDiscount)
             newYearFee = discountedSchoolFee + discountedTransportFee + discountedHostelFee
 
-            // Calculate term distribution for new year
             const terms = 3
             const termDistribution = {}
             
@@ -2980,15 +3086,12 @@ export const promoteStudents = async (req, res) => {
               if (i === 3) term3Due = termTotal
             }
 
-            // Update fee details
             await prisma.feeDetails.update({
               where: { id: currentFee.id },
               data: {
-                // Store updated previous year details (historical records)
                 previousYearDetails: previousYearDetailsArray,
                 previousYearFee: totalPreviousYearPending,
                 
-                // NEW YEAR's fee data - these are for the UPCOMING academic year
                 originalSchoolFee,
                 originalTransportFee,
                 originalHostelFee,
@@ -2997,42 +3100,35 @@ export const promoteStudents = async (req, res) => {
                 discountedSchoolFee,
                 discountedTransportFee,
                 discountedHostelFee,
-                discountedTotalFee: newYearFee, // ✅ This is ONLY next year's fee
+                discountedTotalFee: newYearFee,
                 
-                // RESET all paid amounts to 0 for new year
                 schoolFeePaid: 0,
                 transportFeePaid: 0,
                 hostelFeePaid: 0,
                 totalPaid: 0,
                 
-                // ⚠️ totalDue = ONLY the new year's fee (NO accumulation!)
-                totalDue: newYearFee, // ✅ This is the key fix - ONLY current year's fee
+                totalDue: newYearFee,
                 
-                // New term distribution
                 termDistribution,
                 
-                // New term amounts
                 term1Due,
                 term2Due,
                 term3Due,
                 
-                // RESET term paid amounts
                 term1Paid: 0,
                 term2Paid: 0,
                 term3Paid: 0,
                 
-                // Term due dates
                 term1DueDate: termDueDates.term1DueDate,
                 term2DueDate: termDueDates.term2DueDate,
                 term3DueDate: termDueDates.term3DueDate,
                 
-                // Keep discounts
                 schoolFeeDiscountApplied: schoolFeeDiscount,
                 transportFeeDiscountApplied: transportFeeDiscount,
                 hostelFeeDiscountApplied: hostelFeeDiscount,
                 
                 terms,
-                isFullyPaid: newYearFee === 0, // Only check current year
+                isFullyPaid: newYearFee === 0,
                 updatedBy: 'system-promotion',
                 updatedAt: new Date()
               }
@@ -3053,8 +3149,7 @@ export const promoteStudents = async (req, res) => {
           newSection: updatedStudent.section,
           academicYear: targetAcademicYear,
           isActive: updatedStudent.isActive,
-          status: !updatedStudent.isActive ? 'Graduated' : 
-                  (action === 'demote' ? 'Demoted' : 'Promoted'),
+          status: !updatedStudent.isActive ? 'Graduated' : 'Promoted',
           
           academicSummary: {
             overallResult: overallResult,
@@ -3062,44 +3157,35 @@ export const promoteStudents = async (req, res) => {
             marksPercentage: marksPercentage
           },
           
-          // ✅ FEE SUMMARY - PERFECTLY SEPARATED
           feeSummary: {
-            // Array of all historical fee records - each with its own totalDue for that year ONLY
             previousYearDetails: previousYearDetailsArray.map(record => ({
               academicYear: record.academicYear,
               class: record.class,
               classLabel: record.classLabel,
               section: record.section,
-              totalDue: record.totalDue, // This year's due only
+              totalDue: record.totalDue,
               totalPaid: record.totalPaid,
               discountedTotalFee: record.discountedTotalFee,
               originalTotalFee: record.originalTotalFee,
               isFullyPaid: record.isFullyPaid,
-              termDistribution: record.termDistribution, // ✅ Full term distribution
-              termPayments: record.termPayments, // ✅ Detailed term breakdown
+              termDistribution: record.termDistribution,
+              termPayments: record.termPayments,
               discounts: record.discounts,
               archivedAt: record.archivedAt
             })),
             
-            // ✅ SUM of all historical years' dues (e.g., 30000 + 31000 = 61000)
             previousYearsTotal: totalPreviousYearPending,
-            
-            // ✅ Current year's fee ONLY (for the upcoming year - e.g., 31000)
             newYearFee: newYearFee,
             
-            // ✅ Current year's details (class, section for the upcoming year)
             newYearDetails: {
               academicYear: targetAcademicYear,
               class: nextClass,
               classLabel: mapEnumToDisplayName(nextClass),
-              section: newSection || student.section,
+              section: student.section,
               fee: newYearFee
             },
             
-            // Number of historical years
             previousYearsCount: previousYearDetailsArray.length,
-            
-            // Is current year fully paid?
             isCurrentYearFullyPaid: newYearFee === 0
           }
         })
@@ -3131,7 +3217,6 @@ export const promoteStudents = async (req, res) => {
         ? Math.round((promotionResults.reduce((sum, r) => sum + (r.academicSummary?.marksPercentage || 0), 0) / promotionResults.length) * 100) / 100
         : 0,
       
-      // Fee summary
       totalPreviousYearFees: promotionResults.reduce((sum, r) => sum + (r.feeSummary?.previousYearsTotal || 0), 0),
       totalNewYearFees: promotionResults.reduce((sum, r) => sum + (r.feeSummary?.newYearFee || 0), 0),
       studentsWithPendingFees: promotionResults.filter(r => (r.feeSummary?.previousYearsTotal || 0) > 0).length,
@@ -3160,169 +3245,180 @@ export const promoteStudents = async (req, res) => {
     })
 
   } catch (error) {
-    console.error('Promote students error:', error)
+    console.error('End of academics error:', error)
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to promote students',
+      message: error.message || 'Failed to process end of academics',
       errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined
     })
   }
 }
 
 /**
- * @desc    Get promotion preview with fee impact
- * @route   POST /api/students/promote/preview
+ * @desc    Get count of active students for promotion (NO PAGINATION)
+ * @route   GET /api/students/for-promotion
  * @access  Private
  */
-export const getPromotionPreview = async (req, res) => {
+export const getStudentsForEndOfAcademicYear = async (req, res) => {
   try {
-    const { 
-      studentIds,
-      academicYear,
-      promoteToClass,
-      newSection,
-      action = 'promote',
-      resetFeeDiscounts = false
-    } = req.body
-
-    if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide an array of student IDs to preview'
-      })
-    }
-
-    const targetAcademicYear = academicYear || getCurrentAcademicYear()
-
-    const students = await prisma.student.findMany({
+    const count = await prisma.student.count({
       where: {
-        id: { in: studentIds },
         isActive: true
-      },
-      include: {
-        feeDetails: {
-          orderBy: { createdAt: 'desc' },
-          take: 1
-        }
       }
     })
-
-    const preview = await Promise.all(students.map(async (student) => {
-      const currentFee = student.feeDetails[0]
-      const pendingFees = currentFee ? currentFee.totalDue : 0
-      
-      let nextClass = null
-      let isActive = true
-
-      if (promoteToClass) {
-        nextClass = promoteToClass
-      } else {
-        nextClass = getNextClass(student.class)
-      }
-
-      if (action === 'graduate' || nextClass === 'GRADUATED' || student.class === 'CLASS_10') {
-        isActive = false
-        nextClass = student.class
-      }
-
-      // Calculate new year fees if active
-      let newYearFee = 0
-      if (isActive && nextClass && nextClass !== 'GRADUATED') {
-        const classFeeStructure = await prisma.classFeeStructure.findFirst({
-          where: {
-            className: nextClass,
-            isActive: true
-          }
-        })
-
-        let transportFee = 0
-        if (student.isUsingSchoolTransport && student.village) {
-          const busFeeStructure = await prisma.busFeeStructure.findFirst({
-            where: {
-              villageName: { contains: student.village, mode: 'insensitive' },
-              isActive: true
-            }
-          })
-          transportFee = busFeeStructure?.feeAmount || 5000
-        }
-
-        let hostelFee = 0
-        if (student.studentType === 'HOSTELLER') {
-          const hostelFeeStructure = await prisma.hostelFeeStructure.findFirst({
-            where: {
-              className: nextClass,
-              isActive: true
-            }
-          })
-          hostelFee = hostelFeeStructure?.totalAnnualFee || 0
-        }
-
-        const schoolFeeDiscount = resetFeeDiscounts ? 0 : student.schoolFeeDiscount
-        const transportFeeDiscount = resetFeeDiscounts ? 0 : student.transportFeeDiscount
-        const hostelFeeDiscount = resetFeeDiscounts ? 0 : student.hostelFeeDiscount
-
-        const originalSchoolFee = classFeeStructure?.totalAnnualFee || 0
-        const discountedSchoolFee = calculateDiscountedFees(originalSchoolFee, schoolFeeDiscount)
-        const discountedTransportFee = calculateDiscountedFees(transportFee, transportFeeDiscount)
-        const discountedHostelFee = calculateDiscountedFees(hostelFee, hostelFeeDiscount)
-        
-        newYearFee = discountedSchoolFee + discountedTransportFee + discountedHostelFee
-      }
-
-      return {
-        id: student.id,
-        name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
-        admissionNo: student.admissionNo,
-        currentClass: student.class,
-        currentClassLabel: mapEnumToDisplayName(student.class),
-        currentSection: student.section,
-        newClass: isActive ? nextClass : student.class,
-        newClassLabel: isActive ? mapEnumToDisplayName(nextClass) : mapEnumToDisplayName(student.class),
-        newSection: newSection || (isActive ? student.section : null),
-        academicYear: targetAcademicYear,
-        willBeActive: isActive,
-        action: !isActive ? 'Graduate' : (action === 'demote' ? 'Demote' : 'Promote'),
-        
-        // Fee impact preview
-        feeImpact: {
-          previousYearPending: pendingFees,
-          newYearFee: newYearFee,
-          totalAfterPromotion: newYearFee + pendingFees,
-          hasPendingFees: pendingFees > 0
-        }
-      }
-    }))
-
-    // Summary statistics
-    const summary = {
-      totalStudents: preview.length,
-      willBePromoted: preview.filter(s => s.action === 'Promote').length,
-      willBeDemoted: preview.filter(s => s.action === 'Demote').length,
-      willGraduate: preview.filter(s => s.action === 'Graduate').length,
-      willRemainActive: preview.filter(s => s.willBeActive).length,
-      willBeInactive: preview.filter(s => !s.willBeActive).length,
-      academicYear: targetAcademicYear,
-      
-      // Fee summary
-      totalPreviousYearFees: preview.reduce((sum, s) => sum + (s.feeImpact?.previousYearPending || 0), 0),
-      totalNewYearFees: preview.reduce((sum, s) => sum + (s.feeImpact?.newYearFee || 0), 0),
-      totalFeesAfterPromotion: preview.reduce((sum, s) => sum + (s.feeImpact?.totalAfterPromotion || 0), 0),
-      studentsWithPendingFees: preview.filter(s => s.feeImpact?.hasPendingFees).length
-    }
 
     res.status(200).json({
       success: true,
-      message: 'Preview generated successfully',
-      summary,
-      data: preview
+      count: count,
+      data: null
     })
-
   } catch (error) {
-    console.error('Promotion preview error:', error)
+    console.error('Get students for promotion error:', error)
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to generate promotion preview'
+      message: error.message || 'Failed to fetch students count for promotion'
     })
+  }
+}
+
+// Helper functions for in-memory calculations
+function calculateAttendanceStats(attendance) {
+  let totalSessions = 0
+  let presentSessions = 0
+  
+  attendance.forEach(record => {
+    totalSessions += 2
+    if (record.morning === true) presentSessions++
+    if (record.afternoon === true) presentSessions++
+  })
+  
+  const percentage = totalSessions > 0 
+    ? Math.round((presentSessions / totalSessions) * 100 * 100) / 100
+    : 0
+  
+  return { totalSessions, presentSessions, percentage }
+}
+
+function calculateMarksStats(marks) {
+  const finalExam = marks.find(m => m.examType === 'FINAL')
+  const hasFailed = marks.some(m => m.overallResult === 'FAIL')
+  const overallResult = hasFailed ? 'FAIL' : 'PASS'
+  
+  const percentage = finalExam?.percentage || 
+    (marks.length > 0 
+      ? marks.reduce((sum, m) => sum + (m.percentage || 0), 0) / marks.length
+      : 0)
+  
+  return { overallResult, percentage: Math.round(percentage * 100) / 100 }
+}
+
+function prepareFeeUpdate(student, currentFee, nextClass, isActive, academicYear, classFees, busFees, hostelFees) {
+  // Archive current year
+  let previousYearDetails = []
+  try {
+    previousYearDetails = typeof currentFee.previousYearDetails === 'string'
+      ? JSON.parse(currentFee.previousYearDetails)
+      : (currentFee.previousYearDetails || [])
+  } catch (e) {
+    previousYearDetails = []
+  }
+
+  // Add current year to archive
+  previousYearDetails.push({
+    academicYear,
+    class: student.class,
+    classLabel: mapEnumToDisplayName(student.class),
+    section: student.section,
+    originalTotalFee: currentFee.originalTotalFee,
+    discountedTotalFee: currentFee.discountedTotalFee,
+    totalPaid: currentFee.totalPaid,
+    totalDue: currentFee.totalDue,
+    termDistribution: currentFee.termDistribution,
+    isFullyPaid: currentFee.isFullyPaid,
+    archivedAt: new Date().toISOString()
+  })
+
+  const previousYearFee = previousYearDetails.reduce((sum, r) => sum + (r.totalDue || 0), 0)
+
+  // Calculate new year fee if active
+  let updateData = {
+    previousYearDetails,
+    previousYearFee,
+    updatedBy: 'system-promotion',
+    updatedAt: new Date()
+  }
+
+  if (!isActive) {
+    // Graduation case
+    updateData = {
+      ...updateData,
+      originalSchoolFee: 0,
+      originalTransportFee: 0,
+      originalHostelFee: 0,
+      originalTotalFee: 0,
+      discountedSchoolFee: 0,
+      discountedTransportFee: 0,
+      discountedHostelFee: 0,
+      discountedTotalFee: 0,
+      totalDue: 0,
+      termDistribution: {},
+      isFullyPaid: previousYearFee === 0
+    }
+  } else if (nextClass && nextClass !== 'GRADUATED') {
+    // Promotion case
+    const classFee = classFees.get(nextClass)
+    const busFee = busFees.get(student.village?.toLowerCase())
+    const hostelFee = hostelFees.get(nextClass)
+
+    const newSchoolFee = classFee?.totalAnnualFee || 0
+    const newTransportFee = student.isUsingSchoolTransport && student.village ? (busFee?.feeAmount || 5000) : 0
+    const newHostelFee = student.studentType === 'HOSTELLER' ? (hostelFee?.totalAnnualFee || 0) : 0
+
+    const discountedSchoolFee = Math.floor(newSchoolFee * (100 - student.schoolFeeDiscount) / 100)
+    const discountedTransportFee = Math.floor(newTransportFee * (100 - student.transportFeeDiscount) / 100)
+    const discountedHostelFee = Math.floor(newHostelFee * (100 - student.hostelFeeDiscount) / 100)
+    const discountedTotalFee = discountedSchoolFee + discountedTransportFee + discountedHostelFee
+
+    const termDistribution = calculateTermDistribution(
+      discountedSchoolFee,
+      discountedTransportFee,
+      discountedHostelFee
+    )
+
+    updateData = {
+      ...updateData,
+      originalSchoolFee: newSchoolFee,
+      originalTransportFee: newTransportFee,
+      originalHostelFee: newHostelFee,
+      originalTotalFee: newSchoolFee + newTransportFee + newHostelFee,
+      discountedSchoolFee,
+      discountedTransportFee,
+      discountedHostelFee,
+      discountedTotalFee,
+      schoolFeePaid: 0,
+      transportFeePaid: 0,
+      hostelFeePaid: 0,
+      totalPaid: 0,
+      totalDue: discountedTotalFee + previousYearFee,
+      termDistribution,
+      term1Due: termDistribution[1]?.total || 0,
+      term2Due: termDistribution[2]?.total || 0,
+      term3Due: termDistribution[3]?.total || 0,
+      term1Paid: 0,
+      term2Paid: 0,
+      term3Paid: 0,
+      isFullyPaid: false
+    }
+  }
+
+  return {
+    where: { id: currentFee.id },
+    data: updateData,
+    summary: {
+      previousYearFee,
+      newYearFee: updateData.discountedTotalFee || 0,
+      totalDue: updateData.totalDue || 0
+    }
   }
 }
 
@@ -3445,7 +3541,7 @@ export const getStudentPromotionHistory = async (req, res) => {
   }
 }
 
-// Bulk import students from Excel
+// Optimized bulk import
 export const bulkImportStudents = [
   upload.single('excelFile'),
   async (req, res) => {
@@ -3459,18 +3555,17 @@ export const bulkImportStudents = [
         })
       }
       
-      let workbook, data
+      // Parse Excel file
+      let workbook, rows
       try {
         workbook = xlsx.readFile(req.file.path)
         const sheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[sheetName]
-        
-        data = xlsx.utils.sheet_to_json(worksheet, {
+        rows = xlsx.utils.sheet_to_json(worksheet, {
           raw: false,
           defval: '',
           blankrows: false
         })
-        
       } catch (excelError) {
         cleanupTempFiles(req.file)
         return res.status(400).json({
@@ -3479,396 +3574,233 @@ export const bulkImportStudents = [
         })
       }
       
-      if (data.length === 0) {
+      if (rows.length === 0) {
         cleanupTempFiles(req.file)
         return res.status(400).json({
           success: false,
           message: 'Excel file is empty'
         })
       }
-      
+
+      // STEP 1: Pre-fetch all reference data in BULK
+      const [
+        existingAdmissionNos,
+        classFeeStructures,
+        busFeeStructures,
+        hostelFeeStructures
+      ] = await Promise.all([
+        // Get all existing admission numbers for duplicate check
+        prisma.student.findMany({
+          select: { admissionNo: true },
+          where: { admissionNo: { in: rows.map(r => r.admissionNo?.toString().trim()).filter(Boolean) } }
+        }).then(results => new Set(results.map(r => r.admissionNo))),
+        
+        // Get all class fee structures
+        prisma.classFeeStructure.findMany({
+          where: { isActive: true }
+        }).then(results => {
+          const map = new Map()
+          results.forEach(r => map.set(r.className, r))
+          return map
+        }),
+        
+        // Get all bus fee structures
+        prisma.busFeeStructure.findMany({
+          where: { isActive: true }
+        }).then(results => {
+          const map = new Map()
+          results.forEach(r => map.set(r.villageName.toLowerCase(), r))
+          return map
+        }),
+        
+        // Get all hostel fee structures
+        prisma.hostelFeeStructure.findMany({
+          where: { isActive: true }
+        }).then(results => {
+          const map = new Map()
+          results.forEach(r => map.set(r.className, r))
+          return map
+        })
+      ])
+
+      // STEP 2: Prepare data in memory (NO database calls)
+      const studentsToCreate = []
+      const feeDetailsToCreate = []
       const errors = []
-      let successCount = 0
-      let skippedCount = 0
-      const results = []
       
-      // Process each row
-      for (const [index, row] of data.entries()) {
+      const now = new Date()
+      const termDueDates = {
+        term1DueDate: new Date(now.setMonth(now.getMonth() + 4)),
+        term2DueDate: new Date(now.setMonth(now.getMonth() + 8)),
+        term3DueDate: new Date(now.setMonth(now.getMonth() + 12))
+      }
+
+      for (const [index, row] of rows.entries()) {
         const rowNumber = index + 2
         
         try {
-          // Skip empty rows
-          if (!row.firstName && !row.lastName && !row.admissionNo) {
-            skippedCount++
+          // Validation (keep your existing validation)
+          if (!row.firstName || !row.lastName || !row.admissionNo || !row.parentPhone || !row.parentName) {
+            errors.push({ row: rowNumber, admissionNo: row.admissionNo || 'N/A', error: 'Missing required fields' })
             continue
           }
-          
-          // Validate required fields
-          const missingFields = []
-          if (!row.firstName) missingFields.push('firstName')
-          if (!row.lastName) missingFields.push('lastName')
-          if (!row.admissionNo) missingFields.push('admissionNo')
-          if (!row.parentPhone) missingFields.push('parentPhone')
-          if (!row.parentName) missingFields.push('parentName')
-          
-          if (missingFields.length > 0) {
-            errors.push({
-              row: rowNumber,
-              admissionNo: row.admissionNo || 'N/A',
-              error: `Missing required fields: ${missingFields.join(', ')}`
-            })
-            continue
-          }
-          
-          const firstName = row.firstName.toString().trim()
-          const lastName = row.lastName.toString().trim()
+
           const admissionNo = row.admissionNo.toString().trim()
           
           // Check duplicate
-          const existingStudent = await prisma.student.findUnique({
-            where: { admissionNo }
-          })
-          
-          if (existingStudent) {
-            errors.push({
-              row: rowNumber,
-              admissionNo,
-              error: `Duplicate admission number`
-            })
+          if (existingAdmissionNos.has(admissionNo)) {
+            errors.push({ row: rowNumber, admissionNo, error: 'Duplicate admission number' })
             continue
           }
-          
+
           // Map class
           const classEnum = mapClassToEnum(row.class)
           if (!classEnum) {
-            errors.push({
-              row: rowNumber,
-              admissionNo,
-              error: `Invalid class: "${row.class}"`
-            })
+            errors.push({ row: rowNumber, admissionNo, error: `Invalid class: "${row.class}"` })
             continue
           }
+
+          // Get fee structures from pre-fetched maps
+          const classFee = classFeeStructures.get(classEnum)
+          const busFee = busFeeStructures.get(row.village?.toString().toLowerCase())
+          const hostelFee = hostelFeeStructures.get(classEnum)
+
+          // Calculate fees in memory
+          const isUsingTransport = row.isUsingSchoolTransport?.toString().toLowerCase() === 'true'
+          const studentType = row.studentType?.toString().toUpperCase() === 'HOSTELLER' ? 'HOSTELLER' : 'DAY_SCHOLAR'
           
-          // Validate section
-          let section = 'A'
-          if (row.section) {
-            const sectionStr = row.section.toString().trim().toUpperCase()
-            if (['A', 'B', 'C', 'D', 'E'].includes(sectionStr)) {
-              section = sectionStr
-            } else {
-              errors.push({
-                row: rowNumber,
-                admissionNo,
-                error: `Invalid section. Must be A, B, C, D, or E`
-              })
-              continue
-            }
-          }
-          
-          // Validate phone
-          if (!validatePhoneNumber(row.parentPhone)) {
-            errors.push({
-              row: rowNumber,
-              admissionNo,
-              error: `Invalid parent phone number`
-            })
-            continue
-          }
-          
-          const dob = parseDate(row.dob)
-          
-          // Parse student type
-          let studentType = 'DAY_SCHOLAR'
-          if (row.studentType) {
-            const typeStr = row.studentType.toString().trim().toUpperCase()
-            if (typeStr === 'HOSTELLER') {
-              studentType = 'HOSTELLER'
-            }
-          }
-          
-          // Parse transport
-          let isUsingSchoolTransport = false
-          if (row.isUsingSchoolTransport) {
-            const transportStr = row.isUsingSchoolTransport.toString().trim().toLowerCase()
-            isUsingSchoolTransport = transportStr === 'true' || transportStr === 'yes' || transportStr === '1'
-          }
-          
-          // Parse discounts
           const schoolFeeDiscount = parseDiscount(row.schoolFeeDiscount)
           const transportFeeDiscount = parseDiscount(row.transportFeeDiscount)
           const hostelFeeDiscount = parseDiscount(row.hostelFeeDiscount)
-          
-          // ========== HANDLE PREVIOUS YEAR FEE ==========
-          let previousYearDetailsArray = []
-          let totalPreviousYearFee = 0
-          
-          const previousYearFee = parseFloat(row.previousYearFee) || 0
-          
-          if (previousYearFee > 0) {
-            const currentAcademicYear = getCurrentAcademicYear()
-            const [startYear, endYear] = currentAcademicYear.split('-').map(Number)
-            const previousAcademicYear = `${startYear - 1}-${endYear - 1}`
 
-            const currentClassDisplay = mapEnumToDisplayName(classEnum)
-            const previousClassDisplay = getPreviousClass(currentClassDisplay)
-            const previousClassEnum = previousClassDisplay ? mapClassToEnum(previousClassDisplay) : null
+          // Calculate transport fee
+          const transportFee = isUsingTransport && row.village ? (busFee?.feeAmount || 5000) : 0
+          
+          // Calculate hostel fee
+          const hostelFeeAmount = studentType === 'HOSTELLER' ? (hostelFee?.totalAnnualFee || 0) : 0
 
-            const targetPreviousClass = previousClassEnum || classEnum
-            const targetPreviousClassLabel = mapEnumToDisplayName(targetPreviousClass)
-
-            // Create fee record following feeController structure
-            const feeYearRecord = {
-              academicYear: previousAcademicYear, 
-              class: targetPreviousClass,
-              classLabel: targetPreviousClassLabel,
-              section: section,
-              originalTotalFee: previousYearFee,
-              discountedTotalFee: previousYearFee,
-              totalPaid: 0,
-              totalDue: previousYearFee,
-              
-              // Term distribution - all in term1 (school fee only)
-              termDistribution: {
-                1: {
-                  schoolFee: previousYearFee,
-                  transportFee: 0,
-                  hostelFee: 0,
-                  total: previousYearFee,
-                  schoolFeePaid: 0,
-                  transportFeePaid: 0,
-                  hostelFeePaid: 0,
-                  totalPaid: 0,
-                  status: 'Unpaid'
-                },
-                2: {
-                  schoolFee: 0, transportFee: 0, hostelFee: 0, total: 0,
-                  schoolFeePaid: 0, transportFeePaid: 0, hostelFeePaid: 0,
-                  totalPaid: 0, status: 'Unpaid'
-                },
-                3: {
-                  schoolFee: 0, transportFee: 0, hostelFee: 0, total: 0,
-                  schoolFeePaid: 0, transportFeePaid: 0, hostelFeePaid: 0,
-                  totalPaid: 0, status: 'Unpaid'
-                }
-              },
-              
-              // Term payments breakdown
-              termPayments: {
-                term1: {
-                  due: previousYearFee,
-                  paid: 0,
-                  remaining: previousYearFee,
-                  components: {
-                    schoolFee: { due: previousYearFee, paid: 0, remaining: previousYearFee },
-                    transportFee: { due: 0, paid: 0, remaining: 0 },
-                    hostelFee: { due: 0, paid: 0, remaining: 0 }
-                  }
-                },
-                term2: {
-                  due: 0, paid: 0, remaining: 0,
-                  components: {
-                    schoolFee: { due: 0, paid: 0, remaining: 0 },
-                    transportFee: { due: 0, paid: 0, remaining: 0 },
-                    hostelFee: { due: 0, paid: 0, remaining: 0 }
-                  }
-                },
-                term3: {
-                  due: 0, paid: 0, remaining: 0,
-                  components: {
-                    schoolFee: { due: 0, paid: 0, remaining: 0 },
-                    transportFee: { due: 0, paid: 0, remaining: 0 },
-                    hostelFee: { due: 0, paid: 0, remaining: 0 }
-                  }
-                }
-              },
-              
-              remainingBreakdown: {
-                school: previousYearFee,
-                transport: 0,
-                hostel: 0,
-                total: previousYearFee
-              },
-              
-              discounts: { school: 0, transport: 0, hostel: 0 },
-              isFullyPaid: false,
-              archivedAt: new Date().toISOString()
-            }
-            
-            previousYearDetailsArray = [feeYearRecord]
-            totalPreviousYearFee = previousYearFee
-          }
-          
-          // ========== GET FEE STRUCTURES ==========
-          const classFeeStructure = await prisma.classFeeStructure.findFirst({
-            where: { className: classEnum, isActive: true }
-          })
-          
-          // Transport fee
-          let transportFee = 0
-          if (isUsingSchoolTransport && row.village) {
-            const busFeeStructure = await prisma.busFeeStructure.findFirst({
-              where: {
-                villageName: { contains: row.village.toString().trim(), mode: 'insensitive' },
-                isActive: true
-              }
-            })
-            transportFee = busFeeStructure?.feeAmount || 5000
-          }
-          
-          // Hostel fee
-          let hostelFee = 0
-          if (studentType === 'HOSTELLER') {
-            const hostelFeeStructure = await prisma.hostelFeeStructure.findFirst({
-              where: { className: classEnum, isActive: true }
-            })
-            hostelFee = hostelFeeStructure?.totalAnnualFee || 0
-          }
-          
-          // Calculate fees
-          const originalSchoolFee = classFeeStructure?.totalAnnualFee || 0
-          const originalTransportFee = transportFee
-          const originalHostelFee = hostelFee
-          const originalTotalFee = originalSchoolFee + originalTransportFee + originalHostelFee
-          
-          const discountedSchoolFee = calculateDiscountedFees(originalSchoolFee, schoolFeeDiscount)
-          const discountedTransportFee = calculateDiscountedFees(originalTransportFee, transportFeeDiscount)
-          const discountedHostelFee = calculateDiscountedFees(originalHostelFee, hostelFeeDiscount)
+          // Calculate discounted amounts
+          const originalSchoolFee = classFee?.totalAnnualFee || 0
+          const discountedSchoolFee = Math.floor(originalSchoolFee * (100 - schoolFeeDiscount) / 100)
+          const discountedTransportFee = Math.floor(transportFee * (100 - transportFeeDiscount) / 100)
+          const discountedHostelFee = Math.floor(hostelFeeAmount * (100 - hostelFeeDiscount) / 100)
           const discountedTotalFee = discountedSchoolFee + discountedTransportFee + discountedHostelFee
-          
-          // Calculate term distribution
+
+          // Calculate term distribution (in memory function)
           const termDistribution = calculateTermDistribution(
             discountedSchoolFee,
             discountedTransportFee,
-            discountedHostelFee,
-            3
+            discountedHostelFee
           )
+
+          // Prepare student data
+          const studentId = crypto.randomUUID()
           
-          // Calculate term amounts
-          let term1Due = 0, term2Due = 0, term3Due = 0
-          for (let i = 1; i <= 3; i++) {
-            if (termDistribution[i]) {
-              if (i === 1) term1Due = termDistribution[i].total
-              if (i === 2) term2Due = termDistribution[i].total
-              if (i === 3) term3Due = termDistribution[i].total
-            }
-          }
-          
-          // Calculate due dates
-          const now = new Date()
-          const termDueDates = {
-            term1DueDate: new Date(now.setMonth(now.getMonth() + 4)),
-            term2DueDate: new Date(now.setMonth(now.getMonth() + 8)),
-            term3DueDate: new Date(now.setMonth(now.getMonth() + 12))
-          }
-          
-          // ========== CREATE STUDENT ==========
-          const student = await prisma.student.create({
-            data: {
-              firstName,
-              lastName,
-              dob,
-              gender: row.gender?.toUpperCase() || 'NOT_SPECIFIED',
-              class: classEnum,
-              section,
-              admissionNo,
-              rollNo: row.rollNo ? row.rollNo.toString().trim() : null,
-              address: row.address ? row.address.toString().trim() : null,
-              village: row.village ? row.village.toString().trim() : null,
-              parentName: row.parentName.toString().trim(),
-              parentPhone: row.parentPhone,
-              parentPhone2: row.parentPhone2 ? row.parentPhone2 : null,
-              parentEmail: row.parentEmail ? row.parentEmail.toString().trim().toLowerCase() : null,
-              studentType,
-              isUsingSchoolTransport,
-              schoolFeeDiscount,
-              transportFeeDiscount,
-              hostelFeeDiscount,
-              isActive: true,
-              
-              feeDetails: {
-                create: {
-                  originalSchoolFee,
-                  originalTransportFee,
-                  originalHostelFee,
-                  originalTotalFee,
-                  discountedSchoolFee,
-                  discountedTransportFee,
-                  discountedHostelFee,
-                  discountedTotalFee,
-                  schoolFeePaid: 0,
-                  transportFeePaid: 0,
-                  hostelFeePaid: 0,
-                  totalPaid: 0,
-                  termDistribution,
-                  term1Due,
-                  term2Due,
-                  term3Due,
-                  term1DueDate: termDueDates.term1DueDate,
-                  term2DueDate: termDueDates.term2DueDate,
-                  term3DueDate: termDueDates.term3DueDate,
-                  term1Paid: 0,
-                  term2Paid: 0,
-                  term3Paid: 0,
-                  schoolFeeDiscountApplied: schoolFeeDiscount,
-                  transportFeeDiscountApplied: transportFeeDiscount,
-                  hostelFeeDiscountApplied: hostelFeeDiscount,
-                  previousYearDetails: previousYearDetailsArray,
-                  previousYearFee: totalPreviousYearFee,
-                  totalDue: discountedTotalFee + totalPreviousYearFee,
-                  isFullyPaid: false,
-                  updatedBy: 'bulk-import'
-                }
-              }
-            },
-            include: {
-              feeDetails: {
-                orderBy: { createdAt: 'desc' },
-                take: 1
-              }
-            }
-          })
-          
-          successCount++
-          results.push({
-            row: rowNumber,
+          studentsToCreate.push({
+            id: studentId,
+            firstName: row.firstName.toString().trim(),
+            lastName: row.lastName.toString().trim(),
+            dob: parseDate(row.dob),
+            gender: row.gender?.toUpperCase() || 'NOT_SPECIFIED',
+            class: classEnum,
+            section: row.section?.toString().toUpperCase() || 'A',
             admissionNo,
-            name: `${firstName} ${lastName}`,
-            status: 'success',
-            previousYearFee: totalPreviousYearFee,
-            currentYearFee: discountedTotalFee,
-            totalDue: discountedTotalFee + totalPreviousYearFee
+            rollNo: row.rollNo?.toString().trim() || null,
+            address: row.address?.toString().trim() || null,
+            village: row.village?.toString().trim() || null,
+            parentName: row.parentName.toString().trim(),
+            parentPhone: row.parentPhone,
+            parentPhone2: row.parentPhone2 || null,
+            parentEmail: row.parentEmail?.toString().trim().toLowerCase() || null,
+            studentType,
+            isUsingSchoolTransport: isUsingTransport,
+            schoolFeeDiscount,
+            transportFeeDiscount,
+            hostelFeeDiscount,
+            isActive: true,
+            createdAt: now,
+            updatedAt: now
           })
-          
+
+          // Prepare fee details data
+          feeDetailsToCreate.push({
+            id: crypto.randomUUID(),
+            studentId,
+            originalSchoolFee,
+            originalTransportFee: transportFee,
+            originalHostelFee: hostelFeeAmount,
+            originalTotalFee: originalSchoolFee + transportFee + hostelFeeAmount,
+            discountedSchoolFee,
+            discountedTransportFee,
+            discountedHostelFee,
+            discountedTotalFee,
+            schoolFeePaid: 0,
+            transportFeePaid: 0,
+            hostelFeePaid: 0,
+            totalPaid: 0,
+            termDistribution,
+            term1Due: termDistribution[1]?.total || 0,
+            term2Due: termDistribution[2]?.total || 0,
+            term3Due: termDistribution[3]?.total || 0,
+            term1DueDate: termDueDates.term1DueDate,
+            term2DueDate: termDueDates.term2DueDate,
+            term3DueDate: termDueDates.term3DueDate,
+            term1Paid: 0,
+            term2Paid: 0,
+            term3Paid: 0,
+            schoolFeeDiscountApplied: schoolFeeDiscount,
+            transportFeeDiscountApplied: transportFeeDiscount,
+            hostelFeeDiscountApplied: hostelFeeDiscount,
+            previousYearDetails: [],
+            previousYearFee: 0,
+            totalDue: discountedTotalFee,
+            isFullyPaid: false,
+            updatedBy: 'bulk-import',
+            createdAt: now,
+            updatedAt: now
+          })
+
+          existingAdmissionNos.add(admissionNo) // Prevent duplicates within same file
+
         } catch (error) {
-          console.error(`Error row ${rowNumber}:`, error)
-          errors.push({
-            row: rowNumber,
-            admissionNo: row.admissionNo || 'N/A',
-            error: error.code === 'P2002' ? 'Duplicate admission number' : error.message
-          })
+          errors.push({ row: rowNumber, admissionNo: row.admissionNo || 'N/A', error: error.message })
         }
       }
-      
+
+      // STEP 3: Execute BULK inserts using createMany
+      if (studentsToCreate.length > 0) {
+        // Split into chunks of 1000 for better performance
+        const chunkSize = 1000
+        for (let i = 0; i < studentsToCreate.length; i += chunkSize) {
+          const studentChunk = studentsToCreate.slice(i, i + chunkSize)
+          const feeChunk = feeDetailsToCreate.slice(i, i + chunkSize)
+          
+          await prisma.$transaction([
+            prisma.student.createMany({
+              data: studentChunk,
+              skipDuplicates: true
+            }),
+            prisma.feeDetails.createMany({
+              data: feeChunk,
+              skipDuplicates: true
+            })
+          ])
+        }
+      }
+
       cleanupTempFiles(req.file)
-      
-      const response = {
+
+      res.status(errors.length > 0 ? 207 : 200).json({
         success: true,
-        message: `Imported ${successCount} students successfully`,
+        message: `Imported ${studentsToCreate.length} students successfully`,
         summary: {
-          total: data.length,
-          success: successCount,
-          failed: errors.length,
-          skipped: skippedCount
+          total: rows.length,
+          success: studentsToCreate.length,
+          failed: errors.length
         },
-        results
-      }
-      
-      if (errors.length > 0) {
-        response.errors = errors.slice(0, 100)
-      }
-      
-      res.status(errors.length > 0 ? 207 : 200).json(response)
-      
+        errors: errors.slice(0, 100)
+      })
+
     } catch (error) {
       console.error('Bulk import error:', error)
       cleanupTempFiles(req.file)
@@ -3880,3 +3812,885 @@ export const bulkImportStudents = [
     }
   }
 ]
+
+/**
+ * @desc    Promote a student to the next class (e.g., UKG → CLASS_1)
+ * @route   POST /api/fees/:studentId/promote
+ */
+export const promoteStudent = async (req, res) => {
+  try {
+    const { studentId } = req.params
+    const { 
+      updatedBy,
+      newSection,
+      newRollNo
+    } = req.body
+
+    if (!updatedBy) {
+      return res.status(400).json({
+        success: false,
+        message: 'Updated by is required'
+      })
+    }
+
+    // Get student with current details
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      include: {
+        feeDetails: {
+          orderBy: { createdAt: 'desc' },
+          take: 1
+        }
+      }
+    })
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      })
+    }
+
+    if (!student.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot promote an inactive student'
+      })
+    }
+
+    // Check if student is in 10th class (cannot promote)
+    if (student.class === 'CLASS_10') {
+      return res.status(400).json({
+        success: false,
+        message: 'Students in Class 10 cannot be promoted. They will graduate.'
+      })
+    }
+
+    // Get next class
+    const nextClass = getNextClass(student.class)
+    
+    if (!nextClass) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot determine next class for promotion'
+      })
+    }
+
+    const academicYear = getAcademicYear()
+
+    // Start transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Clear attendance records
+      await tx.attendance.deleteMany({
+        where: { studentId }
+      })
+
+      // 2. Clear marks records
+      await tx.marks.deleteMany({
+        where: { studentId }
+      })
+
+      // 3. Handle current fee record - DELETE IT WITHOUT ARCHIVING
+      const currentFee = student.feeDetails[0]
+      
+      if (currentFee) {
+        // Parse existing previous year details (KEEP THEM UNCHANGED)
+        let previousYearDetails = []
+        try {
+          previousYearDetails = typeof currentFee.previousYearDetails === 'string'
+            ? JSON.parse(currentFee.previousYearDetails)
+            : currentFee.previousYearDetails || []
+          if (!Array.isArray(previousYearDetails)) {
+            previousYearDetails = []
+          }
+        } catch (e) {
+          previousYearDetails = []
+        }
+
+        // Calculate previous year fee (sum of all historical dues) - UNCHANGED
+        const previousYearFee = previousYearDetails.reduce((sum, record) => sum + (record.totalDue || 0), 0)
+
+        // Delete the old fee record
+        await tx.feeDetails.delete({
+          where: { id: currentFee.id }
+        })
+      }
+
+      // 4. Calculate new fee for NEXT class (following createStudent pattern)
+      
+      // Get class fee structure for the NEXT class
+      const classFeeStructure = await tx.classFeeStructure.findFirst({
+        where: {
+          className: nextClass,
+          isActive: true
+        }
+      })
+
+      // Calculate transport fee if applicable
+      let transportFee = 0
+      if (student.isUsingSchoolTransport && student.village) {
+        const busFeeStructure = await tx.busFeeStructure.findFirst({
+          where: {
+            villageName: { contains: student.village, mode: 'insensitive' },
+            isActive: true
+          }
+        })
+        transportFee = busFeeStructure?.feeAmount || 0
+      }
+
+      // Calculate hostel fee if applicable
+      let hostelFee = 0
+      if (student.studentType === 'HOSTELLER') {
+        const hostelFeeStructure = await tx.hostelFeeStructure.findFirst({
+          where: {
+            className: nextClass,
+            isActive: true
+          }
+        })
+        hostelFee = hostelFeeStructure?.totalAnnualFee || 0
+      }
+
+      // Keep existing discounts
+      const schoolFeeDiscount = student.schoolFeeDiscount || 0
+      const transportFeeDiscount = student.transportFeeDiscount || 0
+      const hostelFeeDiscount = student.hostelFeeDiscount || 0
+
+      // Calculate original amounts (following createStudent pattern)
+      const originalSchoolFee = classFeeStructure?.totalAnnualFee || 0
+      const originalTransportFee = transportFee
+      const originalHostelFee = hostelFee
+      const originalTotalFee = originalSchoolFee + originalTransportFee + originalHostelFee
+
+      // Calculate discounted amounts (following createStudent pattern)
+      const discountedSchoolFee = calculateDiscountedFees(originalSchoolFee, schoolFeeDiscount)
+      const discountedTransportFee = calculateDiscountedFees(originalTransportFee, transportFeeDiscount)
+      const discountedHostelFee = calculateDiscountedFees(originalHostelFee, hostelFeeDiscount)
+      const discountedTotalFee = discountedSchoolFee + discountedTransportFee + discountedHostelFee
+
+      // Calculate term distribution (following createStudent pattern)
+      const terms = 3
+      const termDistribution = {}
+      
+      const baseSchoolFee = Math.floor(discountedSchoolFee / terms)
+      const baseTransportFee = Math.floor(discountedTransportFee / terms)
+      const baseHostelFee = Math.floor(discountedHostelFee / terms)
+      
+      const remainderSchool = discountedSchoolFee - (baseSchoolFee * terms)
+      const remainderTransport = discountedTransportFee - (baseTransportFee * terms)
+      const remainderHostel = discountedHostelFee - (baseHostelFee * terms)
+      
+      const now = new Date()
+      const termDueDates = {
+        term1DueDate: new Date(new Date(now).setMonth(now.getMonth() + 4)),
+        term2DueDate: new Date(new Date(now).setMonth(now.getMonth() + 8)),
+        term3DueDate: new Date(new Date(now).setMonth(now.getMonth() + 12))
+      }
+      
+      let term1Due = 0, term2Due = 0, term3Due = 0
+      
+      for (let i = 1; i <= terms; i++) {
+        const schoolFeeAmt = baseSchoolFee + (i <= remainderSchool ? 1 : 0)
+        const transportFeeAmt = baseTransportFee + (i <= remainderTransport ? 1 : 0)
+        const hostelFeeAmt = baseHostelFee + (i <= remainderHostel ? 1 : 0)
+        const termTotal = schoolFeeAmt + transportFeeAmt + hostelFeeAmt
+        
+        termDistribution[i] = {
+          schoolFee: schoolFeeAmt,
+          transportFee: transportFeeAmt,
+          hostelFee: hostelFeeAmt,
+          total: termTotal,
+          schoolFeePaid: 0,
+          transportFeePaid: 0,
+          hostelFeePaid: 0,
+          totalPaid: 0,
+          status: 'Unpaid'
+        }
+        
+        if (i === 1) term1Due = termTotal
+        if (i === 2) term2Due = termTotal
+        if (i === 3) term3Due = termTotal
+      }
+
+      // Get previous year details from the deleted record (if any)
+      let previousYearDetails = []
+      let previousYearFee = 0
+      
+      if (currentFee) {
+        try {
+          previousYearDetails = typeof currentFee.previousYearDetails === 'string'
+            ? JSON.parse(currentFee.previousYearDetails)
+            : currentFee.previousYearDetails || []
+          if (!Array.isArray(previousYearDetails)) {
+            previousYearDetails = []
+          }
+          previousYearFee = previousYearDetails.reduce((sum, record) => sum + (record.totalDue || 0), 0)
+        } catch (e) {
+          previousYearDetails = []
+          previousYearFee = 0
+        }
+      }
+
+      // 5. Create NEW fee record for the promoted class (following createStudent pattern)
+      const newFeeRecord = await tx.feeDetails.create({
+        data: {
+          studentId,
+          
+          // Original amounts
+          originalSchoolFee,
+          originalTransportFee,
+          originalHostelFee,
+          originalTotalFee,
+          
+          // Discounted amounts
+          discountedSchoolFee,
+          discountedTransportFee,
+          discountedHostelFee,
+          discountedTotalFee,
+          
+          // Paid amounts (initial zero)
+          schoolFeePaid: 0,
+          transportFeePaid: 0,
+          hostelFeePaid: 0,
+          totalPaid: 0,
+          
+          // Term distribution
+          termDistribution,
+          
+          // Term amounts
+          term1Due,
+          term2Due,
+          term3Due,
+          
+          // Term due dates
+          term1DueDate: termDueDates.term1DueDate,
+          term2DueDate: termDueDates.term2DueDate,
+          term3DueDate: termDueDates.term3DueDate,
+          
+          // Term paid amounts (initial zero)
+          term1Paid: 0,
+          term2Paid: 0,
+          term3Paid: 0,
+          
+          // Discounts applied
+          schoolFeeDiscountApplied: schoolFeeDiscount,
+          transportFeeDiscountApplied: transportFeeDiscount,
+          hostelFeeDiscountApplied: hostelFeeDiscount,
+          
+          // Total due = discounted total fee (current year only)
+          totalDue: discountedTotalFee,
+          
+          // Previous year details - KEEP EXISTING ONES UNCHANGED
+          previousYearDetails: previousYearDetails,
+          previousYearFee: previousYearFee,
+          
+          terms,
+          isFullyPaid: false,
+          updatedBy
+        }
+      })
+
+      // 6. Update student with new class (NO studiedClasses update)
+      const updatedStudent = await tx.student.update({
+        where: { id: studentId },
+        data: {
+          class: nextClass,
+          section: newSection || student.section,
+          rollNo: newRollNo || null,
+          // studiedClasses: NOT UPDATED HERE
+          updatedAt: new Date()
+        }
+      })
+
+      return {
+        updatedStudent,
+        newFeeRecord,
+        previousYearDetails,
+        previousYearFee
+      }
+    })
+
+    res.status(200).json({
+      success: true,
+      message: `Student promoted from ${mapEnumToDisplayName(student.class)} to ${mapEnumToDisplayName(nextClass)} successfully`,
+      data: {
+        student: {
+          id: result.updatedStudent.id,
+          name: `${result.updatedStudent.firstName} ${result.updatedStudent.lastName}`.trim(),
+          admissionNo: result.updatedStudent.admissionNo,
+          previousClass: mapEnumToDisplayName(student.class),
+          previousSection: student.section,
+          newClass: mapEnumToDisplayName(result.updatedStudent.class),
+          newSection: result.updatedStudent.section,
+          newRollNo: result.updatedStudent.rollNo
+        },
+        academicYear,
+        feeSummary: {
+          previousYearDetails: result.previousYearDetails,
+          previousYearFee: result.previousYearFee,
+          newYearFee: result.newFeeRecord.discountedTotalFee,
+          totalDue: result.previousYearFee + result.newFeeRecord.discountedTotalFee
+        }
+      }
+    })
+
+  } catch (error) {
+    console.error('Promote student error:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to promote student'
+    })
+  }
+}
+
+/**
+ * @desc    Demote a student to the previous class (e.g., UKG → LKG)
+ * @route   POST /api/fees/:studentId/demote
+ */
+export const demoteStudent = async (req, res) => {  
+  try {
+    const { studentId } = req.params
+    const { 
+      updatedBy,
+      newSection,
+      newRollNo
+    } = req.body
+
+    if (!updatedBy) {
+      return res.status(400).json({
+        success: false,
+        message: 'Updated by is required'
+      })
+    }
+
+    // Get student with current details
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      include: {
+        feeDetails: {
+          orderBy: { createdAt: 'desc' },
+          take: 1
+        }
+      }
+    })
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      })
+    }
+
+    if (!student.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot demote an inactive student'
+      })
+    }
+
+    // Check if student is in Pre-Nursery (cannot demote - first class)
+    if (student.class === 'PRE_NURSERY') {
+      return res.status(400).json({
+        success: false,
+        message: 'Students in Pre-Nursery cannot be demoted as it is the first class'
+      })
+    }
+
+    // Get the previous class (e.g., for UKG, this should return LKG)
+    const previousClass = getPreviousClass(student.class)
+    
+    if (!previousClass) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot determine previous class for demotion'
+      })
+    }
+
+    console.log(`Demoting student from ${student.class} to ${previousClass}`)
+
+    const academicYear = getAcademicYear()
+
+    // Start transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Clear attendance records
+      await tx.attendance.deleteMany({
+        where: { studentId }
+      })
+
+      // 2. Clear marks records
+      await tx.marks.deleteMany({
+        where: { studentId }
+      })
+
+      // 3. Handle current fee record - DELETE IT WITHOUT ARCHIVING
+      const currentFee = student.feeDetails[0]
+      
+      // Get previous year details from the current record (if any)
+      let previousYearDetails = []
+      let previousYearFee = 0
+      
+      if (currentFee) {
+        try {
+          previousYearDetails = typeof currentFee.previousYearDetails === 'string'
+            ? JSON.parse(currentFee.previousYearDetails)
+            : currentFee.previousYearDetails || []
+          if (!Array.isArray(previousYearDetails)) {
+            previousYearDetails = []
+          }
+          previousYearFee = previousYearDetails.reduce((sum, record) => sum + (record.totalDue || 0), 0)
+        } catch (e) {
+          previousYearDetails = []
+          previousYearFee = 0
+        }
+
+        // Delete the old fee record
+        await tx.feeDetails.delete({
+          where: { id: currentFee.id }
+        })
+      }
+
+      // 4. Calculate new fee for PREVIOUS class (demotion)
+      
+      // Get class fee structure for the PREVIOUS class
+      const classFeeStructure = await tx.classFeeStructure.findFirst({
+        where: {
+          className: previousClass, // ← USE PREVIOUS CLASS, NOT SAME CLASS
+          isActive: true
+        }
+      })
+
+      // Calculate transport fee if applicable (using same village)
+      let transportFee = 0
+      if (student.isUsingSchoolTransport && student.village) {
+        const busFeeStructure = await tx.busFeeStructure.findFirst({
+          where: {
+            villageName: { contains: student.village, mode: 'insensitive' },
+            isActive: true
+          }
+        })
+        transportFee = busFeeStructure?.feeAmount || 0
+      }
+
+      // Calculate hostel fee if applicable for the PREVIOUS class
+      let hostelFee = 0
+      if (student.studentType === 'HOSTELLER') {
+        const hostelFeeStructure = await tx.hostelFeeStructure.findFirst({
+          where: {
+            className: previousClass, // ← USE PREVIOUS CLASS
+            isActive: true
+          }
+        })
+        hostelFee = hostelFeeStructure?.totalAnnualFee || 0
+      }
+
+      // Keep existing discounts
+      const schoolFeeDiscount = student.schoolFeeDiscount || 0
+      const transportFeeDiscount = student.transportFeeDiscount || 0
+      const hostelFeeDiscount = student.hostelFeeDiscount || 0
+
+      // Calculate original amounts
+      const originalSchoolFee = classFeeStructure?.totalAnnualFee || 0
+      const originalTransportFee = transportFee
+      const originalHostelFee = hostelFee
+      const originalTotalFee = originalSchoolFee + originalTransportFee + originalHostelFee
+
+      // Calculate discounted amounts
+      const discountedSchoolFee = calculateDiscountedFees(originalSchoolFee, schoolFeeDiscount)
+      const discountedTransportFee = calculateDiscountedFees(originalTransportFee, transportFeeDiscount)
+      const discountedHostelFee = calculateDiscountedFees(originalHostelFee, hostelFeeDiscount)
+      const discountedTotalFee = discountedSchoolFee + discountedTransportFee + discountedHostelFee
+
+      // Calculate term distribution
+      const terms = 3
+      const termDistribution = {}
+      
+      const baseSchoolFee = Math.floor(discountedSchoolFee / terms)
+      const baseTransportFee = Math.floor(discountedTransportFee / terms)
+      const baseHostelFee = Math.floor(discountedHostelFee / terms)
+      
+      const remainderSchool = discountedSchoolFee - (baseSchoolFee * terms)
+      const remainderTransport = discountedTransportFee - (baseTransportFee * terms)
+      const remainderHostel = discountedHostelFee - (baseHostelFee * terms)
+      
+      const now = new Date()
+      const termDueDates = {
+        term1DueDate: new Date(new Date(now).setMonth(now.getMonth() + 4)),
+        term2DueDate: new Date(new Date(now).setMonth(now.getMonth() + 8)),
+        term3DueDate: new Date(new Date(now).setMonth(now.getMonth() + 12))
+      }
+      
+      let term1Due = 0, term2Due = 0, term3Due = 0
+      
+      for (let i = 1; i <= terms; i++) {
+        const schoolFeeAmt = baseSchoolFee + (i <= remainderSchool ? 1 : 0)
+        const transportFeeAmt = baseTransportFee + (i <= remainderTransport ? 1 : 0)
+        const hostelFeeAmt = baseHostelFee + (i <= remainderHostel ? 1 : 0)
+        const termTotal = schoolFeeAmt + transportFeeAmt + hostelFeeAmt
+        
+        termDistribution[i] = {
+          schoolFee: schoolFeeAmt,
+          transportFee: transportFeeAmt,
+          hostelFee: hostelFeeAmt,
+          total: termTotal,
+          schoolFeePaid: 0,
+          transportFeePaid: 0,
+          hostelFeePaid: 0,
+          totalPaid: 0,
+          status: 'Unpaid'
+        }
+        
+        if (i === 1) term1Due = termTotal
+        if (i === 2) term2Due = termTotal
+        if (i === 3) term3Due = termTotal
+      }
+
+      // 5. Create NEW fee record for the PREVIOUS class
+      const newFeeRecord = await tx.feeDetails.create({
+        data: {
+          studentId,
+          
+          // Original amounts
+          originalSchoolFee,
+          originalTransportFee,
+          originalHostelFee,
+          originalTotalFee,
+          
+          // Discounted amounts
+          discountedSchoolFee,
+          discountedTransportFee,
+          discountedHostelFee,
+          discountedTotalFee,
+          
+          // Paid amounts (initial zero)
+          schoolFeePaid: 0,
+          transportFeePaid: 0,
+          hostelFeePaid: 0,
+          totalPaid: 0,
+          
+          // Term distribution
+          termDistribution,
+          
+          // Term amounts
+          term1Due,
+          term2Due,
+          term3Due,
+          
+          // Term due dates
+          term1DueDate: termDueDates.term1DueDate,
+          term2DueDate: termDueDates.term2DueDate,
+          term3DueDate: termDueDates.term3DueDate,
+          
+          // Term paid amounts (initial zero)
+          term1Paid: 0,
+          term2Paid: 0,
+          term3Paid: 0,
+          
+          // Discounts applied
+          schoolFeeDiscountApplied: schoolFeeDiscount,
+          transportFeeDiscountApplied: transportFeeDiscount,
+          hostelFeeDiscountApplied: hostelFeeDiscount,
+          
+          // Total due = discounted total fee (current year only)
+          totalDue: discountedTotalFee,
+          
+          // Previous year details - KEEP EXISTING ONES UNCHANGED
+          previousYearDetails: previousYearDetails,
+          previousYearFee: previousYearFee,
+          
+          terms,
+          isFullyPaid: false,
+          updatedBy
+        }
+      })
+
+      // 6. Update student with PREVIOUS class (ACTUAL DEMOTION)
+      const updatedStudent = await tx.student.update({
+        where: { id: studentId },
+        data: {
+          class: previousClass, // ← USE PREVIOUS CLASS, NOT SAME CLASS
+          section: newSection || student.section,
+          rollNo: newRollNo || student.rollNo,
+          updatedAt: new Date()
+        }
+      })
+
+      return {
+        updatedStudent,
+        newFeeRecord,
+        previousYearDetails,
+        previousYearFee
+      }
+    })
+
+    res.status(200).json({
+      success: true,
+      message: `Student demoted from ${mapEnumToDisplayName(student.class)} to ${mapEnumToDisplayName(previousClass)}`,
+      data: {
+        student: {
+          id: result.updatedStudent.id,
+          name: `${result.updatedStudent.firstName} ${result.updatedStudent.lastName}`.trim(),
+          admissionNo: result.updatedStudent.admissionNo,
+          previousClass: mapEnumToDisplayName(student.class),
+          previousSection: student.section,
+          newClass: mapEnumToDisplayName(result.updatedStudent.class),
+          newSection: result.updatedStudent.section,
+          newRollNo: result.updatedStudent.rollNo
+        },
+        academicYear,
+        feeSummary: {
+          previousYearDetails: result.previousYearDetails,
+          previousYearFee: result.previousYearFee,
+          newYearFee: result.newFeeRecord.discountedTotalFee,
+          totalDue: result.previousYearFee + result.newFeeRecord.discountedTotalFee
+        }
+      }
+    })
+
+  } catch (error) {
+    console.error('Demote student error:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to demote student'
+    })
+  }
+}
+
+/**
+ * @desc    Inactivate a student - Just clear current year fee, keep previous year history
+ * @route   POST /api/fees/:studentId/inactivate
+ */
+export const inactivateStudent = async (req, res) => {
+  try {
+    const { studentId } = req.params
+    const { 
+      updatedBy,
+      reason
+    } = req.body
+
+    if (!updatedBy) {
+      return res.status(400).json({
+        success: false,
+        message: 'Updated by is required'
+      })
+    }
+
+    // Get student with current details
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      include: {
+        feeDetails: {
+          orderBy: { createdAt: 'desc' },
+          take: 1
+        }
+      }
+    })
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      })
+    }
+
+    if (!student.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: 'Student is already inactive'
+      })
+    }
+
+    // Start transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Clear attendance records
+      await tx.attendance.deleteMany({
+        where: { studentId }
+      })
+
+      // 2. Clear marks records
+      await tx.marks.deleteMany({
+        where: { studentId }
+      })
+
+      // 3. Handle current fee record - DELETE IT BUT KEEP PREVIOUS YEAR DETAILS
+      const currentFee = student.feeDetails[0]
+      
+      let previousYearDetails = []
+      let previousYearFee = 0
+
+      if (currentFee) {
+        // Parse existing previous year details (KEEP THEM UNCHANGED)
+        try {
+          previousYearDetails = typeof currentFee.previousYearDetails === 'string'
+            ? JSON.parse(currentFee.previousYearDetails)
+            : currentFee.previousYearDetails || []
+          if (!Array.isArray(previousYearDetails)) {
+            previousYearDetails = []
+          }
+          previousYearFee = previousYearDetails.reduce((sum, record) => sum + (record.totalDue || 0), 0)
+        } catch (e) {
+          previousYearDetails = []
+          previousYearFee = 0
+        }
+
+        // Delete the old fee record
+        await tx.feeDetails.delete({
+          where: { id: currentFee.id }
+        })
+      }
+
+      // 4. Create new empty fee record with ONLY previous year details
+      const newFeeRecord = await tx.feeDetails.create({
+        data: {
+          studentId,
+          originalSchoolFee: 0,
+          originalTransportFee: 0,
+          originalHostelFee: 0,
+          originalTotalFee: 0,
+          discountedSchoolFee: 0,
+          discountedTransportFee: 0,
+          discountedHostelFee: 0,
+          discountedTotalFee: 0,
+          schoolFeePaid: 0,
+          transportFeePaid: 0,
+          hostelFeePaid: 0,
+          totalPaid: 0,
+          termDistribution: {},
+          term1Due: 0,
+          term2Due: 0,
+          term3Due: 0,
+          term1Paid: 0,
+          term2Paid: 0,
+          term3Paid: 0,
+          totalDue: 0,
+          isFullyPaid: true,
+          // Keep previous year details UNCHANGED
+          previousYearDetails: previousYearDetails,
+          previousYearFee: previousYearFee,
+          updatedBy
+        }
+      })
+
+      // 5. Update student to inactive
+      const updatedStudent = await tx.student.update({
+        where: { id: studentId },
+        data: {
+          isActive: false,
+          isUsingSchoolTransport: false,
+          isUsingSchoolHostel: false,
+          updatedAt: new Date()
+        }
+      })
+
+      return {
+        updatedStudent,
+        newFeeRecord,
+        previousYearDetails,
+        previousYearFee
+      }
+    })
+
+    res.status(200).json({
+      success: true,
+      message: `Student ${student.firstName} ${student.lastName} has been marked as inactive`,
+      data: {
+        student: {
+          id: result.updatedStudent.id,
+          name: `${result.updatedStudent.firstName} ${result.updatedStudent.lastName}`.trim(),
+          admissionNo: result.updatedStudent.admissionNo,
+          class: mapEnumToDisplayName(result.updatedStudent.class),
+          section: result.updatedStudent.section,
+          isActive: result.updatedStudent.isActive
+        },
+        reason: reason || null,
+        feeSummary: {
+          previousYearDetails: result.previousYearDetails,
+          previousYearFee: result.previousYearFee,
+          currentYearFee: 0,
+          totalDue: result.previousYearFee
+        }
+      }
+    })
+
+  } catch (error) {
+    console.error('Inactivate student error:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to inactivate student'
+    })
+  }
+}
+
+/**
+ * @desc    Get student progression history
+ * @route   GET /api/students/:studentId/progression-history
+ */
+export const getStudentProgressionHistory = async (req, res) => {
+  try {
+    const { studentId } = req.params
+
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        admissionNo: true,
+        class: true,
+        section: true,
+        isActive: true,
+        studiedClasses: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    })
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      })
+    }
+
+    // Parse studied classes
+    let progressionHistory = []
+    try {
+      progressionHistory = typeof student.studiedClasses === 'string'
+        ? JSON.parse(student.studiedClasses)
+        : student.studiedClasses || []
+    } catch (e) {
+      progressionHistory = []
+    }
+
+    // Ensure it's an array
+    if (!Array.isArray(progressionHistory)) {
+      progressionHistory = []
+    }
+
+    // Sort by date (newest first)
+    progressionHistory.sort((a, b) => {
+      return new Date(b.actionDate) - new Date(a.actionDate)
+    })
+
+    res.status(200).json({
+      success: true,
+      data: {
+        student: {
+          id: student.id,
+          name: `${student.firstName} ${student.lastName}`.trim(),
+          admissionNo: student.admissionNo,
+          currentClass: mapEnumToDisplayName(student.class),
+          currentSection: student.section,
+          isActive: student.isActive
+        },
+        progressionHistory,
+        totalProgressionEvents: progressionHistory.length
+      }
+    })
+
+  } catch (error) {
+    console.error('Get student progression history error:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to get student progression history'
+    })
+  }
+}

@@ -19,6 +19,8 @@ const componentMap = {
   
   // New Student Management component
   'studentManagement': () => import('@/pages/menu/studentManagement/StudentManagement'),
+  'inactiveSearch': () => import('@/pages/menu/inactiveSearch/InactiveSearch'),
+  'studentsByBatch': () => import('@/pages/menu/studentsByBatch/StudentsByBatch'),
   
   // Cashflow components
   'AddIncome': () => import('@/pages/cashflow/CashflowForm'),

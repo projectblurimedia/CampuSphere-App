@@ -519,7 +519,7 @@ export const getDayAttendanceSummary = asyncHandler(async (req, res) => {
 })
 
 /**
- * @desc    Get attendance for a specific student
+ * @desc    Get attendance for a specific student (session-based calculation)
  * @route   GET /api/attendance/student/:studentId
  * @access  Private
  */
@@ -550,7 +550,7 @@ export const getStudentAttendance = asyncHandler(async (req, res) => {
       })
     }
 
-    // Get attendance records with date range if provided
+    // Build where clause for attendance records
     const whereClause = {
       studentId,
     }
@@ -578,40 +578,51 @@ export const getStudentAttendance = asyncHandler(async (req, res) => {
       }
     })
 
-    // Calculate summary (all zeros if no records)
-    let presentDays = 0
-    let absentDays = 0
-    let halfDays = 0
-    let totalDays = attendanceRecords.length
+    // Calculate session-based statistics
+    let totalSessions = 0
+    let presentSessions = 0
+    let absentSessions = 0
+    let notMarkedSessions = 0
+
+    // Track date range
+    let firstRecordDate = null
+    let lastRecordDate = null
 
     attendanceRecords.forEach(record => {
-      const dayStatus = calculateDayStatus(record.morning, record.afternoon)
-      
-      if (dayStatus === 'PRESENT') presentDays++
-      else if (dayStatus === 'ABSENT') absentDays++
-      else if (dayStatus === 'HALF_DAY') halfDays++
+      // Track date range
+      if (!firstRecordDate || record.date < firstRecordDate) firstRecordDate = record.date
+      if (!lastRecordDate || record.date > lastRecordDate) lastRecordDate = record.date
+
+      // Count morning session
+      if (record.morning !== null) {
+        totalSessions++
+        if (record.morning === true) {
+          presentSessions++
+        } else {
+          absentSessions++
+        }
+      } else {
+        notMarkedSessions++
+      }
+
+      // Count afternoon session
+      if (record.afternoon !== null) {
+        totalSessions++
+        if (record.afternoon === true) {
+          presentSessions++
+        } else {
+          absentSessions++
+        }
+      } else {
+        notMarkedSessions++
+      }
     })
 
-    const effectivePresentDays = presentDays + (halfDays * 0.5)
-    const attendancePercentage = totalDays > 0 
-      ? (effectivePresentDays / totalDays) * 100 
+    // Calculate attendance percentage based ONLY on entered sessions
+    const attendancePercentage = totalSessions > 0 
+      ? (presentSessions / totalSessions) * 100 
       : 0
 
-    // Determine period dates based on actual attendance records
-    let periodStartDate = null
-    let periodEndDate = null
-
-    if (attendanceRecords.length > 0) {
-      // Sort by date to get first and last
-      const sortedRecords = [...attendanceRecords].sort((a, b) => 
-        new Date(a.date) - new Date(b.date)
-      )
-      
-      periodStartDate = sortedRecords[0].date
-      periodEndDate = sortedRecords[sortedRecords.length - 1].date
-    }
-
-    // Format response with proper null handling
     res.status(200).json({
       success: true,
       data: {
@@ -625,27 +636,17 @@ export const getStudentAttendance = asyncHandler(async (req, res) => {
           displayClass: mapEnumToDisplayName(student.class)
         },
         period: {
-          startDate: periodStartDate,
-          endDate: periodEndDate,
-          filtered: !!(startDate || endDate) // Indicates if filters were applied
+          startDate: firstRecordDate,
+          endDate: lastRecordDate,
+          filtered: !!(startDate || endDate)
         },
         summary: {
-          totalDays,
-          presentDays,
-          absentDays,
-          halfDays,
-          effectivePresentDays,
+          totalSessions,
+          presentSessions,
+          absentSessions,
+          notMarkedSessions,
           attendancePercentage: parseFloat(attendancePercentage.toFixed(2))
-        },
-        dailyAttendance: attendanceRecords.length > 0 
-          ? attendanceRecords.map(record => ({
-              date: record.date,
-              morning: record.morning,
-              afternoon: record.afternoon,
-              dayStatus: calculateDayStatus(record.morning, record.afternoon),
-              markedBy: record.markedBy
-            }))
-          : [] // Return empty array if no records
+        }
       }
     })
   } catch (error) {

@@ -46,8 +46,8 @@ export const getAllStats = async (req, res) => {
       totalStaff,
       studentGenderBreakdown,
       staffGenderBreakdown,
-      todayAttendance,
-      averageAttendance,
+      todayAttendanceRecords,
+      averageAttendanceData,
       academicStats,
       transportStats,
       classSections,
@@ -85,25 +85,29 @@ export const getAllStats = async (req, res) => {
         where: { isActive: true }
       }),
       
-      // Today's attendance
-      prisma.attendance.count({
+      // Today's attendance records (for session-based calculation)
+      prisma.attendance.findMany({
         where: {
-          date: today,
-          morning: true
+          date: today
+        },
+        select: {
+          morning: true,
+          afternoon: true
         }
       }),
       
-      // Average attendance (last 30 days)
-      prisma.$queryRaw`
-        SELECT AVG(daily_count) as avg_attendance
-        FROM (
-          SELECT date, COUNT(*) as daily_count
-          FROM "Attendance"
-          WHERE date >= NOW() - INTERVAL '30 days'
-          AND morning = true
-          GROUP BY date
-       ) as daily
-      `,
+      // Average attendance (last 30 days) - session-based
+      prisma.attendance.findMany({
+        where: {
+          date: {
+            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+          }
+        },
+        select: {
+          morning: true,
+          afternoon: true
+        }
+      }),
       
       // Academic stats
       prisma.marks.groupBy({
@@ -156,6 +160,51 @@ export const getAllStats = async (req, res) => {
       })()
     ])
 
+    // Calculate today's attendance based on sessions
+    let todayPresentSessions = 0
+    let todayTotalSessions = 0
+    
+    todayAttendanceRecords.forEach(record => {
+      // Count morning session
+      if (record.morning !== null) {
+        todayTotalSessions++
+        if (record.morning === true) todayPresentSessions++
+      }
+      
+      // Count afternoon session
+      if (record.afternoon !== null) {
+        todayTotalSessions++
+        if (record.afternoon === true) todayPresentSessions++
+      }
+    })
+    
+    const todayAttendance = todayPresentSessions
+    const todayAttendancePercentage = todayTotalSessions > 0 
+      ? ((todayPresentSessions / todayTotalSessions) * 100).toFixed(1)
+      : 0
+
+    // Calculate average attendance (last 30 days) based on sessions
+    let totalSessions30Days = 0
+    let presentSessions30Days = 0
+    
+    averageAttendanceData.forEach(record => {
+      // Count morning session
+      if (record.morning !== null) {
+        totalSessions30Days++
+        if (record.morning === true) presentSessions30Days++
+      }
+      
+      // Count afternoon session
+      if (record.afternoon !== null) {
+        totalSessions30Days++
+        if (record.afternoon === true) presentSessions30Days++
+      }
+    })
+    
+    const avgAttendance = totalSessions30Days > 0 
+      ? ((presentSessions30Days / totalSessions30Days) * 100).toFixed(1)
+      : 0
+
     // Process student gender breakdown
     const boysCount = studentGenderBreakdown.find(g => g.gender === 'MALE')?._count || 0
     const girlsCount = studentGenderBreakdown.find(g => g.gender === 'FEMALE')?._count || 0
@@ -178,11 +227,6 @@ export const getAllStats = async (req, res) => {
     // Process fee stats
     const totalDueAmount = feeStats.totalDue._sum?.totalDue || 0
     const totalCollectedAmount = feeStats.totalCollected._sum?.totalAmount || 0
-
-    // Calculate attendance
-    const avgAttendance = averageAttendance[0]?.avg_attendance 
-      ? Math.round(averageAttendance[0].avg_attendance) 
-      : 0
 
     const response = {
       success: true,
@@ -238,15 +282,22 @@ export const getAllStats = async (req, res) => {
           girlsPassPercentage: '-', // Would need more detailed query
         },
         
-        // Attendance Statistics
+        // Attendance Statistics (Session-based)
         attendance: {
           today: formatValue(todayAttendance),
+          todayTotalSessions: formatValue(todayTotalSessions),
           averageDaily: formatValue(avgAttendance),
-          todayPercentage: calculatePercentage(todayAttendance, activeStudents),
-          averagePercentage: avgAttendance ? 
-            calculatePercentage(avgAttendance, activeStudents) : '-',
-          boysAttendance: '-', // Would need detailed query
-          girlsAttendance: '-', // Would need detailed query
+          todayPercentage: todayAttendancePercentage,
+          averagePercentage: avgAttendance,
+          note: 'Based on session counts (morning + afternoon sessions)',
+          todaySessionBreakdown: {
+            presentSessions: todayPresentSessions,
+            totalSessions: todayTotalSessions
+          },
+          monthlySessionBreakdown: {
+            presentSessions: presentSessions30Days,
+            totalSessions: totalSessions30Days
+          }
         },
         
         // Transportation
@@ -530,69 +581,232 @@ export const getAcademicStats = async (req, res) => {
  */
 export const getAttendanceStats = async (req, res) => {
   try {
-    const { days = 30 } = req.query
+    const { days = 30, session = 'all' } = req.query // session can be 'morning', 'afternoon', or 'all'
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     
     const startDate = new Date()
     startDate.setDate(startDate.getDate() - parseInt(days))
+    startDate.setHours(0, 0, 0, 0)
 
-    // Get today's attendance
-    const todayAttendance = await prisma.attendance.count({
+    // Get total active students
+    const totalStudents = await prisma.student.count({ where: { isActive: true } })
+
+    // Get today's attendance based on session
+    let todayPresentCount = 0
+    let todayTotalSessions = 0
+    
+    if (session === 'all') {
+      // Get all attendance records for today
+      const todayRecords = await prisma.attendance.findMany({
+        where: { date: today },
+        select: { morning: true, afternoon: true }
+      })
+      
+      todayRecords.forEach(record => {
+        // Count morning session
+        if (record.morning !== null) {
+          todayTotalSessions++
+          if (record.morning === true) todayPresentCount++
+        }
+        // Count afternoon session
+        if (record.afternoon !== null) {
+          todayTotalSessions++
+          if (record.afternoon === true) todayPresentCount++
+        }
+      })
+    } else {
+      // Get specific session attendance
+      const todayAttendance = await prisma.attendance.count({
+        where: {
+          date: today,
+          [session]: true
+        }
+      })
+      todayPresentCount = todayAttendance
+      todayTotalSessions = totalStudents // Each student should have this session marked ideally
+    }
+
+    // Calculate today's percentage
+    const todayPercentage = todayTotalSessions > 0 
+      ? ((todayPresentCount / todayTotalSessions) * 100).toFixed(1)
+      : 0
+
+    // Get attendance trend with session-based calculation
+    const attendanceRecords = await prisma.attendance.findMany({
       where: {
-        date: today,
-        morning: true
+        date: {
+          gte: startDate,
+          lte: today
+        }
+      },
+      select: {
+        date: true,
+        morning: true,
+        afternoon: true
+      },
+      orderBy: {
+        date: 'asc'
       }
     })
 
-    // Get attendance trend
-    const attendanceTrend = await prisma.$queryRaw`
-      SELECT 
-        date,
-        COUNT(*) as present_count,
-        (SELECT COUNT(*) FROM "Student" WHERE "isActive" = true) as total_students
-      FROM "Attendance"
-      WHERE date >= ${startDate}
-        AND morning = true
-      GROUP BY date
-      ORDER BY date ASC
-    `
+    // Group records by date and calculate session-based attendance
+    const attendanceByDate = new Map()
+    
+    attendanceRecords.forEach(record => {
+      const dateKey = record.date.toISOString().split('T')[0]
+      
+      if (!attendanceByDate.has(dateKey)) {
+        attendanceByDate.set(dateKey, {
+          totalSessions: 0,
+          presentSessions: 0
+        })
+      }
+      
+      const dayStats = attendanceByDate.get(dateKey)
+      
+      // Process morning session based on filter
+      if (session === 'all' || session === 'morning') {
+        if (record.morning !== null) {
+          dayStats.totalSessions++
+          if (record.morning === true) dayStats.presentSessions++
+        }
+      }
+      
+      // Process afternoon session based on filter
+      if (session === 'all' || session === 'afternoon') {
+        if (record.afternoon !== null) {
+          dayStats.totalSessions++
+          if (record.afternoon === true) dayStats.presentSessions++
+        }
+      }
+    })
 
-    // Get class-wise attendance for today
-    const classWiseAttendance = await prisma.$queryRaw`
-      SELECT 
-        s.class,
-        COUNT(DISTINCT a."studentId") as present_count,
-        COUNT(DISTINCT s.id) as total_students
-      FROM "Student" s
-      LEFT JOIN "Attendance" a ON s.id = a."studentId" 
-        AND a.date = ${today}
-        AND a.morning = true
-      WHERE s."isActive" = true
-      GROUP BY s.class
-      ORDER BY s.class
-    `
+    // Build trend array
+    const trend = []
+    const currentDate = new Date(startDate)
+    
+    while (currentDate <= today) {
+      const dateKey = currentDate.toISOString().split('T')[0]
+      const dayStats = attendanceByDate.get(dateKey)
+      
+      if (dayStats && dayStats.totalSessions > 0) {
+        const percentage = (dayStats.presentSessions / dayStats.totalSessions) * 100
+        trend.push({
+          date: dateKey,
+          presentSessions: dayStats.presentSessions,
+          totalSessions: dayStats.totalSessions,
+          percentage: percentage.toFixed(1) + '%'
+        })
+      } else {
+        trend.push({
+          date: dateKey,
+          presentSessions: 0,
+          totalSessions: 0,
+          percentage: '0%'
+        })
+      }
+      
+      currentDate.setDate(currentDate.getDate() + 1)
+    }
 
-    const totalStudents = await prisma.student.count({ where: { isActive: true } })
+    // Get class-wise attendance based on session
+    let classWiseData = []
+    
+    if (session === 'all') {
+      // Get all students with their attendance for today
+      const studentsWithAttendance = await prisma.student.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          class: true,
+          attendance: {
+            where: { date: today },
+            select: { morning: true, afternoon: true }
+          }
+        },
+        orderBy: { class: 'asc' }
+      })
+      
+      // Group by class and calculate session-based attendance
+      const classMap = new Map()
+      
+      studentsWithAttendance.forEach(student => {
+        const className = student.class
+        if (!classMap.has(className)) {
+          classMap.set(className, {
+            totalSessions: 0,
+            presentSessions: 0,
+            totalStudents: 0
+          })
+        }
+        
+        const classStats = classMap.get(className)
+        classStats.totalStudents++
+        
+        // Process attendance for this student
+        if (student.attendance.length > 0) {
+          const record = student.attendance[0]
+          
+          // Morning session
+          if (record.morning !== null) {
+            classStats.totalSessions++
+            if (record.morning === true) classStats.presentSessions++
+          }
+          
+          // Afternoon session
+          if (record.afternoon !== null) {
+            classStats.totalSessions++
+            if (record.afternoon === true) classStats.presentSessions++
+          }
+        }
+      })
+      
+      // Convert map to array
+      classWiseData = Array.from(classMap.entries()).map(([className, stats]) => ({
+        class: className,
+        present: formatValue(stats.presentSessions),
+        total: formatValue(stats.totalSessions),
+        percentage: stats.totalSessions > 0 
+          ? ((stats.presentSessions / stats.totalSessions) * 100).toFixed(1)
+          : 0
+      }))
+      
+    } else {
+      // Get class-wise attendance for specific session
+      classWiseData = await prisma.$queryRaw`
+        SELECT 
+          s.class,
+          COUNT(CASE WHEN a.${raw(session)} = true THEN 1 END) as present_count,
+          COUNT(DISTINCT s.id) as total_students
+        FROM "Student" s
+        LEFT JOIN "Attendance" a ON s.id = a."studentId" 
+          AND a.date = ${today}
+        WHERE s."isActive" = true
+        GROUP BY s.class
+        ORDER BY s.class
+      `
+      
+      classWiseData = classWiseData.map(c => ({
+        class: c.class,
+        present: formatValue(Number(c.present_count)),
+        total: formatValue(Number(c.total_students)),
+        percentage: calculatePercentage(Number(c.present_count), Number(c.total_students))
+      }))
+    }
 
     const stats = {
       today: {
-        present: formatValue(todayAttendance),
-        total: formatValue(totalStudents),
-        percentage: calculatePercentage(todayAttendance, totalStudents)
+        present: formatValue(todayPresentCount),
+        total: formatValue(session === 'all' ? todayTotalSessions : totalStudents),
+        percentage: todayPercentage,
+        session: session,
+        note: session === 'all' 
+          ? 'Based on total sessions (morning + afternoon)'
+          : `Based on ${session} sessions`
       },
-      trend: attendanceTrend.map(day => ({
-        date: day.date.toISOString().split('T')[0],
-        present: day.present_count,
-        total: day.total_students,
-        percentage: ((day.present_count / day.total_students) * 100).toFixed(1) + '%'
-      })),
-      classWise: classWiseAttendance.map(c => ({
-        class: c.class,
-        present: formatValue(c.present_count),
-        total: formatValue(c.total_students),
-        percentage: calculatePercentage(c.present_count, c.total_students)
-      }))
+      trend: trend,
+      classWise: classWiseData
     }
 
     res.status(200).json({ success: true, data: stats })
@@ -940,7 +1154,7 @@ export const getDashboardStats = async (req, res) => {
       totalStaff,
       monthlyIncome,
       monthlyExpenses,
-      dailyAttendanceStats,
+      allAttendanceRecords,
       totalActiveStudents
     ] = await Promise.all([
       // Total active students
@@ -973,18 +1187,17 @@ export const getDashboardStats = async (req, res) => {
         _sum: { amount: true }
       }),
       
-      // Get all attendance records grouped by date
-      prisma.attendance.groupBy({
-        by: ['date'],
+      // Get ALL attendance records for current month (not grouped)
+      prisma.attendance.findMany({
         where: {
           date: {
-            // For current month (you can adjust this period as needed)
             gte: startOfMonth,
             lt: startOfNextMonth
           }
         },
-        _count: {
-          _all: true
+        select: {
+          morning: true,
+          afternoon: true
         }
       }),
       
@@ -1004,72 +1217,41 @@ export const getDashboardStats = async (req, res) => {
         ? `₹${(monthlyRevenueAmount / 1000).toFixed(1)}K`
         : `₹${monthlyRevenueAmount}`
 
-    // Calculate average attendance percentage across all days
-    let averageAttendance = 0
-    let totalDaysWithAttendance = 0
-    let totalAttendancePercentage = 0
+    // Calculate attendance based on sessions (not days)
+    let totalSessions = 0
+    let presentSessions = 0
+    
+    allAttendanceRecords.forEach(record => {
+      // Count morning session
+      if (record.morning !== null) {
+        totalSessions++
+        if (record.morning === true) presentSessions++
+      }
+      
+      // Count afternoon session
+      if (record.afternoon !== null) {
+        totalSessions++
+        if (record.afternoon === true) presentSessions++
+      }
+    })
 
-    if (dailyAttendanceStats.length > 0) {
-      // For each day, fetch the detailed attendance records to calculate daily percentage
-      const attendancePromises = dailyAttendanceStats.map(async (day) => {
-        const attendanceRecords = await prisma.attendance.findMany({
-          where: {
-            date: day.date
-          },
-          select: {
-            morning: true,
-            afternoon: true
-          }
-        })
+    // Calculate average attendance percentage based on sessions
+    const averageAttendance = totalSessions > 0 
+      ? ((presentSessions / totalSessions) * 100).toFixed(1)
+      : 0
 
-        let presentSessions = 0
-        let totalMarkedSessions = 0
-
-        attendanceRecords.forEach(record => {
-          // Count morning session if marked
-          if (record.morning !== null) {
-            totalMarkedSessions++
-            if (record.morning === true) presentSessions++
-          }
-          
-          // Count afternoon session if marked
-          if (record.afternoon !== null) {
-            totalMarkedSessions++
-            if (record.afternoon === true) presentSessions++
-          }
-        })
-
-        // Calculate daily percentage
-        const dailyPercentage = totalMarkedSessions > 0 
-          ? (presentSessions / totalMarkedSessions) * 100 
-          : 0
-
-        return {
-          date: day.date,
-          percentage: dailyPercentage,
-          presentSessions,
-          totalMarkedSessions
+    // Get unique days count for subtitle
+    const uniqueDaysCount = await prisma.attendance.groupBy({
+      by: ['date'],
+      where: {
+        date: {
+          gte: startOfMonth,
+          lt: startOfNextMonth
         }
-      })
+      }
+    })
 
-      const dailyResults = await Promise.all(attendancePromises)
-      
-      // Sum up all daily percentages
-      totalAttendancePercentage = dailyResults.reduce((sum, day) => sum + day.percentage, 0)
-      totalDaysWithAttendance = dailyResults.length
-      
-      // Calculate average
-      averageAttendance = totalDaysWithAttendance > 0 
-        ? (totalAttendancePercentage / totalDaysWithAttendance).toFixed(1)
-        : 0
-
-      // Log for debugging (remove in production)
-      console.log('Daily attendance breakdown:', dailyResults.map(d => ({
-        date: d.date.toISOString().split('T')[0],
-        percentage: d.percentage.toFixed(1) + '%',
-        sessions: `${d.presentSessions}/${d.totalMarkedSessions}`
-      })))
-    }
+    const totalDaysWithAttendance = uniqueDaysCount.length
 
     const dashboardStats = [
       {
@@ -1104,7 +1286,7 @@ export const getDashboardStats = async (req, res) => {
         title: 'Attendance',
         value: `${averageAttendance}%`,
         subtitle: totalDaysWithAttendance > 0
-          ? `Average across ${totalDaysWithAttendance} days this month`
+          ? `${presentSessions}/${totalSessions} sessions present across ${totalDaysWithAttendance} days`
           : 'No attendance data this month',
         icon: 'clipboard-check',
         iconFamily: 'FontAwesome6',

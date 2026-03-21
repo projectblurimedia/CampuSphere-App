@@ -79,11 +79,19 @@ export default function SchoolStats({ visible, onClose }) {
     },
     attendance: {
       today: '-',
+      todayTotalSessions: '-',
       averageDaily: '-',
       todayPercentage: '-',
       averagePercentage: '-',
-      boysAttendance: '-',
-      girlsAttendance: '-',
+      note: '',
+      todaySessionBreakdown: {
+        presentSessions: 0,
+        totalSessions: 0
+      },
+      monthlySessionBreakdown: {
+        presentSessions: 0,
+        totalSessions: 0
+      }
     },
     transport: {
       totalBuses: '-',
@@ -138,16 +146,6 @@ export default function SchoolStats({ visible, onClose }) {
     subtitle: {
       fontSize: 12,
       color: 'rgba(255,255,255,0.9)',
-    },
-    refreshButton: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: 'rgba(255, 255, 255, 0.18)',
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.4)',
     },
     sectionContainer: {
       borderRadius: 16,
@@ -342,6 +340,12 @@ export default function SchoolStats({ visible, onClose }) {
       alignItems: 'center',
       justifyContent: 'center',
     },
+    sessionNote: {
+      fontSize: 10,
+      textAlign: 'center',
+      marginTop: 4,
+      fontStyle: 'italic',
+    },
   }), [colors])
 
   // Fetch statistics on mount and when modal becomes visible
@@ -516,7 +520,7 @@ export default function SchoolStats({ visible, onClose }) {
   const attendanceStatItems = [
     {
       id: 'totalAttendance',
-      title: 'Today\'s',
+      title: "Today's",
       value: statsData.attendance.todayPercentage,
       icon: 'calendar-check',
       color: '#8b5cf6',
@@ -722,7 +726,7 @@ export default function SchoolStats({ visible, onClose }) {
           </View>
           <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 8 }}>
             <ThemedText style={{ fontSize: 11, color: colors.textSecondary }}>
-              Boys: {statsData.studentGender.boysPercentage} | Girls: {statsData.studentGender.girlsPercentage}
+              Boys: {statsData.studentGender.boysPercentage}% | Girls: {statsData.studentGender.girlsPercentage}%
             </ThemedText>
           </View>
         </View>
@@ -765,7 +769,7 @@ export default function SchoolStats({ visible, onClose }) {
           </View>
         </View>
 
-        {/* 6. ATTENDANCE STATISTICS */}
+        {/* 6. ATTENDANCE STATISTICS - Updated with session-based info */}
         <View style={[styles.sectionContainer, { backgroundColor: colors.cardBackground }]}>
           <ThemedText type='subtitle' style={[styles.sectionTitle, { color: colors.text }]}>
             Attendance Statistics
@@ -776,9 +780,16 @@ export default function SchoolStats({ visible, onClose }) {
           </View>
           <View style={{ alignItems: 'center', marginTop: 8 }}>
             <ThemedText style={{ fontSize: 11, color: colors.textSecondary }}>
-              Today: {statsData.attendance.today} present
+              Today: {statsData.attendance.today} present sessions out of {statsData.attendance.todayTotalSessions} total
             </ThemedText>
           </View>
+          {statsData.attendance.note && (
+            <View style={{ alignItems: 'center', marginTop: 4 }}>
+              <ThemedText style={styles.sessionNote}>
+                {statsData.attendance.note}
+              </ThemedText>
+            </View>
+          )}
         </View>
 
         {/* 7. FEE STATISTICS - 2x2 Grid */}
@@ -825,7 +836,7 @@ export default function SchoolStats({ visible, onClose }) {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
      
-        {/* Header with centered title like School Profile */}
+        {/* Header with only back button - removed refresh button */}
         <LinearGradient
           colors={[colors?.gradientStart || '#3b82f6', colors?.gradientEnd || '#1d4ed8']}
           style={styles.header}
@@ -854,17 +865,8 @@ export default function SchoolStats({ visible, onClose }) {
                 </ThemedText>
               </View>
 
-              <TouchableOpacity
-                style={[styles.refreshButton, (loading || refreshing) && { opacity: 0.5 }]}
-                onPress={onRefresh}
-                disabled={loading || refreshing}
-              >
-                <FontAwesome
-                  name="refresh"
-                  size={20}
-                  color="#FFFFFF"
-                />
-              </TouchableOpacity>
+              {/* Empty view for spacing */}
+              <View style={{ width: 44 }} />
             </View>
           </SafeAreaView>
         </LinearGradient>

@@ -611,7 +611,7 @@ export default function StudentManagement({ visible, onClose }) {
     switch(activeTab) {
       case 'promote': return '/students/promote'
       case 'demote': return '/students/demote'
-      case 'inactive': return '/students/inactivate'
+      case 'inactive': return '/students/inactive'
       default: return null
     }
   }, [activeTab])

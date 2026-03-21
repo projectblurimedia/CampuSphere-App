@@ -100,10 +100,26 @@ export default function DashboardMenu({ visible, onClose }) {
       gradient: ['#06b6d4', '#0891b2'], 
       componentName: 'studentManagement'
     },
+    { 
+      id: 4, 
+      title: 'Inactive Search', 
+      icon: 'users', 
+      iconType: 'FontAwesome5', 
+      gradient: ['#f97316', '#ea580c'], 
+      componentName: 'inactiveSearch'
+    },
+    { 
+      id: 5, 
+      title: 'Students By Batch', 
+      icon: 'users', 
+      iconType: 'FontAwesome5', 
+      gradient: ['#ec4899', '#d946ef'], 
+      componentName: 'studentsByBatch'
+    },
     
     // Students Group
     { 
-      id: 4, 
+      id: 6, 
       title: 'New Student', 
       icon: 'user-graduate', 
       iconType: 'FontAwesome5', 
@@ -111,7 +127,7 @@ export default function DashboardMenu({ visible, onClose }) {
       componentName: 'createStudent'
     },
     { 
-      id: 5,
+      id: 7,
       title: 'Bulk Import Students', 
       icon: 'file-import', 
       iconType: 'FontAwesome5', 
@@ -121,7 +137,7 @@ export default function DashboardMenu({ visible, onClose }) {
     
     // Employees Group
     { 
-      id: 6, 
+      id: 8, 
       title: 'New Employee', 
       icon: 'user-tie', 
       iconType: 'FontAwesome5', 
@@ -129,7 +145,7 @@ export default function DashboardMenu({ visible, onClose }) {
       componentName: 'createEmployee'
     },
     { 
-      id: 7,
+      id: 9,
       title: 'Bulk Import Employees', 
       icon: 'users', 
       iconType: 'FontAwesome5', 
@@ -139,7 +155,7 @@ export default function DashboardMenu({ visible, onClose }) {
     
     // Student Progress
     { 
-      id: 8, 
+      id: 10, 
       title: 'End Of Academic Year', 
       icon: 'graduation-cap', 
       iconType: 'FontAwesome5', 
@@ -149,7 +165,7 @@ export default function DashboardMenu({ visible, onClose }) {
     
     // Uploads
     { 
-      id: 9, 
+      id: 11, 
       title: 'Upload Marks',
       icon: 'upload', 
       iconType: 'Feather', 
@@ -157,7 +173,7 @@ export default function DashboardMenu({ visible, onClose }) {
       componentName: 'uploadMarks'
     },
     { 
-      id: 10, 
+      id: 12, 
       title: 'Mark Attendance', 
       icon: 'clipboard-check', 
       iconType: 'MaterialCommunityIcons', 
@@ -167,7 +183,7 @@ export default function DashboardMenu({ visible, onClose }) {
     
     // Fees
     { 
-      id: 11, 
+      id: 13, 
       title: 'Fee Management', 
       icon: 'cogs', 
       iconType: 'FontAwesome5', 
@@ -175,7 +191,7 @@ export default function DashboardMenu({ visible, onClose }) {
       componentName: 'feeManagement'
     },
     { 
-      id: 12, 
+      id: 14, 
       title: 'Fee Details', 
       icon: 'file-invoice-dollar', 
       iconType: 'FontAwesome5', 
@@ -185,7 +201,7 @@ export default function DashboardMenu({ visible, onClose }) {
     
     // Schedules
     { 
-      id: 13, 
+      id: 15, 
       title: 'Events',
       icon: 'calendar-star',
       iconType: 'MaterialCommunityIcons', 
@@ -193,7 +209,7 @@ export default function DashboardMenu({ visible, onClose }) {
       componentName: 'events'
     },
     { 
-      id: 14, 
+      id: 16, 
       title: 'Timetable',
       icon: 'calendar-clock',
       iconType: 'MaterialCommunityIcons', 
@@ -209,31 +225,31 @@ export default function DashboardMenu({ visible, onClose }) {
     },
     {
       title: 'Student Management',
-      data: menuItems.filter(item => [3].includes(item.id)),
+      data: menuItems.filter(item => [3, 4, 5].includes(item.id)),
     },
     {
       title: 'Students',
-      data: menuItems.filter(item => [4,5].includes(item.id)),
+      data: menuItems.filter(item => [6, 7].includes(item.id)),
     },
     {
       title: 'Employees',
-      data: menuItems.filter(item => [6,7].includes(item.id)),
+      data: menuItems.filter(item => [8, 9].includes(item.id)),
     },
     {
       title: 'Student Progress',
-      data: menuItems.filter(item => [8].includes(item.id)),
+      data: menuItems.filter(item => [10].includes(item.id)),
     },
     {
       title: 'Uploads',
-      data: menuItems.filter(item => [9,10].includes(item.id)),
+      data: menuItems.filter(item => [11, 12].includes(item.id)),
     },
     {
       title: 'Fees',
-      data: menuItems.filter(item => [11,12].includes(item.id)),
+      data: menuItems.filter(item => [13, 14].includes(item.id)),
     },
     {
       title: 'Schedules',
-      data: menuItems.filter(item => [13,14].includes(item.id)),
+      data: menuItems.filter(item => [15, 16].includes(item.id)),
     },
   ]
 

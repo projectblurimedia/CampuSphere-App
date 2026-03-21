@@ -41,6 +41,7 @@ export default function StudentAttendance({ visible, onClose, student }) {
     try {
       setLoading(true)
       const response = await axiosApi.get(`/attendances/student/${student.id}`)
+      console.log(response.data)
       
       if (response.data.success) {
         setAttendanceData(response.data.data)
@@ -90,15 +91,8 @@ export default function StudentAttendance({ visible, onClose, student }) {
     return 'Needs Improvement'
   }
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString)
-    const day = date.getDate().toString().padStart(2, '0')
-    const month = (date.getMonth() + 1).toString().padStart(2, '0')
-    const year = date.getFullYear()
-    return `${day}/${month}/${year}`
-  }
-
   const formatDateLong = (dateString) => {
+    if (!dateString) return ''
     const date = new Date(dateString)
     const options = { day: 'numeric', month: 'short', year: 'numeric' }
     return date.toLocaleDateString('en-IN', options)
@@ -145,36 +139,53 @@ export default function StudentAttendance({ visible, onClose, student }) {
     if (!attendanceData) return null
 
     const { summary, student: studentInfo } = attendanceData
-    const statusColor = getStatusColor(summary.attendancePercentage)
-    const statusText = getStatusText(summary.attendancePercentage)
+    
+    const totalSessions = summary.totalSessions || 0
+    const presentSessions = summary.presentSessions || 0
+    const absentSessions = summary.absentSessions || 0
+    const notMarkedSessions = summary.notMarkedSessions || 0
+    const attendancePercentage = summary.attendancePercentage || 0
+    
+    const statusColor = getStatusColor(attendancePercentage)
+    const statusText = getStatusText(attendancePercentage)
 
     return (
       <View style={styles.contentContainer}>
-        {/* Stats Cards - 2x2 Grid with left icon and column layout */}
+        {/* Sessions Section */}
+        <View style={styles.sectionHeader}>
+          <View style={styles.sectionIconContainer}>
+            <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+          </View>
+          <ThemedText style={[styles.sectionTitle, { color: colors.text }]}>
+            Sessions:
+          </ThemedText>
+        </View>
+
+        {/* Stats Cards - 2x2 Grid */}
         <View style={styles.statsGrid}>
-          {/* Total Days */}
+          {/* Total Sessions */}
           <View style={[styles.statCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
             <View style={[styles.statIconContainer, { backgroundColor: '#2196F315' }]}>
               <Ionicons name="calendar" size={26} color="#2196F3" />
             </View>
             <View style={styles.statContent}>
               <ThemedText style={[styles.statValue, { color: colors.text }]}>
-                {summary.totalDays}
+                {totalSessions}
               </ThemedText>
               <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
-                Total Days
+                Total
               </ThemedText>
             </View>
           </View>
 
-          {/* Present Days */}
+          {/* Present Sessions */}
           <View style={[styles.statCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
             <View style={[styles.statIconContainer, { backgroundColor: '#4CAF5015' }]}>
               <Ionicons name="checkmark-circle" size={26} color="#4CAF50" />
             </View>
             <View style={styles.statContent}>
               <ThemedText style={[styles.statValue, { color: colors.text }]}>
-                {summary.presentDays}
+                {presentSessions}
               </ThemedText>
               <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
                 Present
@@ -182,14 +193,14 @@ export default function StudentAttendance({ visible, onClose, student }) {
             </View>
           </View>
 
-          {/* Absent Days */}
+          {/* Absent Sessions */}
           <View style={[styles.statCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
             <View style={[styles.statIconContainer, { backgroundColor: '#F4433615' }]}>
               <Ionicons name="close-circle" size={26} color="#F44336" />
             </View>
             <View style={styles.statContent}>
               <ThemedText style={[styles.statValue, { color: colors.text }]}>
-                {summary.absentDays}
+                {absentSessions}
               </ThemedText>
               <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
                 Absent
@@ -197,17 +208,17 @@ export default function StudentAttendance({ visible, onClose, student }) {
             </View>
           </View>
 
-          {/* Half Days */}
+          {/* Not Marked Sessions */}
           <View style={[styles.statCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
             <View style={[styles.statIconContainer, { backgroundColor: '#FF980015' }]}>
-              <Ionicons name="time" size={26} color="#FF9800" />
+              <Ionicons name="help-circle" size={26} color="#FF9800" />
             </View>
             <View style={styles.statContent}>
               <ThemedText style={[styles.statValue, { color: colors.text }]}>
-                {summary.halfDays || 0}
+                {notMarkedSessions}
               </ThemedText>
               <ThemedText style={[styles.statLabel, { color: colors.textSecondary }]}>
-                Half Days
+                Not Marked
               </ThemedText>
             </View>
           </View>
@@ -228,7 +239,7 @@ export default function StudentAttendance({ visible, onClose, student }) {
               </ThemedText>
               <View style={styles.percentageRow}>
                 <ThemedText type='title' style={[styles.percentageValue, { color: statusColor }]}>
-                  {summary.attendancePercentage}%
+                  {attendancePercentage}%
                 </ThemedText>
                 <LinearGradient
                   colors={[statusColor, statusColor]}
@@ -250,20 +261,18 @@ export default function StudentAttendance({ visible, onClose, student }) {
               end={{ x: 1, y: 0 }}
               style={[
                 styles.progressBar, 
-                { width: `${Math.min(summary.attendancePercentage, 100)}%` }
+                { width: `${Math.min(attendancePercentage, 100)}%` }
               ]} 
             />
           </View>
 
-          {/* Effective Days Info */}
-          {summary.halfDays > 0 && (
-            <View style={styles.effectiveInfo}>
-              <Ionicons name="information-circle" size={16} color={colors.textSecondary} />
-              <ThemedText style={[styles.effectiveText, { color: colors.textSecondary }]}>
-                Half days count as 0.5 day each
-              </ThemedText>
-            </View>
-          )}
+          {/* Session Info */}
+          <View style={styles.effectiveInfo}>
+            <Ionicons name="information-circle" size={16} color={colors.textSecondary} />
+            <ThemedText style={[styles.effectiveText, { color: colors.textSecondary }]}>
+              {presentSessions} present out of {totalSessions} total sessions
+            </ThemedText>
+          </View>
         </LinearGradient>
 
         {/* Period Info */}
@@ -449,10 +458,31 @@ const styles = StyleSheet.create({
   contentContainer: {
     gap: 16,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 4,
+    paddingHorizontal: 4,
+  },
+  sectionIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(33, 150, 243, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    fontFamily: 'Poppins-SemiBold',
+  },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
+    marginBottom: 4,
   },
   statCard: {
     flex: 1,

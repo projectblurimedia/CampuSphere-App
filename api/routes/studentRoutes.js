@@ -21,16 +21,20 @@ import {
   endOfAcademicYear,
   promoteStudent,
   demoteStudent,
-  inactivateStudent,
+  inactiveStudent,
   getStudentProgressionHistory,
+  searchInactiveStudents,
+  getGraduatedBatchStudents,
 } from '../controllers/studentController.js'
 
 const router = express.Router()
 
 router.post('/promote/:studentId', promoteStudent)
 router.post('/demote/:studentId', demoteStudent)
-router.post('/inactivate/:studentId', inactivateStudent)
+router.post('/inactive/:studentId', inactiveStudent)
 router.get('/progression-history/:studentId', getStudentProgressionHistory)
+
+router.get('/graduated/batch/:academicYear', getGraduatedBatchStudents)
 
 router.use('/bulk-import', bulkImportStudents)
 router.get('/birthdays', getTodayBirthdays)
@@ -38,6 +42,7 @@ router.get('/attendance-stats', getAttendanceStatsByClassSection)
 router.get('/marks-stats', getMarksStatsByClassSection)
 router.get('/classes-sections', getClassesAndSections)
 router.get('/search', searchStudents)
+router.get('/search-inactive', searchInactiveStudents)
 router.get('/quick-search', quickSearchStudents)
 router.get('/statistics', getStudentStatistics)
 router.get('/classes-summary', getClassesSummary)

@@ -273,7 +273,8 @@ export const getTimetableForClassSection = asyncHandler(async (req, res) => {
 export const bulkImportTimetable = [
   upload.single('excelFile'),
   asyncHandler(async (req, res) => {
-    console.log('=== TIMETABLE BULK IMPORT STARTED ===')
+    console.log('=== TIMETABLE BULK IMPORT STARTED (ULTRA FAST) ===')
+    const startTime = Date.now()
     
     try {
       if (!req.file) {
@@ -284,6 +285,7 @@ export const bulkImportTimetable = [
       }
       
       console.log('File received:', req.file.originalname)
+      console.log('File size:', req.file.size, 'bytes')
       
       if (!fs.existsSync(req.file.path)) {
         cleanupTempFiles(req.file)
@@ -293,30 +295,32 @@ export const bulkImportTimetable = [
         })
       }
       
-      let workbook, data
+      // STEP 1: Parse Excel file
+      let workbook, rows
       try {
         workbook = xlsx.readFile(req.file.path)
         const sheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[sheetName]
         
-        data = xlsx.utils.sheet_to_json(worksheet, {
+        rows = xlsx.utils.sheet_to_json(worksheet, {
           raw: false,
           defval: '',
           blankrows: false
         })
         
-        console.log('Rows found in Excel:', data.length)
+        console.log('Rows found in Excel:', rows.length)
         
       } catch (excelError) {
         console.error('Excel read error:', excelError)
         cleanupTempFiles(req.file)
         return res.status(400).json({
           success: false,
-          message: 'Invalid Excel file format. Please use the provided template.'
+          message: 'Invalid Excel file format. Please use the provided template.',
+          error: process.env.NODE_ENV === 'development' ? excelError.message : undefined
         })
       }
       
-      if (data.length === 0) {
+      if (rows.length === 0) {
         cleanupTempFiles(req.file)
         return res.status(400).json({
           success: false,
@@ -324,12 +328,33 @@ export const bulkImportTimetable = [
         })
       }
       
-      const errors = []
-      const validTimetables = new Map() // Key: classEnum_section_day
-      const processedCount = 0
+      // STEP 2: Pre-fetch all existing timetables
+      const existingTimetables = await prisma.timetable.findMany({
+        select: {
+          class: true,
+          section: true,
+          day: true,
+          id: true,
+          slots: true
+        }
+      })
       
-      // First pass: Validate all rows and collect unique class-section-day combinations
-      for (const [index, row] of data.entries()) {
+      // Create lookup maps for existing timetables
+      const existingTimetableMap = new Map()
+      existingTimetables.forEach(t => {
+        const key = `${t.class}_${t.section}_${t.day}`
+        existingTimetableMap.set(key, {
+          id: t.id,
+          slots: typeof t.slots === 'string' ? JSON.parse(t.slots) : t.slots
+        })
+      })
+      
+      // STEP 3: Validate and prepare data in memory
+      const validDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+      const timetablesMap = new Map() // Key: class_section_day -> { class, section, day, slots: [] }
+      const errors = []
+      
+      for (const [index, row] of rows.entries()) {
         const rowNumber = index + 2
         
         try {
@@ -339,16 +364,9 @@ export const bulkImportTimetable = [
           }
           
           // Validate required fields based on type
-          const requiredFields = ['class', 'section', 'day', 'type', 'timings']
           const typeInput = row.type?.toString().toLowerCase().trim()
           
-          if (typeInput === 'period') {
-            requiredFields.push('sno', 'subject')
-          } else if (typeInput === 'break') {
-            // Break doesn't require sno or subject
-            requiredFields.push('breakType')
-          } else {
-            // Invalid type
+          if (!typeInput || (typeInput !== 'period' && typeInput !== 'break')) {
             errors.push({
               row: rowNumber,
               class: row.class || 'N/A',
@@ -360,51 +378,75 @@ export const bulkImportTimetable = [
             continue
           }
           
-          const missingFields = requiredFields.filter(field => {
-            const value = row[field]
-            return !value || value.toString().trim() === ''
-          })
-          
-          if (missingFields.length > 0) {
+          // Validate class
+          const className = row.class?.toString().trim()
+          if (!className) {
             errors.push({
               row: rowNumber,
-              class: row.class || 'N/A',
+              class: 'N/A',
               section: row.section || 'N/A',
               day: row.day || 'N/A',
-              error: `Missing required fields: ${missingFields.join(', ')}`,
-              type: 'missing_fields'
+              error: 'Missing required field: class',
+              type: 'missing_field'
             })
             continue
           }
           
-          // Validate sno only for periods
-          if (typeInput === 'period') {
-            const sno = parseInt(row.sno)
-            if (isNaN(sno) || sno <= 0) {
-              errors.push({
-                row: rowNumber,
-                class: row.class,
-                section: row.section,
-                day: row.day,
-                error: `Invalid sno: ${row.sno}. Must be a positive number.`,
-                type: 'invalid_sno'
-              })
-              continue
-            }
+          const classEnum = mapClassToEnum(className)
+          if (!classEnum) {
+            errors.push({
+              row: rowNumber,
+              class: className,
+              section: row.section || 'N/A',
+              day: row.day || 'N/A',
+              error: `Invalid class: ${className}. Must be one of: Pre-Nursery, Nursery, LKG, UKG, 1-10`,
+              type: 'invalid_class'
+            })
+            continue
           }
           
-          // Trim and validate inputs
-          const className = row.class.toString().trim()
-          const sectionInput = row.section.toString().toUpperCase().trim()
-          const dayInput = row.day.toString().trim()
-          const dayCapitalized = dayInput.charAt(0).toUpperCase() + dayInput.slice(1).toLowerCase()
-          const subject = row.subject ? row.subject.toString().trim() : ''
-          const timings = row.timings.toString().trim()
-          const teacherName = row.teacherName ? row.teacherName.toString().trim() : null
-          const breakType = row.breakType ? row.breakType.toString().trim() : null
+          // Validate section
+          const sectionInput = row.section?.toString().toUpperCase().trim()
+          if (!sectionInput) {
+            errors.push({
+              row: rowNumber,
+              class: className,
+              section: 'N/A',
+              day: row.day || 'N/A',
+              error: 'Missing required field: section',
+              type: 'missing_field'
+            })
+            continue
+          }
+          
+          const sectionEnum = validateSection(sectionInput)
+          if (!sectionEnum) {
+            errors.push({
+              row: rowNumber,
+              class: className,
+              section: sectionInput,
+              day: row.day || 'N/A',
+              error: `Invalid section: ${sectionInput}. Must be one of: A, B, C, D, E`,
+              type: 'invalid_section'
+            })
+            continue
+          }
           
           // Validate day
-          const validDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+          const dayInput = row.day?.toString().trim()
+          if (!dayInput) {
+            errors.push({
+              row: rowNumber,
+              class: className,
+              section: sectionInput,
+              day: 'N/A',
+              error: 'Missing required field: day',
+              type: 'missing_field'
+            })
+            continue
+          }
+          
+          const dayCapitalized = dayInput.charAt(0).toUpperCase() + dayInput.slice(1).toLowerCase()
           if (!validDays.includes(dayCapitalized)) {
             errors.push({
               row: rowNumber,
@@ -418,76 +460,137 @@ export const bulkImportTimetable = [
           }
           
           // Validate timings
+          const timings = row.timings?.toString().trim()
+          if (!timings) {
+            errors.push({
+              row: rowNumber,
+              class: className,
+              section: sectionInput,
+              day: dayCapitalized,
+              error: 'Missing required field: timings',
+              type: 'missing_field'
+            })
+            continue
+          }
+          
           if (!validateTimings(timings)) {
             errors.push({
               row: rowNumber,
               class: className,
               section: sectionInput,
-              day: dayInput,
+              day: dayCapitalized,
               error: `Invalid timings format: ${timings}. Example: 9:00 AM - 10:00 AM`,
               type: 'invalid_timings'
             })
             continue
           }
           
-          // Map class and section to enums using the utility functions
-          const classEnum = mapClassToEnum(className)
-          const sectionEnum = validateSection(sectionInput)
+          // Validate period-specific fields
+          let sno = null
+          let subject = ''
+          let teacherName = null
+          let breakType = null
           
-          if (!classEnum) {
-            errors.push({
-              row: rowNumber,
-              class: className,
-              section: sectionInput,
-              day: dayInput,
-              error: `Invalid class: ${className}. Must be one of: Pre-Nursery, Nursery, LKG, UKG, 1-10`,
-              type: 'invalid_class'
-            })
-            continue
+          if (typeInput === 'period') {
+            // Validate sno
+            const snoValue = row.sno
+            if (!snoValue) {
+              errors.push({
+                row: rowNumber,
+                class: className,
+                section: sectionInput,
+                day: dayCapitalized,
+                error: 'Missing required field: sno for period',
+                type: 'missing_field'
+              })
+              continue
+            }
+            
+            sno = parseInt(snoValue)
+            if (isNaN(sno) || sno <= 0) {
+              errors.push({
+                row: rowNumber,
+                class: className,
+                section: sectionInput,
+                day: dayCapitalized,
+                error: `Invalid sno: ${snoValue}. Must be a positive number.`,
+                type: 'invalid_sno'
+              })
+              continue
+            }
+            
+            // Validate subject
+            subject = row.subject?.toString().trim()
+            if (!subject) {
+              errors.push({
+                row: rowNumber,
+                class: className,
+                section: sectionInput,
+                day: dayCapitalized,
+                error: 'Missing required field: subject for period',
+                type: 'missing_field'
+              })
+              continue
+            }
+            
+            teacherName = row.teacherName ? row.teacherName.toString().trim() : null
+          } else if (typeInput === 'break') {
+            // Validate break type
+            breakType = row.breakType?.toString().trim()
+            if (!breakType) {
+              errors.push({
+                row: rowNumber,
+                class: className,
+                section: sectionInput,
+                day: dayCapitalized,
+                error: 'Missing required field: breakType for break',
+                type: 'missing_field'
+              })
+              continue
+            }
+            
+            const validBreakTypes = ['LUNCH', 'SHORT_BREAK', 'ASSEMBLY']
+            if (!validBreakTypes.includes(breakType)) {
+              errors.push({
+                row: rowNumber,
+                class: className,
+                section: sectionInput,
+                day: dayCapitalized,
+                error: `Invalid breakType: ${breakType}. Must be one of: ${validBreakTypes.join(', ')}`,
+                type: 'invalid_break_type'
+              })
+              continue
+            }
+            
+            subject = row.subject ? row.subject.toString().trim() : 'Break'
           }
           
-          if (!sectionEnum) {
-            errors.push({
-              row: rowNumber,
-              class: className,
-              section: sectionInput,
-              day: dayInput,
-              error: `Invalid section: ${sectionInput}. Must be one of: A, B, C, D, E`,
-              type: 'invalid_section'
-            })
-            continue
-          }
-          
-          // Debug log to see what's being mapped
-          console.log(`Row ${rowNumber}: ${className} -> ${classEnum}, ${sectionInput} -> ${sectionEnum}, Day: ${dayCapitalized}`)
-          
-          // Create unique key using the enum values
+          // Create unique key for this timetable
           const timetableKey = `${classEnum}_${sectionEnum}_${dayCapitalized}`
           
-          // Initialize timetable entry if not exists
-          if (!validTimetables.has(timetableKey)) {
-            validTimetables.set(timetableKey, {
-              class: classEnum, // This is the actual enum value like 'CLASS_1' or 'NURSERY'
-              section: sectionEnum, // This is the section letter like 'A'
-              day: dayCapitalized, // This is the day like 'Monday'
+          // Get or create timetable entry
+          if (!timetablesMap.has(timetableKey)) {
+            timetablesMap.set(timetableKey, {
+              class: classEnum,
+              section: sectionEnum,
+              day: dayCapitalized,
               slots: []
             })
           }
           
-          // Get the timetable entry
-          const timetableEntry = validTimetables.get(timetableKey)
+          const timetableEntry = timetablesMap.get(timetableKey)
           
-          // Create slot object - sno only for periods
+          // Create slot object
           const slot = {
-            ...(typeInput === 'period' && { sno: parseInt(row.sno) }),
-            subject: subject || (typeInput === 'break' ? 'Break' : ''),
             timings: timings,
-            ...(typeInput === 'period' && { teacherName: teacherName }),
             isBreak: typeInput === 'break',
+            ...(typeInput === 'period' && { sno: sno }),
+            ...(typeInput === 'period' && { subject: subject }),
+            ...(typeInput === 'period' && teacherName && { teacherName: teacherName }),
+            ...(typeInput === 'break' && { subject: subject }),
             ...(typeInput === 'break' && { breakType: breakType })
           }
           
-          // Add slot to timetable
           timetableEntry.slots.push(slot)
           
         } catch (error) {
@@ -503,80 +606,111 @@ export const bulkImportTimetable = [
         }
       }
       
-      // If there are validation errors, don't proceed
+      // If there are validation errors, return early
       if (errors.length > 0) {
         cleanupTempFiles(req.file)
         return res.status(400).json({
           success: false,
           message: `Validation failed. ${errors.length} rows have errors.`,
           summary: {
-            totalRows: data.length,
-            timetablesCreated: 0,
+            totalRows: rows.length,
+            timetablesProcessed: 0,
             totalSlots: 0,
             errors: errors.slice(0, 100)
           }
         })
       }
       
-      // Format each timetable's slots - periods get sequential sno, breaks have no sno
-      const formattedTimetables = []
+      // STEP 4: Format and validate all timetables
+      const timetablesToUpsert = []
       let totalSlots = 0
       
-      for (const [key, timetable] of validTimetables) {
-        // Format slots properly
+      for (const [key, timetable] of timetablesMap) {
+        // Format slots - periods get sequential sno, breaks have no sno
         const formattedSlots = formatDaySlots(timetable.slots)
         totalSlots += formattedSlots.length
         
-        // Validate structure
+        // Validate slots structure
         if (!validateSlotsStructure(formattedSlots)) {
           cleanupTempFiles(req.file)
           return res.status(400).json({
             success: false,
             message: `Invalid slots structure for ${timetable.class} - ${timetable.section} - ${timetable.day}`,
             summary: {
-              totalRows: data.length,
-              timetablesCreated: 0,
+              totalRows: rows.length,
+              timetablesProcessed: 0,
               totalSlots: 0,
               errors: [{
                 row: 0,
-                class: timetable.class,
+                class: mapEnumToDisplayName(timetable.class),
                 section: timetable.section,
                 day: timetable.day,
-                error: 'Invalid slots structure',
+                error: 'Invalid slots structure after formatting',
                 type: 'validation_error'
               }]
             }
           })
         }
         
-        formattedTimetables.push({
+        timetablesToUpsert.push({
+          key: key,
           class: timetable.class,
           section: timetable.section,
           day: timetable.day,
-          slots: formattedSlots
+          slots: formattedSlots,
+          existingId: existingTimetableMap.get(key)?.id || null
         })
       }
       
-      console.log(`Validation passed. Found ${formattedTimetables.length} unique timetables with ${totalSlots} slots`)
+      console.log(`Validation passed. Found ${timetablesToUpsert.length} unique timetables with ${totalSlots} total slots`)
       
-      // Process in batches to avoid transaction timeout
-      const BATCH_SIZE = 5
+      // STEP 5: Batch process upserts using transactions
+      const BATCH_SIZE = 50 // Increased from 5 to 50 for better performance
       let upsertedCount = 0
       const upsertErrors = []
       
-      for (let i = 0; i < formattedTimetables.length; i += BATCH_SIZE) {
-        const batch = formattedTimetables.slice(i, i + BATCH_SIZE)
+      // Prepare operations for each batch
+      for (let i = 0; i < timetablesToUpsert.length; i += BATCH_SIZE) {
+        const batch = timetablesToUpsert.slice(i, i + BATCH_SIZE)
         
         try {
-          // Use Promise.all for parallel processing within batch
-          await Promise.all(batch.map(async (timetable) => {
+          // Execute all upserts in a single transaction for this batch
+          const operations = batch.map(timetable => {
+            return prisma.timetable.upsert({
+              where: {
+                class_section_day: {
+                  class: timetable.class,
+                  section: timetable.section,
+                  day: timetable.day
+                }
+              },
+              update: {
+                slots: JSON.stringify(timetable.slots),
+                updatedAt: new Date()
+              },
+              create: {
+                class: timetable.class,
+                section: timetable.section,
+                day: timetable.day,
+                slots: JSON.stringify(timetable.slots)
+              }
+            })
+          })
+          
+          // Execute batch in parallel with Promise.all
+          const results = await Promise.all(operations)
+          upsertedCount += results.length
+          
+          console.log(`Batch ${Math.floor(i / BATCH_SIZE) + 1} completed: ${results.length} timetables upserted`)
+          
+        } catch (batchError) {
+          console.error(`Batch ${Math.floor(i / BATCH_SIZE) + 1} error:`, batchError)
+          
+          // If batch fails, try individual upserts to identify which ones failed
+          for (const timetable of batch) {
             try {
-              console.log(`Upserting timetable for: ${timetable.class} - ${timetable.section} - ${timetable.day}`)
-              
-              // Use upsert for each timetable
-              const result = await prisma.timetable.upsert({
+              await prisma.timetable.upsert({
                 where: {
-                  // Prisma will automatically use the unique constraint
                   class_section_day: {
                     class: timetable.class,
                     section: timetable.section,
@@ -594,59 +728,46 @@ export const bulkImportTimetable = [
                   slots: JSON.stringify(timetable.slots)
                 }
               })
-              
               upsertedCount++
-              console.log(`Successfully upserted: ${timetable.class} - ${timetable.section} - ${timetable.day}`)
             } catch (upsertError) {
-              console.error(`Error upserting ${timetable.class} - ${timetable.section} - ${timetable.day}:`, upsertError)
+              console.error(`Failed to upsert ${timetable.key}:`, upsertError)
               upsertErrors.push({
-                timetable: `${timetable.class}_${timetable.section}_${timetable.day}`,
+                timetable: `${mapEnumToDisplayName(timetable.class)} - ${timetable.section} - ${timetable.day}`,
                 error: upsertError.message
               })
             }
-          }))
-        } catch (batchError) {
-          console.error('Batch processing error:', batchError)
-          // Continue with next batch even if this one fails
+          }
+        }
+      }
+      
+      const endTime = Date.now()
+      const executionTime = ((endTime - startTime) / 1000).toFixed(2)
+      
+      console.log(`✅ Timetable bulk import completed in ${executionTime} seconds`)
+      console.log(`   Upserted: ${upsertedCount}/${timetablesToUpsert.length} timetables, ${totalSlots} slots`)
+      console.log(`   Errors: ${upsertErrors.length}`)
+      
+      cleanupTempFiles(req.file)
+      
+      const response = {
+        success: upsertErrors.length === 0,
+        message: upsertErrors.length === 0 
+          ? `Bulk import completed successfully. Upserted ${upsertedCount} timetables with ${totalSlots} slots.`
+          : `Import completed with ${upsertErrors.length} errors. ${upsertedCount} timetables were successfully upserted.`,
+        summary: {
+          totalRows: rows.length,
+          timetablesProcessed: timetablesToUpsert.length,
+          timetablesUpserted: upsertedCount,
+          totalSlots: totalSlots,
+          executionTimeSeconds: parseFloat(executionTime)
         }
       }
       
       if (upsertErrors.length > 0) {
-        console.error('Some upserts failed:', upsertErrors)
-        cleanupTempFiles(req.file)
-        return res.status(207).json({
-          success: false,
-          message: `Import completed with ${upsertErrors.length} errors. ${upsertedCount} timetables were successfully upserted.`,
-          summary: {
-            totalRows: data.length,
-            timetablesCreated: upsertedCount,
-            totalSlots: totalSlots,
-            errors: upsertErrors.slice(0, 100).map(e => ({
-              row: 0,
-              class: e.timetable?.split('_')[0] || 'N/A',
-              section: e.timetable?.split('_')[1] || 'N/A',
-              day: e.timetable?.split('_')[2] || 'N/A',
-              error: e.error,
-              type: 'upsert_error'
-            }))
-          }
-        })
+        response.errors = upsertErrors.slice(0, 100)
       }
       
-      console.log(`Successfully upserted ${upsertedCount} timetables with ${totalSlots} slots`)
-      
-      cleanupTempFiles(req.file)
-      
-      res.status(200).json({
-        success: true,
-        message: `Bulk import completed successfully. Upserted ${upsertedCount} timetables with ${totalSlots} slots.`,
-        summary: {
-          totalRows: data.length,
-          timetablesCreated: upsertedCount,
-          totalSlots: totalSlots,
-          errors: []
-        }
-      })
+      res.status(upsertErrors.length > 0 ? 207 : 200).json(response)
       
     } catch (error) {
       console.error('Bulk import error:', error)
@@ -657,13 +778,10 @@ export const bulkImportTimetable = [
         message: error.message || 'Bulk import failed due to server error',
         summary: {
           totalRows: 0,
-          timetablesCreated: 0,
+          timetablesProcessed: 0,
+          timetablesUpserted: 0,
           totalSlots: 0,
           errors: [{
-            row: 0,
-            class: 'N/A',
-            section: 'N/A',
-            day: 'N/A',
             error: error.message || 'Internal server error',
             type: 'server_error'
           }]

@@ -912,7 +912,7 @@ export default function EndOfAcademicYear({ visible, onClose }) {
 
                 {!isLoading && studentCount === 0 && !error && (
                   <View style={styles.emptyStateContainer}>
-                    <MaterialCommunityIcons name="school-off" size={60} color={colors.textSecondary} />
+                    <MaterialIcons name="school" size={60} color={colors.textSecondary} />
                     <ThemedText style={[styles.emptyStateTitle, { color: colors.text, fontFamily: 'Poppins-SemiBold' }]}>
                       No Students Available
                     </ThemedText>
@@ -1045,6 +1045,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: -80,
   },
   mainCard: {
     width: '100%',

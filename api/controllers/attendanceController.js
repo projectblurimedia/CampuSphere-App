@@ -1189,13 +1189,18 @@ export const getStudentsListByClass = asyncHandler(async (req, res) => {
         rollNo: true,
         firstName: true,
         lastName: true
-      },
-      orderBy: {
-        rollNo: 'asc'
       }
     })
 
-    const formattedStudents = students.map(student => ({
+    // Sort by roll number as numeric value
+    const sortedStudents = students.sort((a, b) => {
+      // Handle cases where rollNo might be null or undefined
+      const rollA = a.rollNo ? parseInt(a.rollNo, 10) : 0
+      const rollB = b.rollNo ? parseInt(b.rollNo, 10) : 0
+      return rollA - rollB
+    })
+
+    const formattedStudents = sortedStudents.map(student => ({
       id: student.id,
       rollNo: student.rollNo,
       firstName: student.firstName,

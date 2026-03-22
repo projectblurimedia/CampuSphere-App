@@ -2149,12 +2149,8 @@ export const getAttendanceStatsByClassSection = async (req, res) => {
             afternoon: true
           }
         }
-      },
-      orderBy: [
-        { class: 'asc' },
-        { section: 'asc' },
-        { firstName: 'asc' }
-      ]
+      }
+      // Remove the orderBy here - we'll sort manually after grouping
     })
 
     // Group by class and section
@@ -2278,7 +2274,6 @@ export const getAttendanceStatsByClassSection = async (req, res) => {
 
     // Calculate percentages and format the response
     const classes = []
-    let schoolTotalPresentPercentage = 0
 
     // Process each class-section
     for (const [_, sectionStats] of classSectionMap) {
@@ -2321,7 +2316,12 @@ export const getAttendanceStatsByClassSection = async (req, res) => {
           status: sectionStats.studentsWithAttendance === 0 ? 'No attendance data' : 'Data available'
         },
         dailyAttendance,
-        students: sectionStats.students
+        students: sectionStats.students.sort((a, b) => {
+          // Sort students by roll number numerically
+          const rollA = parseInt(a.rollNo, 10) || 0
+          const rollB = parseInt(b.rollNo, 10) || 0
+          return rollA - rollB
+        })
       })
     }
 
@@ -2359,6 +2359,31 @@ export const getAttendanceStatsByClassSection = async (req, res) => {
         : 0
     }
 
+    // Define the correct class order
+    const classOrder = [
+      'Pre-Nursery', 'Nursery', 'LKG', 'UKG',
+      'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5',
+      'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10'
+    ]
+
+    // Sort classes by the defined order
+    const sortedClasses = classes.sort((a, b) => {
+      const aIndex = classOrder.indexOf(a.classLabel)
+      const bIndex = classOrder.indexOf(b.classLabel)
+      
+      // If class not found in order, put it at the end
+      if (aIndex === -1 && bIndex === -1) return 0
+      if (aIndex === -1) return 1
+      if (bIndex === -1) return -1
+      
+      // If same class, sort by section
+      if (aIndex === bIndex) {
+        return a.section.localeCompare(b.section)
+      }
+      
+      return aIndex - bIndex
+    })
+
     res.status(200).json({
       success: true,
       data: {
@@ -2369,13 +2394,7 @@ export const getAttendanceStatsByClassSection = async (req, res) => {
         },
         schoolSummary,
         dailyAttendance: schoolDailyAttendance,
-        classes: classes.sort((a, b) => {
-          // Sort by class label then section
-          if (a.classLabel === b.classLabel) {
-            return a.section.localeCompare(b.section)
-          }
-          return a.classLabel.localeCompare(b.classLabel)
-        })
+        classes: sortedClasses
       }
     })
 

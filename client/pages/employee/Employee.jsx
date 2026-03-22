@@ -23,6 +23,8 @@ import axiosApi from '@/utils/axiosApi'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import CreateEmployee from '@/pages/menu/createEmployee/CreateEmployee'
 import { forceLogoutEmployee } from '../../socket/socket'
+import { useDispatch } from 'react-redux'
+import { triggerRefresh } from '@/redux/employeesRefreshSlice'
 
 const { width, height } = Dimensions.get('window')
 
@@ -66,6 +68,7 @@ const getDesignationDisplay = (designation) => {
 
 export default function Employee({ employee, onClose }) {
   const { colors } = useTheme()
+  const dispatch = useDispatch()
   const [loading, setLoading] = useState(true)
   const [employeeData, setEmployeeData] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -185,6 +188,7 @@ export default function Employee({ employee, onClose }) {
           employeeData.id,
           'Your account details have been updated. Please login again.'
         )
+        dispatch(triggerRefresh())
         setShowDeleteModal(false)
         showToast('Employee deleted successfully', 'success')
         setTimeout(() => {

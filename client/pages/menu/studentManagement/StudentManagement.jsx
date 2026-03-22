@@ -30,29 +30,10 @@ import { ToastNotification } from '@/components/ui/ToastNotification'
 import { useDebounce } from '@/utils/useDebounce'
 import axiosApi from '@/utils/axiosApi'
 import { useSelector } from 'react-redux'
+import { useDispatch } from 'react-redux'
+import { triggerRefresh } from '@/redux/studentsRefreshSlice'
 
 const { width, height } = Dimensions.get('window')
-
-// Helper function to get class order for sorting
-const getClassOrder = (className) => {
-  const orderMap = {
-    'Pre-Nursery': 1,
-    'Nursery': 2,
-    'LKG': 3,
-    'UKG': 4,
-    'Class 1': 5,
-    'Class 2': 6,
-    'Class 3': 7,
-    'Class 4': 8,
-    'Class 5': 9,
-    'Class 6': 10,
-    'Class 7': 11,
-    'Class 8': 12,
-    'Class 9': 13,
-    'Class 10': 14
-  }
-  return orderMap[className] || 999
-}
 
 // Helper function to get next class
 const getNextClass = (currentClass) => {
@@ -538,6 +519,7 @@ const TabButton = ({ title, icon, isActive, onPress, color }) => {
 // ========== MAIN COMPONENT ==========
 export default function StudentManagement({ visible, onClose }) {
   const { colors } = useTheme()
+  const dispatch = useDispatch()
   
   // Tab state
   const [activeTab, setActiveTab] = useState('promote') // 'promote', 'demote', 'inactive'
@@ -766,6 +748,8 @@ export default function StudentManagement({ visible, onClose }) {
       if (response.data.success) {
         setActionResult(response.data.data)
         setShowSuccessModal(true)
+
+        dispatch(triggerRefresh())
         
         // Clear search and refresh
         handleClearSearch()
@@ -793,7 +777,7 @@ export default function StudentManagement({ visible, onClose }) {
       setIsProcessing(false)
       setSelectedStudent(null)
     }
-  }, [selectedStudent, activeTab, getApiEndpoint, handleClearSearch, showToast])
+  }, [selectedStudent, activeTab, getApiEndpoint, handleClearSearch, showToast, dispatch])
 
   // Handle cancel
   const handleCancel = useCallback(() => {

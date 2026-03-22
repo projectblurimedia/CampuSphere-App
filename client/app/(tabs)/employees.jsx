@@ -16,6 +16,7 @@ import { ThemedText } from '@/components/ui/themed-text'
 import EmployeeCard from '@/components/employee/employee-card'
 import axiosApi from '@/utils/axiosApi'
 import { useDebounce } from '@/utils/useDebounce'
+import { useSelector } from 'react-redux'
 
 export default function Employees() {
   const { colors, isDark } = useTheme()
@@ -30,6 +31,14 @@ export default function Employees() {
   const [selectedDesignation, setSelectedDesignation] = useState('All')
   const [designations, setDesignations] = useState(['All'])
   const [totalCount, setTotalCount] = useState(0)
+
+  const refreshTrigger = useSelector(state => state.employeesRefresh.refreshTrigger)
+
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      fetchEmployees()
+    }
+  }, [refreshTrigger])
   
   const scrollViewRef = useRef(null)
   const searchInputRef = useRef(null)

@@ -28,6 +28,8 @@ import { useTheme } from '@/hooks/useTheme'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import axiosApi from '@/utils/axiosApi'
 import { Image } from 'expo-image'
+import { useDispatch } from 'react-redux'
+import { triggerRefresh } from '@/redux/studentsRefreshSlice'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
@@ -248,6 +250,7 @@ const ModernDropdown = ({
 
 export default function CreateStudent({ visible, onClose, studentData: editStudentData }) {
   const { colors } = useTheme()
+  const dispatch = useDispatch()
   const isEditMode = !!editStudentData
 
   // Form state
@@ -485,6 +488,7 @@ export default function CreateStudent({ visible, onClose, studentData: editStude
 
       if (response.data.success) {
         showToast(isEditMode ? 'Student updated successfully!' : 'Student created successfully!', 'success')
+        dispatch(triggerRefresh())
         resetForm()
         setTimeout(() => onClose(true), 1500)
       }

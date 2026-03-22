@@ -28,6 +28,8 @@ import { ToastNotification } from '@/components/ui/ToastNotification'
 import axiosApi from '@/utils/axiosApi'
 import { Image } from 'expo-image'
 import { forceLogoutEmployee } from '@/socket/socket'
+import { triggerRefresh } from '@/redux/employeesRefreshSlice'
+import { useDispatch } from 'react-redux'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
@@ -250,6 +252,7 @@ const ModernDropdown = ({
 
 export default function CreateEmployee({ visible, onClose, employeeData }) {
   const { colors } = useTheme()
+  const dispatch = useDispatch()
   const isEdit = !!employeeData
 
   const [formData, setFormData] = useState({
@@ -477,6 +480,7 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
             'Your account details have been updated. Please login again.'
           )
         }
+        dispatch(triggerRefresh())
         showToast(isEdit ? 'Employee updated successfully!' : 'Employee created successfully!', 'success')
         setTimeout(() => onClose(true), 1500)
       }
@@ -506,7 +510,7 @@ export default function CreateEmployee({ visible, onClose, employeeData }) {
     } finally {
       setLoading(false)
     }
-  }, [formData, profilePic, removeProfilePic, employeeData, isEdit, validateForm, loading, onClose, showToast])
+  }, [formData, profilePic, removeProfilePic, employeeData, isEdit, validateForm, loading, onClose, showToast, dispatch])
 
   const handleClose = useCallback(() => {
     if (!loading) {

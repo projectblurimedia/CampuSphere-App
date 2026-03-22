@@ -21,10 +21,11 @@ import {
   MaterialCommunityIcons 
 } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
-import { useSelector } from 'react-redux'
 import axiosApi from '@/utils/axiosApi'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import { ScrollView } from 'react-native'
+import { useDispatch } from 'react-redux'
+import { triggerRefresh } from '@/redux/studentsRefreshSlice'
 
 const { width, height } = Dimensions.get('window')
 
@@ -584,6 +585,7 @@ const SuccessResultModal = ({
 // Main End of Academic Year Component
 export default function EndOfAcademicYear({ visible, onClose }) {
   const { colors } = useTheme()
+  const dispatch = useDispatch()
   
   // State for filters
   const [academicYear, setAcademicYear] = useState(getCurrentAcademicYear())
@@ -717,6 +719,8 @@ export default function EndOfAcademicYear({ visible, onClose }) {
       if (response.data.success || response.status === 207) {
         setProcessingSummary(response.data.summary)
         setShowSuccessModal(true)
+
+        dispatch(triggerRefresh())
         
         // Reload student count after processing
         setTimeout(() => {
@@ -736,7 +740,7 @@ export default function EndOfAcademicYear({ visible, onClose }) {
     } finally {
       setIsProcessing(false)
     }
-  }, [academicYear, loadStudentCount])
+  }, [academicYear, loadStudentCount, dispatch])
 
   const handleCancel = useCallback(() => {
     setShowConfirmModal(false)

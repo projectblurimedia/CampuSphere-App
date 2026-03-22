@@ -14,6 +14,7 @@ import TransactionCard from '@/components/cashflow/transaction-card'
 import QuickActions from '@/components/cashflow/quick-actions'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import axiosApi from '@/utils/axiosApi'
+import { useSelector } from 'react-redux'
 
 export default function Cashflow() {
   const { colors } = useTheme()
@@ -28,6 +29,14 @@ export default function Cashflow() {
   })
   const [timePeriod, setTimePeriod] = useState('month')
   const [toast, setToast] = useState(null)
+
+  const refreshTrigger = useSelector(state => state.cashflowRefresh.refreshTrigger)
+
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      fetchDashboardData()
+    }
+  }, [refreshTrigger])
 
   const showToast = (message, type = 'info') => {
     setToast({ message, type })

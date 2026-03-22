@@ -27,6 +27,8 @@ import CreateStudent from '@/pages/menu/createStudent/CreateStudent'
 import StudentFeeDetails from '@/pages/menu/feeDetails/StudentFeeDetails'
 import StudentAttendance from './StudentAttendance'
 import StudentMarks from './StudentMarks'
+import { useDispatch } from 'react-redux'
+import { triggerRefresh } from '@/redux/studentsRefreshSlice'
 
 const { width, height } = Dimensions.get('window')
 
@@ -248,6 +250,7 @@ const ConfirmationModal = ({
 
 export default function Student({ student, onClose }) {
   const { colors } = useTheme()
+  const dispatch = useDispatch()
   
   // Get user role from Redux
   const { employee } = useSelector((state) => state.employee)
@@ -395,7 +398,7 @@ export default function Student({ student, onClose }) {
 
     try {
       const studentId = studentData?.id || student?.id
-      const response = await axiosApi.post(`/fees/inactivate/${studentId}`, {
+      const response = await axiosApi.post(`/students/inactive/${studentId}`, {
         updatedBy: employee?.name || 'Admin',
         reason: 'Student marked inactive',
         note: 'Student inactivated from profile',
@@ -405,6 +408,7 @@ export default function Student({ student, onClose }) {
       if (response.data.success) {
         setShowInactiveConfirmModal(false)
         showToast('Student inactivated successfully', 'success')
+        dispatch(triggerRefresh())
         
         await fetchStudentData()
         

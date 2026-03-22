@@ -21,8 +21,9 @@ import axiosApi from '@/utils/axiosApi'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import DateTimePicker from '@react-native-community/datetimepicker'
-import { useSelector } from 'react-redux'
+import { useDispatch, useSelector } from 'react-redux'
 import ConfirmationModal from './ConfirmationModal'
+import { triggerRefresh } from '@/redux/cashflowRefreshSlice'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
@@ -36,6 +37,8 @@ const CashflowForm = ({
   isEditing = false
 }) => {
   const { colors } = useTheme()
+  const dispatch = useDispatch()
+
   const [formData, setFormData] = useState({
     type: type,
     category: '',
@@ -335,6 +338,8 @@ const CashflowForm = ({
         showToast(`${isEditing ? 'Updated' : 'Added'} successfully!`, 'success')        
         // Reset form
         resetForm()
+
+        dispatch(triggerRefresh())
         
         setLoading(false)
         

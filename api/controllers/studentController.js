@@ -1193,13 +1193,13 @@ export const searchInactiveStudents = async (req, res) => {
 }
 
 /**
- * @desc    Quick search for autocomplete (ULTRA OPTIMIZED)
+ * @desc    Quick search for autocomplete with advanced fuzzy matching
  * @route   GET /api/students/quick-search
  * @access  Private
  */
 export const quickSearchStudents = async (req, res) => {
   try {
-    const { query, limit = 10 } = req.query
+    const { query, limit = 10, fuzzy = 'false' } = req.query
 
     if (!query || query.trim() === '') {
       return res.status(200).json({
@@ -1209,48 +1209,106 @@ export const quickSearchStudents = async (req, res) => {
     }
 
     const searchTerm = query.trim()
+    let students = []
 
-    // Ultra fast search - only returns id and name for autocomplete
-    const students = await prisma.student.findMany({
-      where: {
-        isActive: true,
-        OR: [
-          { firstName: { contains: searchTerm, mode: 'insensitive' } },
-          { lastName: { contains: searchTerm, mode: 'insensitive' } },
+    if (fuzzy === 'true' && process.env.DATABASE_URL?.includes('postgres')) {
+      // Use PostgreSQL trigram similarity for fuzzy matching
+      students = await prisma.$queryRaw`
+        SELECT 
+          id, 
+          "firstName", 
+          "lastName", 
+          "rollNo", 
+          "admissionNo", 
+          class, 
+          section, 
+          "profilePicUrl",
+          GREATEST(
+            similarity("firstName", ${searchTerm}),
+            similarity("lastName", ${searchTerm}),
+            similarity(CONCAT("firstName", ' ', "lastName"), ${searchTerm})
+          ) as similarity
+        FROM "Student"
+        WHERE "isActive" = true
+        AND (
+          "firstName" ILIKE ${searchTerm + '%'} OR
+          "lastName" ILIKE ${searchTerm + '%'} OR
+          CONCAT("firstName", ' ', "lastName") ILIKE ${'%' + searchTerm + '%'}
+        )
+        ORDER BY similarity DESC
+        LIMIT ${parseInt(limit)}
+      `
+    } else {
+      // Standard prefix matching for better performance
+      students = await prisma.student.findMany({
+        where: {
+          isActive: true,
+          OR: [
+            { firstName: { startsWith: searchTerm, mode: 'insensitive' } },
+            { lastName: { startsWith: searchTerm, mode: 'insensitive' } },
+            {
+              AND: [
+                { firstName: { contains: searchTerm, mode: 'insensitive' } },
+                { lastName: { contains: searchTerm, mode: 'insensitive' } }
+              ]
+            }
+          ]
+        },
+        take: parseInt(limit),
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          rollNo: true,
+          admissionNo: true,
+          class: true,
+          section: true,
+          profilePicUrl: true,
+        },
+        orderBy: [
+          { firstName: 'asc' },
+          { lastName: 'asc' }
         ]
-      },
-      take: parseInt(limit),
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        rollNo: true,
-        admissionNo: true,
-        class: true,
-        section: true,
-        profilePicUrl: true,
-      },
-      orderBy: [
-        { firstName: 'asc' },
-        { lastName: 'asc' }
-      ]
-    })
+      })
+    }
 
-    const formattedStudents = students.map(student => ({
-      id: student.id,
-      name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
-      firstName: student.firstName,
-      lastName: student.lastName,
-      rollNo: student.rollNo,
-      class: mapEnumToDisplayName(student.class),
-      displayClass: mapEnumToDisplayName(student.class),
-      section: student.section,
-      profilePicUrl: student.profilePicUrl,
-    }))
+    // Format and deduplicate results
+    const formattedStudents = []
+    const seenIds = new Set()
+
+    for (const student of students) {
+      if (!seenIds.has(student.id)) {
+        seenIds.add(student.id)
+        
+        // Check if search term matches from start of either name
+        const firstNameMatch = student.firstName?.toLowerCase().startsWith(searchTerm.toLowerCase())
+        const lastNameMatch = student.lastName?.toLowerCase().startsWith(searchTerm.toLowerCase())
+        
+        formattedStudents.push({
+          id: student.id,
+          name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
+          firstName: student.firstName,
+          lastName: student.lastName,
+          rollNo: student.rollNo,
+          class: mapEnumToDisplayName(student.class),
+          displayClass: mapEnumToDisplayName(student.class),
+          section: student.section,
+          profilePicUrl: student.profilePicUrl,
+          matchType: firstNameMatch ? 'first-name' : (lastNameMatch ? 'last-name' : 'full-name'),
+          similarity: student.similarity || undefined
+        })
+      }
+    }
+
+    // Sort by match type priority
+    formattedStudents.sort((a, b) => {
+      const priority = { 'first-name': 3, 'last-name': 2, 'full-name': 1 }
+      return (priority[b.matchType] || 0) - (priority[a.matchType] || 0)
+    })
 
     res.status(200).json({
       success: true,
-      data: formattedStudents
+      data: formattedStudents.slice(0, parseInt(limit))
     })
   } catch (error) {
     console.error('Quick search error:', error)

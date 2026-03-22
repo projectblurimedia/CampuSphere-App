@@ -17,9 +17,12 @@ import ClassGroup from '@/components/students/class-group'
 import StudentCard from '@/components/students/student-card'
 import axiosApi from '@/utils/axiosApi'
 import { useDebounce } from '@/utils/useDebounce'
+import { useSelector } from 'react-redux'
 
 export default function Students() {
   const { colors } = useTheme()
+  const refreshTrigger = useSelector(state => state.studentsRefresh.refreshTrigger)
+
   const [classesSummary, setClassesSummary] = useState([])
   const [searchResults, setSearchResults] = useState([])
   const [loading, setLoading] = useState(true)
@@ -33,6 +36,12 @@ export default function Students() {
   
   // Debounce search query with 300ms delay for better performance
   const debouncedSearchQuery = useDebounce(searchQuery, 300)
+
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      fetchClassesSummary()
+    }
+  }, [refreshTrigger])
 
   // Fetch classes summary
   const fetchClassesSummary = useCallback(async (showLoading = true) => {

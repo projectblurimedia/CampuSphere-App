@@ -8,44 +8,76 @@ import {
   Animated,
   Dimensions,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
-import { FontAwesome6, Ionicons } from '@expo/vector-icons'
+import { Ionicons, FontAwesome6, Feather } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
+import { ToastNotification } from '@/components/ui/ToastNotification'
+import { schoolDetails } from '@/schoolDetails'
+import { useDispatch } from 'react-redux'
+import { useRouter } from 'expo-router'
+import { logoutEmployee } from '@/redux/employeeSlice'
 import Attendance from '@/pages/menu/attendance/Attendance'
 import UploadMarks from '@/pages/menu/uploadMarks/UploadMarks'
 import BirthdayStudents from '@/pages/menu/birthdays/BirthdayStudents'
 import StudentsMarksStats from '@/pages/student/StudentsMarksStats'
 import StudentsAttendanceStats from '@/pages/student/StudentsAttendanceStats'
-import { schoolDetails } from '@/schoolDetails'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
+const themeOptions = [
+  { 
+    id: 'system', 
+    label: 'System Default', 
+    icon: 'settings',
+    gradient: ['#667eea', '#764ba2']
+  },
+  { 
+    id: 'light', 
+    label: 'Light Mode', 
+    icon: 'sun',
+    gradient: ['#fbbf24', '#f59e0b']
+  },
+  { 
+    id: 'dark', 
+    label: 'Dark Mode', 
+    icon: 'moon',
+    gradient: ['#4f46e5', '#7c3aed']
+  },
+]
+
 export default function StudentsMenu({ visible, onClose }) {
-  const { colors } = useTheme()
-  const translateX = useRef(new Animated.Value(SCREEN_WIDTH)).current
-  const backdropOpacity = useRef(new Animated.Value(0)).current
-  const [isVisible, setIsVisible] = useState(visible)
+  const { theme, colors, changeTheme } = useTheme()
+  const dispatch = useDispatch()
+  const router = useRouter()
   
-  // State for individual modals
   const [showAttendance, setShowAttendance] = useState(false)
   const [showAttendanceReport, setShowAttendanceReport] = useState(false)
   const [showUploadMarks, setShowUploadMarks] = useState(false)
   const [showMarksReport, setShowMarksReport] = useState(false)
   const [showBirthdays, setShowBirthdays] = useState(false)
-
-  // Track if any child modal is open
+  const [toast, setToast] = useState(null)
+  const [themeModalVisible, setThemeModalVisible] = useState(false)
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const [logoutLoading, setLogoutLoading] = useState(false)
   const [childModalOpen, setChildModalOpen] = useState(false)
+  
+  const translateX = useRef(new Animated.Value(SCREEN_WIDTH)).current
+  const backdropOpacity = useRef(new Animated.Value(0)).current
+  
+  // Theme modal animations
+  const modalScale = useRef(new Animated.Value(0.8)).current
+  const modalOpacity = useRef(new Animated.Value(0)).current
 
-  // Handle visibility changes and animation
+  const showToast = (message, type = 'info') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+  
   useEffect(() => {
     if (visible && !childModalOpen) {
-      setIsVisible(true)
-      // Reset position before animating in
-      translateX.setValue(SCREEN_WIDTH)
-      backdropOpacity.setValue(0)
-      
       Animated.parallel([
         Animated.spring(translateX, {
           toValue: 0,
@@ -60,11 +92,102 @@ export default function StudentsMenu({ visible, onClose }) {
         }),
       ]).start()
     } else if (!visible && !childModalOpen) {
-      closeMenu()
+      Animated.parallel([
+        Animated.spring(translateX, {
+          toValue: SCREEN_WIDTH,
+          useNativeDriver: true,
+          tension: 60,
+          friction: 12,
+        }),
+        Animated.timing(backdropOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start()
+      // Close modals when main menu closes
+      setTimeout(() => {
+        setThemeModalVisible(false)
+        setShowLogoutModal(false)
+      }, 200)
     }
   }, [visible, childModalOpen])
 
-  const closeMenu = () => {
+  // Handle theme modal animations
+  useEffect(() => {
+    if (themeModalVisible) {
+      Animated.parallel([
+        Animated.spring(modalScale, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 50,
+          friction: 7,
+        }),
+        Animated.timing(modalOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start()
+    } else {
+      Animated.parallel([
+        Animated.spring(modalScale, {
+          toValue: 0.8,
+          useNativeDriver: true,
+          tension: 50,
+          friction: 7,
+        }),
+        Animated.timing(modalOpacity, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start()
+    }
+  }, [themeModalVisible])
+
+  const handleLogout = () => {
+    setShowLogoutModal(true)
+  }
+
+  const confirmLogout = async () => {
+    setLogoutLoading(true)
+    try {
+      await dispatch(logoutEmployee())
+      setShowLogoutModal(false)
+      showToast('Logged out successfully', 'success')
+      setTimeout(() => {
+        onClose()
+        router.replace('/')
+      }, 1500)
+    } catch (error) {
+      console.error('Error logging out:', error)
+      showToast('Failed to logout', 'error')
+      setShowLogoutModal(false)
+    } finally {
+      setLogoutLoading(false)
+    }
+  }
+
+  const getThemeLabel = () => {
+    switch (theme) {
+      case 'system': return 'System Default'
+      case 'light': return 'Light Mode'
+      case 'dark': return 'Dark Mode'
+      default: return 'System Default'
+    }
+  }
+
+  const handleThemeSelect = (themeId) => {
+    changeTheme(themeId)
+    setTimeout(() => setThemeModalVisible(false), 300)
+  }
+
+  // Handle menu item press
+  const handleMenuItemPress = (item) => {
+    setChildModalOpen(true)
+    
+    // Close the side menu with animation
     Animated.parallel([
       Animated.spring(translateX, {
         toValue: SCREEN_WIDTH,
@@ -78,53 +201,38 @@ export default function StudentsMenu({ visible, onClose }) {
         useNativeDriver: true,
       }),
     ]).start(() => {
-      setIsVisible(false)
       onClose()
     })
-  }
-
-  // Handle menu item press
-  const handleMenuItemPress = (item) => {
-    // Set child modal open flag to prevent menu from reopening
-    setChildModalOpen(true)
     
-    // Close the side menu immediately
-    setIsVisible(false)
-    onClose()
-    
-    // Small delay to ensure menu is closed before opening modal
     setTimeout(() => {
-      // Open the respective modal based on item id
       switch(item.id) {
-        case 1: // Mark Attendance
+        case 1:
           setShowAttendance(true)
           break
-        case 2: // Attendance Report
+        case 2:
           setShowAttendanceReport(true)
           break
-        case 3: // Upload Marks
+        case 3:
           setShowUploadMarks(true)
           break
-        case 4: // Marks Report
+        case 4:
           setShowMarksReport(true)
           break
-        case 5: // Birthdays
+        case 5:
           setShowBirthdays(true)
           break
         default:
           console.log('Unknown menu item')
       }
-    }, 300) // Wait for menu close animation
+    }, 300)
   }
 
   // Handle child modal close
   const handleChildModalClose = (modalSetter) => {
     modalSetter(false)
     setChildModalOpen(false)
-    // Don't reopen the menu automatically
   }
 
-  // Menu items with the 5 requested options
   const menuItems = [
     { 
       id: 1, 
@@ -176,37 +284,239 @@ export default function StudentsMenu({ visible, onClose }) {
       title: 'Events',
       data: menuItems.filter(item => [5].includes(item.id)),
     },
+    {
+      title: 'App Settings',
+      data: [
+        { 
+          id: 6, 
+          title: 'App Theme', 
+          icon: 'palette', 
+          iconType: 'FontAwesome6', 
+          gradient: [colors.gradientStart || '#5053ee', colors.gradientEnd || '#7346e5'], 
+          value: getThemeLabel(),
+          onPress: () => setThemeModalVisible(true)
+        },
+      ],
+    },
+    {
+      title: 'Account',
+      data: [
+        { 
+          id: 7, 
+          title: 'Logout', 
+          icon: 'log-out', 
+          iconType: 'Feather', 
+          gradient: ['#ef4444', '#dc2626'], 
+          isLogout: true,
+          onPress: handleLogout
+        },
+      ],
+    },
   ]
 
   const getIcon = (type, name, size, color) => {
     const icons = {
       Ionicons: Ionicons,
       FontAwesome6: FontAwesome6,
+      Feather: Feather,
     }
     const Icon = icons[type] || Ionicons
     return <Icon name={name} size={size} color={color} />
   }
 
-  // Don't render anything if not visible and no child modal open
-  if (!isVisible && !visible && !childModalOpen) {
-    return null
+  // Theme Selection Modal Component
+  const ThemeSelectionModal = () => {
+    return (
+      <Modal
+        visible={themeModalVisible}
+        transparent
+        animationType="none"
+        onRequestClose={() => setThemeModalVisible(false)}
+        statusBarTranslucent
+      >
+        <View style={styles.themeOverlay}>
+          <TouchableOpacity 
+            style={styles.themeBackdrop}
+            activeOpacity={1}
+            onPress={() => setThemeModalVisible(false)}
+          >
+            <Animated.View 
+              style={[
+                styles.themeBackdropAnimated,
+                { opacity: modalOpacity }
+              ]}
+            />
+          </TouchableOpacity>
+          
+          <Animated.View 
+            style={[
+              styles.themeModalContainer,
+              { 
+                opacity: modalOpacity,
+                transform: [{ scale: modalScale }]
+              }
+            ]}
+          >
+            <View style={[
+              styles.themeModalContent,
+              { backgroundColor: colors.cardBackground }
+            ]}>
+              <LinearGradient
+                colors={[colors.gradientStart, colors.gradientEnd]}
+                style={styles.themeHeaderGradient}
+              >
+                <View style={styles.themeHeaderContent}>
+                  <View style={styles.themeIconContainer}>
+                    <FontAwesome6 name="palette" size={28} color="#FFFFFF" />
+                  </View>
+                  <ThemedText type='subtitle' style={styles.themeHeaderTitle}>
+                    Choose Theme
+                  </ThemedText>
+                  <ThemedText style={styles.themeHeaderSubtitle}>
+                    Select your preferred app theme
+                  </ThemedText>
+                </View>
+              </LinearGradient>
+
+              <View style={styles.themeOptionsContainer}>
+                {themeOptions.map((option) => {
+                  const isSelected = theme === option.id
+                  
+                  return (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[
+                        styles.themeOption,
+                        { 
+                          backgroundColor: colors.cardBackground,
+                          borderWidth: isSelected ? 2 : 1,
+                          borderColor: isSelected ? colors.tint : colors.border,
+                        }
+                      ]}
+                      activeOpacity={0.7}
+                      onPress={() => handleThemeSelect(option.id)}
+                    >
+                      <LinearGradient
+                        colors={option.gradient}
+                        style={styles.themeOptionIcon}
+                      >
+                        <Feather name={option.icon} size={24} color="#FFFFFF" />
+                      </LinearGradient>
+                      
+                      <View style={styles.themeOptionText}>
+                        <ThemedText 
+                          style={[
+                            styles.themeOptionLabel,
+                            { color: isSelected ? colors.tint : colors.text }
+                          ]}
+                        >
+                          {option.label}
+                        </ThemedText>
+                      </View>
+                      
+                      {isSelected && (
+                        <View style={[styles.themeSelected, { backgroundColor: colors.tint }]}>
+                          <Feather name="check" size={16} color="#FFFFFF" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  )
+                })}
+              </View>
+
+              <TouchableOpacity
+                style={[styles.themeCloseBtn, { borderTopColor: colors.border }]}
+                onPress={() => setThemeModalVisible(false)}
+              >
+                <ThemedText style={[styles.themeCloseText, { color: colors.textSecondary }]}>
+                  Close
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </View>
+      </Modal>
+    )
   }
+
+  // Logout Confirmation Modal Component
+  const LogoutConfirmationModal = () => (
+    <Modal
+      visible={showLogoutModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowLogoutModal(false)}
+      statusBarTranslucent
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.confirmationModal, { backgroundColor: colors.cardBackground }]}>
+          <View style={styles.confirmationHeader}>
+            <LinearGradient
+              colors={['#ef4444', '#dc2626']}
+              style={styles.confirmationIcon}
+            >
+              <Feather name="log-out" size={28} color="#FFFFFF" />
+            </LinearGradient>
+            <ThemedText type="subtitle" style={[styles.confirmationTitle, { color: colors.text }]}>
+              Confirm Logout
+            </ThemedText>
+            <ThemedText style={[styles.confirmationMessage, { color: colors.textSecondary }]}>
+              Are you sure you want to logout from your account?
+            </ThemedText>
+          </View>
+          
+          <View style={styles.confirmationButtons}>
+            <TouchableOpacity
+              style={[styles.cancelBtn, { borderColor: colors.border, backgroundColor: colors.inputBackground }]}
+              onPress={() => setShowLogoutModal(false)}
+              disabled={logoutLoading}
+            >
+              <ThemedText style={[styles.cancelBtnText, { color: colors.text }]}>
+                Cancel
+              </ThemedText>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.confirmBtn}
+              onPress={confirmLogout}
+              disabled={logoutLoading}
+            >
+              <LinearGradient
+                colors={['#ef4444', '#dc2626']}
+                style={styles.confirmBtnGradient}
+              >
+                {logoutLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Feather name="log-out" size={16} color="#FFFFFF" />
+                    <ThemedText style={styles.confirmBtnText}>
+                      Logout
+                    </ThemedText>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
 
   return (
     <>
-      {/* Side Menu Modal */}
       <Modal
-        visible={isVisible}
+        visible={visible}
         transparent
         animationType="none"
-        onRequestClose={closeMenu}
+        onRequestClose={onClose}
         statusBarTranslucent
       >
         <View style={styles.modalContainer}>
           <TouchableOpacity 
             style={styles.backdropTouchable} 
             activeOpacity={1} 
-            onPress={closeMenu}
+            onPress={onClose}
           >
             <Animated.View
               style={[
@@ -247,7 +557,7 @@ export default function StudentsMenu({ visible, onClose }) {
                 
                 <TouchableOpacity
                   style={styles.closeBtn}
-                  onPress={closeMenu}
+                  onPress={onClose}
                 >
                   <Ionicons name="close" size={24} color="#FFFFFF" />
                 </TouchableOpacity>
@@ -257,36 +567,58 @@ export default function StudentsMenu({ visible, onClose }) {
             <ScrollView
               style={styles.scroll}
               contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
             >
               {sections.map((section) => (
                 <View key={section.title} style={styles.section}>
-                  <ThemedText style={[styles.sectionTitle, { color: colors.text }]}>
+                  <ThemedText type='subtitle' style={[styles.sectionTitle, { color: colors.text }]}>
                     {section.title}
                   </ThemedText>
                   <View style={styles.items}>
                     {section.data.map((item) => (
-                      <TouchableOpacity
-                        activeOpacity={0.7} 
-                        key={item.id}
-                        style={[styles.item, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
-                        onPress={() => handleMenuItemPress(item)}
-                      >
-                        <View style={styles.itemContent}>
-                          <LinearGradient colors={item.gradient} style={styles.icon}>
-                            {getIcon(item.iconType, item.icon, 18, '#FFFFFF')}
+                      item.isLogout ? (
+                        <TouchableOpacity
+                          activeOpacity={0.7}
+                          key={item.id}
+                          onPress={handleLogout}
+                        >
+                          <LinearGradient 
+                            colors={['#ef4444', '#dc2626']} 
+                            style={styles.logoutGradient}
+                          >
+                            <Feather name="log-out" size={18} color="#FFFFFF" />
+                            <ThemedText style={styles.logoutText}>Logout</ThemedText>
                           </LinearGradient>
-                          <View style={styles.itemText}>
-                            <ThemedText style={[styles.itemTitle, { color: colors.text }]}>
-                              {item.title}
-                            </ThemedText>
-                            <ThemedText style={[styles.itemValue, { color: colors.textSecondary }]}>
-                              Tap to continue
-                            </ThemedText>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          activeOpacity={.9} 
+                          key={item.id}
+                          style={[styles.item, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+                          onPress={() => item.onPress ? item.onPress() : handleMenuItemPress(item)}
+                        >
+                          <View style={styles.itemContent}>
+                            <LinearGradient colors={item.gradient} style={styles.icon}>
+                              {getIcon(item.iconType, item.icon, 18, '#FFFFFF')}
+                            </LinearGradient>
+                            <View style={styles.itemText}>
+                              <ThemedText type='subtitle' style={[styles.itemTitle, { color: colors.text }]}>
+                                {item.title}
+                              </ThemedText>
+                              {item.value && (
+                                <ThemedText style={[styles.itemValue, { color: colors.textSecondary }]}>
+                                  {item.value}
+                                </ThemedText>
+                              )}
+                              {!item.value && (
+                                <ThemedText style={[styles.itemValue, { color: colors.textSecondary }]}>
+                                  Tap to continue
+                                </ThemedText>
+                              )}
+                            </View>
+                            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
                           </View>
-                          <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-                        </View>
-                      </TouchableOpacity>
+                        </TouchableOpacity>
+                      )
                     ))}
                   </View>
                 </View>
@@ -294,16 +626,22 @@ export default function StudentsMenu({ visible, onClose }) {
 
               <View style={styles.footer}>
                 <ThemedText style={[styles.footerText, { color: colors.textSecondary }]}>
-                  Bluri High School App v2.4.1
+                  Bluri Developers v2.4.1
                 </ThemedText>
                 <ThemedText style={[styles.footerCopyright, { color: colors.textSecondary }]}>
-                  © 2024 All rights reserved
+                  © 2026 All rights reserved
                 </ThemedText>
               </View>
             </ScrollView>
           </Animated.View>
         </View>
       </Modal>
+
+      {/* Theme Selection Modal */}
+      <ThemeSelectionModal />
+
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmationModal />
 
       {/* Individual Feature Modals */}
       <Attendance 
@@ -330,20 +668,25 @@ export default function StudentsMenu({ visible, onClose }) {
         visible={showBirthdays} 
         onClose={() => handleChildModalClose(setShowBirthdays)} 
       />
+
+      {/* Toast Notification */}
+      <ToastNotification
+        visible={!!toast}
+        type={toast?.type}
+        message={toast?.message}
+        onHide={() => setToast(null)}
+        position="bottom-center"
+        duration={3000}
+        showCloseButton={true}
+      />
     </>
   )
 }
 
 const styles = StyleSheet.create({
-  modalContainer: { 
-    flex: 1 
-  },
-  backdropTouchable: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
+  modalContainer: { flex: 1 },
+  backdropTouchable: StyleSheet.absoluteFillObject,
+  backdrop: StyleSheet.absoluteFillObject,
   menuContainer: {
     position: 'absolute',
     top: 0,
@@ -360,9 +703,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.2, 
         shadowRadius: 20 
       },
-      android: { 
-        elevation: 20 
-      },
+      android: { elevation: 20 },
     }),
   },
   header: {
@@ -393,7 +734,6 @@ const styles = StyleSheet.create({
   menuTitle: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.9)',
-    fontFamily: 'Poppins-Regular',
   },
   closeBtn: {
     width: 40,
@@ -403,24 +743,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  scroll: { 
-    flex: 1 
-  },
-  scrollContent: { 
-    paddingBottom: 30 
-  },
-  section: { 
-    marginTop: 20 
-  },
+  scroll: { flex: 1 },
+  scrollContent: { paddingBottom: 30 },
+  section: { marginTop: 15 },
   sectionTitle: {
     fontSize: 16,
     marginLeft: 20,
-    marginBottom: 10,
-    fontFamily: 'Poppins-SemiBold',
+    marginBottom: 6,
   },
-  items: { 
-    paddingHorizontal: 15 
-  },
+  items: { paddingHorizontal: 15 },
   item: {
     borderRadius: 12,
     marginBottom: 8,
@@ -432,9 +763,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.05, 
         shadowRadius: 4 
       },
-      android: { 
-        elevation: 1
-      },
+      android: { elevation: 1 },
     }),
   },
   itemContent: {
@@ -456,25 +785,223 @@ const styles = StyleSheet.create({
   },
   itemTitle: {
     fontSize: 14,
-    fontFamily: 'Poppins-SemiBold',
+    marginBottom: -5,
   },
   itemValue: {
     fontSize: 12,
-    fontFamily: 'Poppins-Medium',
     opacity: 0.7,
+  },
+  logoutGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  logoutText: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    marginLeft: 8,
+    fontFamily: 'Poppins-SemiBold',
   },
   footer: {
     alignItems: 'center',
-    paddingTop: 20,
+    paddingTop: 15,
   },
   footerText: {
     fontSize: 12,
     marginBottom: 4,
-    fontFamily: 'Poppins-Regular',
   },
   footerCopyright: {
     fontSize: 11,
-    fontFamily: 'Poppins-Regular',
     opacity: 0.5,
+  },
+  // Modal Overlay
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  // Theme Modal Styles
+  themeOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  themeBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  themeBackdropAnimated: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  themeModalContainer: {
+    width: SCREEN_WIDTH * 0.85,
+    maxWidth: 400,
+    paddingHorizontal: 20,
+  },
+  themeModalContent: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 20,
+      },
+    }),
+  },
+  themeHeaderGradient: {
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+  },
+  themeHeaderContent: {
+    alignItems: 'center',
+  },
+  themeIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  themeHeaderTitle: {
+    fontSize: 22,
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  themeHeaderSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    textAlign: 'center',
+  },
+  themeOptionsContainer: {
+    padding: 20,
+  },
+  themeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  themeOptionIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+  },
+  themeOptionText: {
+    flex: 1,
+  },
+  themeOptionLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  themeSelected: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
+  },
+  themeCloseBtn: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderTopWidth: 1,
+  },
+  themeCloseText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Logout Confirmation Modal Styles
+  confirmationModal: {
+    width: '90%',
+    maxWidth: 400,
+    borderRadius: 20,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.2,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 10,
+      },
+    }),
+  },
+  confirmationHeader: {
+    alignItems: 'center',
+    padding: 30,
+    paddingBottom: 20,
+  },
+  confirmationIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  confirmationTitle: {
+    fontSize: 22,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  confirmationMessage: {
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  confirmationButtons: {
+    flexDirection: 'row',
+    padding: 20,
+    paddingTop: 10,
+    gap: 12,
+  },
+  cancelBtn: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtnText: {
+    fontSize: 16,
+    fontFamily: 'Poppins-Medium',
+  },
+  confirmBtn: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  confirmBtnGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+  },
+  confirmBtnText: {
+    fontSize: 16,
+    fontFamily: 'Poppins-SemiBold',
+    color: '#FFFFFF',
+    marginLeft: 8,
   },
 })

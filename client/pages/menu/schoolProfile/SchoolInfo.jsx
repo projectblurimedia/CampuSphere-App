@@ -251,7 +251,7 @@ const SchoolInfo = ({ schoolInfo, isEditing, onInputChange, colors, loading }) =
       flex: 1,
     },
     scrollContent: {
-      paddingBottom: 120,
+      paddingBottom: 420,
     },
     content: {
       padding: 16,

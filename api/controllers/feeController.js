@@ -475,8 +475,9 @@ const updateStudiedClasses = (currentStudiedClasses, newEntry) => {
 // ========== STUDENT FEE OPERATIONS ==========
 
 /**
- * @desc    Search students for fee management
+ * @desc    Search students for fee management (ULTRA OPTIMIZED)
  * @route   GET /api/fee/students/search
+ * @access  Private
  */
 export const searchStudentsForFee = async (req, res) => {
   try {
@@ -492,24 +493,54 @@ export const searchStudentsForFee = async (req, res) => {
       isActive: true
     }
 
-    // Search by name, admission no, parent name, phone
+    // ULTRA FAST: Optimized search logic
     if (search) {
-      where.OR = [
-        { firstName: { contains: search, mode: 'insensitive' } },
-        { lastName: { contains: search, mode: 'insensitive' } },
-        { admissionNo: { contains: search, mode: 'insensitive' } },
-        { parentName: { contains: search, mode: 'insensitive' } },
-        { parentPhone: { contains: search, mode: 'insensitive' } }
-      ]
+      const searchTerm = search.trim().toLowerCase()
+      const searchWords = searchTerm.split(' ').filter(w => w.length > 0)
+      
+      if (searchWords.length === 1) {
+        // Single word - fastest prefix search
+        where.OR = [
+          { firstName: { startsWith: searchWords[0], mode: 'insensitive' } },
+          { lastName: { startsWith: searchWords[0], mode: 'insensitive' } },
+          { admissionNo: { startsWith: searchWords[0], mode: 'insensitive' } },
+          { parentPhone: { contains: searchWords[0], mode: 'insensitive' } }
+        ]
+      } else if (searchWords.length >= 2) {
+        const firstWord = searchWords[0]
+        const lastWord = searchWords[searchWords.length - 1]
+        
+        // Two conditions only - fastest possible
+        where.OR = [
+          // Best match: firstName starts with first word AND lastName starts with last word
+          {
+            AND: [
+              { firstName: { startsWith: firstWord, mode: 'insensitive' } },
+              { lastName: { startsWith: lastWord, mode: 'insensitive' } }
+            ]
+          },
+          // Second best: firstName contains first word AND lastName starts with last word
+          {
+            AND: [
+              { firstName: { contains: firstWord, mode: 'insensitive' } },
+              { lastName: { startsWith: lastWord, mode: 'insensitive' } }
+            ]
+          },
+          // Admission number match
+          { admissionNo: { startsWith: searchTerm, mode: 'insensitive' } },
+          // Phone number match
+          { parentPhone: { contains: searchTerm, mode: 'insensitive' } }
+        ]
+      }
     }
 
-    // Class filter
+    // Apply class filter
     if (classFilter && classFilter !== 'ALL' && classFilter !== 'all') {
       const classEnum = mapClassToEnum(classFilter)
       if (classEnum) where.class = classEnum
     }
 
-    // Section filter
+    // Apply section filter
     if (section && section !== 'ALL' && section !== 'all') {
       where.section = section.toUpperCase()
     }
@@ -518,13 +549,32 @@ export const searchStudentsForFee = async (req, res) => {
     const limitNum = parseInt(limit)
     const skip = (pageNum - 1) * limitNum
 
+    // Parallel execution with optimized includes
     const [students, total] = await Promise.all([
       prisma.student.findMany({
         where,
         include: {
           feeDetails: {
             orderBy: { createdAt: 'desc' },
-            take: 1
+            take: 1,
+            select: {
+              id: true,
+              originalSchoolFee: true,
+              discountedSchoolFee: true,
+              schoolFeePaid: true,
+              schoolFeeDiscountApplied: true,
+              originalTransportFee: true,
+              discountedTransportFee: true,
+              transportFeePaid: true,
+              transportFeeDiscountApplied: true,
+              originalHostelFee: true,
+              discountedHostelFee: true,
+              hostelFeePaid: true,
+              hostelFeeDiscountApplied: true,
+              originalTotalFee: true,
+              previousYearDetails: true,
+              createdAt: true
+            }
           }
         },
         orderBy: [
@@ -538,20 +588,25 @@ export const searchStudentsForFee = async (req, res) => {
       prisma.student.count({ where })
     ])
 
-    // Process students with fee summary using discounted fees
+    // Ultra-fast processing with cached calculations
     const processedStudents = students.map(student => {
       const feeRecord = student.feeDetails[0] || null
       
-      // Parse previous year details
-      const previousYearDetails = feeRecord ? getFormattedPreviousYearDetails(feeRecord.previousYearDetails) : []
-      const previousYearFee = feeRecord ? calculateTotalPreviousYearPending(previousYearDetails) : 0
+      // Parse previous year details efficiently
+      let previousYearDetails = []
+      let previousYearFee = 0
+      
+      if (feeRecord?.previousYearDetails) {
+        previousYearDetails = getFormattedPreviousYearDetails(feeRecord.previousYearDetails)
+        previousYearFee = calculateTotalPreviousYearPending(previousYearDetails)
+      }
       
       let feeSummary = null
       if (feeRecord) {
         const discountedTotalFee = feeRecord.discountedSchoolFee + feeRecord.discountedTransportFee + feeRecord.discountedHostelFee
         const totalPaid = feeRecord.schoolFeePaid + feeRecord.transportFeePaid + feeRecord.hostelFeePaid
-        const currentYearDue = discountedTotalFee - totalPaid // Current year's due only
-        const totalDue = previousYearFee + currentYearDue // Total due including previous years
+        const currentYearDue = discountedTotalFee - totalPaid
+        const totalDue = previousYearFee + currentYearDue
         
         feeSummary = {
           discountedTotalFee,

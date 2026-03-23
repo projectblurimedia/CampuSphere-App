@@ -8,6 +8,8 @@ import {
   TextInput,
   Platform,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import {
@@ -276,7 +278,7 @@ const BusDetails = ({
       backgroundColor: colors.background,
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
-      maxHeight: '100%',
+      maxHeight: '90%',
     },
     modalHeader: {
       flexDirection: 'row',
@@ -309,6 +311,7 @@ const BusDetails = ({
     modalScrollContent: {
       flexGrow: 1,
       paddingHorizontal: 20,
+      paddingTop: 20,
       paddingBottom: 200,
     },
     modalInputContainer: {
@@ -354,7 +357,7 @@ const BusDetails = ({
     routeInputContainer: {
       flexDirection: 'row',
       gap: 8,
-      marginBottom: 8,
+      marginBottom: 12,
     },
     routeInput: {
       flex: 1,
@@ -366,6 +369,7 @@ const BusDetails = ({
       backgroundColor: colors.inputBackground,
       color: colors.text,
       fontFamily: 'Poppins-Medium',
+      fontSize: 14,
     },
     addRouteButton: {
       backgroundColor: colors.primary,
@@ -373,9 +377,11 @@ const BusDetails = ({
       paddingHorizontal: 16,
       justifyContent: 'center',
       alignItems: 'center',
+      minWidth: 48,
     },
     routesList: {
-      gap: 6,
+      gap: 8,
+      maxHeight: 200,
     },
     routeItem: {
       flexDirection: 'row',
@@ -392,18 +398,16 @@ const BusDetails = ({
       flex: 1,
       fontSize: 14,
       color: colors.text,
+      fontFamily: 'Poppins-Medium',
     },
     deleteRouteButton: {
       padding: 4,
     },
     modalActions: {
-      position: 'absolute',
-      bottom: 0,
       flexDirection: 'row',
       gap: 12,
       paddingHorizontal: 20,
-      paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-      paddingTop: 10,
+      paddingTop: 16,
       borderTopWidth: 1,
       borderTopColor: colors.border,
       backgroundColor: colors.background,
@@ -441,9 +445,13 @@ const BusDetails = ({
       marginBottom: 8,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
+      fontWeight: '500',
     },
     disabledButton: {
       opacity: 0.5,
+    },
+    keyboardAvoidingView: {
+      flex: 1,
     },
   }), [colors])
 
@@ -509,9 +517,10 @@ const BusDetails = ({
 
   const addRoute = () => {
     if (newRouteInput.trim()) {
+      const routeToAdd = newRouteInput.trim()
       setBusFormData(prev => ({
         ...prev,
-        routes: [...prev.routes, newRouteInput.trim()]
+        routes: [...prev.routes, routeToAdd]
       }))
       setNewRouteInput('')
     }
@@ -524,9 +533,32 @@ const BusDetails = ({
     }))
   }
 
+  // Check if bus number already exists
+  const isBusNumberDuplicate = (busNumber, excludeBusId = null) => {
+    return localBuses.some(bus => 
+      bus.busNumber === busNumber && 
+      bus.id !== excludeBusId
+    )
+  }
+
   const saveBus = async () => {
     if (!validateForm()) {
       showToast('Please fill all required fields correctly', 'warning')
+      return
+    }
+
+    // Check for duplicate bus number
+    const isDuplicate = isBusNumberDuplicate(
+      busFormData.busNumber.trim(), 
+      editingBus?.id
+    )
+    
+    if (isDuplicate) {
+      setFormErrors(prev => ({ 
+        ...prev, 
+        busNumber: 'Bus number already exists' 
+      }))
+      showToast('Bus number already exists! Please use a different bus number.', 'error')
       return
     }
 
@@ -561,11 +593,20 @@ const BusDetails = ({
     } catch (error) {
       console.error('Save bus error:', error)
       
-      if (error.response?.status === 400 && error.response?.data?.message?.includes('already exists')) {
-        setFormErrors(prev => ({ ...prev, busNumber: 'Bus number already exists' }))
-        showToast('Bus number already exists', 'error')
+      // Handle duplicate bus number from server response
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to save bus'
+      
+      if (errorMessage.toLowerCase().includes('bus number already exists') || 
+          errorMessage.toLowerCase().includes('already exists')) {
+        setFormErrors(prev => ({ 
+          ...prev, 
+          busNumber: 'Bus number already exists' 
+        }))
+        showToast('Bus number already exists! Please use a different bus number.', 'error')
+      } else if (error.response?.status === 400) {
+        showToast(errorMessage, 'error')
       } else {
-        showToast(error.response?.data?.message || 'Failed to save bus', 'error')
+        showToast('Failed to save bus. Please try again.', 'error')
       }
     } finally {
       setSaveLoading(false)
@@ -685,7 +726,7 @@ const BusDetails = ({
         )}
       </View>
     )
-  }, [isEditing, loading])
+  }, [isEditing, loading, styles, colors])
 
   return (
     <>
@@ -752,7 +793,7 @@ const BusDetails = ({
         )}
       </ScrollView>
 
-      {/* Bus Modal */}
+      {/* Bus Modal with KeyboardAvoidingView */}
       <Modal
         statusBarTranslucent
         visible={showBusModal}
@@ -760,10 +801,7 @@ const BusDetails = ({
         animationType="fade"
         onRequestClose={() => !saveLoading && setShowBusModal(false)}
       >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-        >
+        <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <View style={styles.modalTitleContainer}>
@@ -783,11 +821,12 @@ const BusDetails = ({
             </View>
 
             <ScrollView 
-              style={{ maxHeight: '80%' }} 
+              style={{ maxHeight: '70%' }} 
               contentContainerStyle={styles.modalScrollContent}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
+              {/* Bus Name */}
               <ThemedText style={styles.fieldLabel}>
                 Bus Name <ThemedText style={styles.requiredStar}>*</ThemedText>
               </ThemedText>
@@ -800,12 +839,14 @@ const BusDetails = ({
                   value={busFormData.name}
                   onChangeText={(text) => handleBusInputChange('name', text)}
                   editable={!saveLoading}
+                  returnKeyType="next"
                 />
               </View>
               {formErrors.name && (
                 <ThemedText style={styles.errorText}>{formErrors.name}</ThemedText>
               )}
 
+              {/* Bus Number */}
               <ThemedText style={styles.fieldLabel}>
                 Bus Number <ThemedText style={styles.requiredStar}>*</ThemedText>
               </ThemedText>
@@ -818,12 +859,15 @@ const BusDetails = ({
                   value={busFormData.busNumber}
                   onChangeText={(text) => handleBusInputChange('busNumber', text)}
                   editable={!saveLoading}
+                  autoCapitalize="characters"
+                  returnKeyType="next"
                 />
               </View>
               {formErrors.busNumber && (
                 <ThemedText style={styles.errorText}>{formErrors.busNumber}</ThemedText>
               )}
 
+              {/* Driver Name */}
               <ThemedText style={styles.fieldLabel}>
                 Driver Name <ThemedText style={styles.requiredStar}>*</ThemedText>
               </ThemedText>
@@ -836,12 +880,14 @@ const BusDetails = ({
                   value={busFormData.driverName}
                   onChangeText={(text) => handleBusInputChange('driverName', text)}
                   editable={!saveLoading}
+                  returnKeyType="next"
                 />
               </View>
               {formErrors.driverName && (
                 <ThemedText style={styles.errorText}>{formErrors.driverName}</ThemedText>
               )}
 
+              {/* Driver Phone */}
               <ThemedText style={styles.fieldLabel}>
                 Driver Phone <ThemedText style={styles.requiredStar}>*</ThemedText>
               </ThemedText>
@@ -855,12 +901,15 @@ const BusDetails = ({
                   onChangeText={(text) => handleBusInputChange('driverPhone', text)}
                   keyboardType="phone-pad"
                   editable={!saveLoading}
+                  maxLength={10}
+                  returnKeyType="next"
                 />
               </View>
               {formErrors.driverPhone && (
                 <ThemedText style={styles.errorText}>{formErrors.driverPhone}</ThemedText>
               )}
 
+              {/* Routes Section */}
               <View style={styles.routesContainer}>
                 <View style={styles.routesHeader}>
                   <ThemedText style={styles.fieldLabel}>
@@ -875,6 +924,8 @@ const BusDetails = ({
                     value={newRouteInput}
                     onChangeText={setNewRouteInput}
                     editable={!saveLoading}
+                    onSubmitEditing={addRoute}
+                    returnKeyType="done"
                   />
                   <TouchableOpacity
                     style={[styles.addRouteButton, saveLoading && styles.disabledButton]}
@@ -884,6 +935,7 @@ const BusDetails = ({
                     <Ionicons name="add" size={20} color="#FFFFFF" />
                   </TouchableOpacity>
                 </View>
+                
                 <View style={styles.routesList}>
                   {busFormData.routes.map((route, index) => (
                     <View key={index} style={styles.routeItem}>
@@ -926,7 +978,7 @@ const BusDetails = ({
               </TouchableOpacity>
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
       {/* Delete Bus Confirmation Modal */}

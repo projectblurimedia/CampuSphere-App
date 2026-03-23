@@ -13,7 +13,7 @@ import {
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
-import { Ionicons, Feather } from '@expo/vector-icons'
+import { Ionicons, Feather, FontAwesome6 } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 import { useDispatch, useSelector } from 'react-redux'
 import { useRouter } from 'expo-router'
@@ -22,8 +22,29 @@ import { ToastNotification } from '@/components/ui/ToastNotification'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
+const themeOptions = [
+  { 
+    id: 'system', 
+    label: 'System Default', 
+    icon: 'settings',
+    gradient: ['#667eea', '#764ba2']
+  },
+  { 
+    id: 'light', 
+    label: 'Light Mode', 
+    icon: 'sun',
+    gradient: ['#fbbf24', '#f59e0b']
+  },
+  { 
+    id: 'dark', 
+    label: 'Dark Mode', 
+    icon: 'moon',
+    gradient: ['#4f46e5', '#7c3aed']
+  },
+]
+
 export default function ProfileMenu({ visible, onClose }) {
-  const { colors } = useTheme()
+  const { theme, colors, changeTheme } = useTheme()
   const dispatch = useDispatch()
   const router = useRouter()
 
@@ -31,7 +52,11 @@ export default function ProfileMenu({ visible, onClose }) {
   
   const translateX = useRef(new Animated.Value(SCREEN_WIDTH)).current
   const backdropOpacity = useRef(new Animated.Value(0)).current
-  const [isVisible, setIsVisible] = useState(visible)
+  const [themeModalVisible, setThemeModalVisible] = useState(false)
+  
+  // Theme modal animations
+  const modalScale = useRef(new Animated.Value(0.8)).current
+  const modalOpacity = useRef(new Animated.Value(0)).current
   
   // State for logout confirmation modal
   const [showLogoutModal, setShowLogoutModal] = useState(false)
@@ -40,24 +65,9 @@ export default function ProfileMenu({ visible, onClose }) {
   // Toast state
   const [toast, setToast] = useState(null)
 
-  // Show toast notification
-  const showToast = (message, type = 'error') => {
-    setToast({ message, type })
-  }
-
-  // Hide toast notification
-  const hideToast = () => {
-    setToast(null)
-  }
-
-  // Handle visibility changes and animation
+  // Handle main menu animations when visibility changes
   useEffect(() => {
     if (visible) {
-      setIsVisible(true)
-      // Reset position before animating in
-      translateX.setValue(SCREEN_WIDTH)
-      backdropOpacity.setValue(0)
-      
       Animated.parallel([
         Animated.spring(translateX, {
           toValue: 0,
@@ -72,27 +82,68 @@ export default function ProfileMenu({ visible, onClose }) {
         }),
       ]).start()
     } else {
-      closeMenu()
+      Animated.parallel([
+        Animated.spring(translateX, {
+          toValue: SCREEN_WIDTH,
+          useNativeDriver: true,
+          tension: 60,
+          friction: 12,
+        }),
+        Animated.timing(backdropOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start()
+      // Close modals when main menu closes
+      setTimeout(() => {
+        setThemeModalVisible(false)
+        setShowLogoutModal(false)
+      }, 200)
     }
   }, [visible])
 
-  const closeMenu = () => {
-    Animated.parallel([
-      Animated.spring(translateX, {
-        toValue: SCREEN_WIDTH,
-        useNativeDriver: true,
-        tension: 60,
-        friction: 12,
-      }),
-      Animated.timing(backdropOpacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setIsVisible(false)
-      onClose()
-    })
+  // Handle theme modal animations
+  useEffect(() => {
+    if (themeModalVisible) {
+      Animated.parallel([
+        Animated.spring(modalScale, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 50,
+          friction: 7,
+        }),
+        Animated.timing(modalOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start()
+    } else {
+      Animated.parallel([
+        Animated.spring(modalScale, {
+          toValue: 0.8,
+          useNativeDriver: true,
+          tension: 50,
+          friction: 7,
+        }),
+        Animated.timing(modalOpacity, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start()
+    }
+  }, [themeModalVisible])
+
+  // Show toast notification
+  const showToast = (message, type = 'error') => {
+    setToast({ message, type })
+  }
+
+  // Hide toast notification
+  const hideToast = () => {
+    setToast(null)
   }
 
   const handleLogout = () => {
@@ -106,6 +157,7 @@ export default function ProfileMenu({ visible, onClose }) {
       setShowLogoutModal(false)
       showToast('Logged out successfully', 'success')
       setTimeout(() => {
+        onClose()
         router.replace('/')
       }, 1500)
     } catch (error) {
@@ -114,6 +166,15 @@ export default function ProfileMenu({ visible, onClose }) {
       setShowLogoutModal(false)
     } finally {
       setLogoutLoading(false)
+    }
+  }
+
+  const getThemeLabel = () => {
+    switch (theme) {
+      case 'system': return 'System Default'
+      case 'light': return 'Light Mode'
+      case 'dark': return 'Dark Mode'
+      default: return 'System Default'
     }
   }
 
@@ -178,26 +239,205 @@ export default function ProfileMenu({ visible, onClose }) {
     )
   }
 
-  // Don't render anything if not visible and no modal open
-  if (!isVisible && !visible && !showLogoutModal) {
-    return null
+  const handleThemeSelect = (themeId) => {
+    changeTheme(themeId)
+    setTimeout(() => setThemeModalVisible(false), 300)
   }
+
+  // Theme Selection Modal Component
+  const ThemeSelectionModal = () => {
+    return (
+      <Modal
+        visible={themeModalVisible}
+        transparent
+        animationType="none"
+        onRequestClose={() => setThemeModalVisible(false)}
+        statusBarTranslucent
+      >
+        <View style={styles.themeOverlay}>
+          <TouchableOpacity 
+            style={styles.themeBackdrop}
+            activeOpacity={1}
+            onPress={() => setThemeModalVisible(false)}
+          >
+            <Animated.View 
+              style={[
+                styles.themeBackdropAnimated,
+                { opacity: modalOpacity }
+              ]}
+            />
+          </TouchableOpacity>
+          
+          <Animated.View 
+            style={[
+              styles.themeModalContainer,
+              { 
+                opacity: modalOpacity,
+                transform: [{ scale: modalScale }]
+              }
+            ]}
+          >
+            <View style={[
+              styles.themeModalContent,
+              { backgroundColor: colors.cardBackground }
+            ]}>
+              <LinearGradient
+                colors={[colors.gradientStart, colors.gradientEnd]}
+                style={styles.themeHeaderGradient}
+              >
+                <View style={styles.themeHeaderContent}>
+                  <View style={styles.themeIconContainer}>
+                    <FontAwesome6 name="palette" size={28} color="#FFFFFF" />
+                  </View>
+                  <ThemedText type='subtitle' style={styles.themeHeaderTitle}>
+                    Choose Theme
+                  </ThemedText>
+                  <ThemedText style={styles.themeHeaderSubtitle}>
+                    Select your preferred app theme
+                  </ThemedText>
+                </View>
+              </LinearGradient>
+
+              <View style={styles.themeOptionsContainer}>
+                {themeOptions.map((option) => {
+                  const isSelected = theme === option.id
+                  
+                  return (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[
+                        styles.themeOption,
+                        { 
+                          backgroundColor: colors.cardBackground,
+                          borderWidth: isSelected ? 2 : 1,
+                          borderColor: isSelected ? colors.tint : colors.border,
+                        }
+                      ]}
+                      activeOpacity={0.7}
+                      onPress={() => handleThemeSelect(option.id)}
+                    >
+                      <LinearGradient
+                        colors={option.gradient}
+                        style={styles.themeOptionIcon}
+                      >
+                        <Feather name={option.icon} size={24} color="#FFFFFF" />
+                      </LinearGradient>
+                      
+                      <View style={styles.themeOptionText}>
+                        <ThemedText 
+                          style={[
+                            styles.themeOptionLabel,
+                            { color: isSelected ? colors.tint : colors.text }
+                          ]}
+                        >
+                          {option.label}
+                        </ThemedText>
+                      </View>
+                      
+                      {isSelected && (
+                        <View style={[styles.themeSelected, { backgroundColor: colors.tint }]}>
+                          <Feather name="check" size={16} color="#FFFFFF" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  )
+                })}
+              </View>
+
+              <TouchableOpacity
+                style={[styles.themeCloseBtn, { borderTopColor: colors.border }]}
+                onPress={() => setThemeModalVisible(false)}
+              >
+                <ThemedText style={[styles.themeCloseText, { color: colors.textSecondary }]}>
+                  Close
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </View>
+      </Modal>
+    )
+  }
+
+  // Logout Confirmation Modal Component
+  const LogoutConfirmationModal = () => (
+    <Modal
+      visible={showLogoutModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowLogoutModal(false)}
+      statusBarTranslucent
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.confirmationModal, { backgroundColor: colors.cardBackground }]}>
+          <View style={styles.confirmationHeader}>
+            <LinearGradient
+              colors={['#ef4444', '#dc2626']}
+              style={styles.confirmationIcon}
+            >
+              <Feather name="log-out" size={28} color="#FFFFFF" />
+            </LinearGradient>
+            <ThemedText type="subtitle" style={[styles.confirmationTitle, { color: colors.text }]}>
+              Confirm Logout
+            </ThemedText>
+            <ThemedText style={[styles.confirmationMessage, { color: colors.textSecondary }]}>
+              Are you sure you want to logout from your account?
+            </ThemedText>
+          </View>
+          
+          <View style={styles.confirmationButtons}>
+            <TouchableOpacity
+              style={[styles.cancelBtn, { borderColor: colors.border, backgroundColor: colors.inputBackground }]}
+              onPress={() => setShowLogoutModal(false)}
+              disabled={logoutLoading}
+            >
+              <ThemedText style={[styles.cancelBtnText, { color: colors.text }]}>
+                Cancel
+              </ThemedText>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.confirmBtn}
+              onPress={confirmLogout}
+              disabled={logoutLoading}
+            >
+              <LinearGradient
+                colors={['#ef4444', '#dc2626']}
+                style={styles.confirmBtnGradient}
+              >
+                {logoutLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Feather name="log-out" size={16} color="#FFFFFF" />
+                    <ThemedText style={styles.confirmBtnText}>
+                      Logout
+                    </ThemedText>
+                  </>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
 
   return (
     <>
       {/* Side Menu Modal */}
       <Modal
-        visible={isVisible}
+        visible={visible}
         transparent
         animationType="none"
-        onRequestClose={closeMenu}
+        onRequestClose={onClose}
         statusBarTranslucent
       >
         <View style={styles.modalContainer}>
           <TouchableOpacity 
             style={styles.backdropTouchable} 
             activeOpacity={1} 
-            onPress={closeMenu}
+            onPress={onClose}
           >
             <Animated.View
               style={[
@@ -240,7 +480,7 @@ export default function ProfileMenu({ visible, onClose }) {
                 
                 <TouchableOpacity
                   style={styles.closeBtn}
-                  onPress={closeMenu}
+                  onPress={onClose}
                 >
                   <Ionicons name="close" size={24} color="#FFFFFF" />
                 </TouchableOpacity>
@@ -269,28 +509,28 @@ export default function ProfileMenu({ visible, onClose }) {
                 </View>
               </View>
 
-              {/* Menu Items */}
+              {/* App Settings Section */}
               <View style={styles.section}>
                 <ThemedText style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-                  ACCOUNT
+                  APP SETTINGS
                 </ThemedText>
                 <View style={styles.items}>
-                  {/* Logout Option - Only Item */}
+                  {/* Theme Option */}
                   <TouchableOpacity
                     activeOpacity={0.7} 
                     style={[styles.item, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
-                    onPress={handleLogout}
+                    onPress={() => setThemeModalVisible(true)}
                   >
                     <View style={styles.itemContent}>
-                      <View style={[styles.icon, { backgroundColor: '#F4433620' }]}>
-                        <Feather name="log-out" size={20} color="#F44336" />
+                      <View style={[styles.icon, { backgroundColor: colors.primary + '20' }]}>
+                        <FontAwesome6 name="palette" size={20} color={colors.primary} />
                       </View>
                       <View style={styles.itemText}>
                         <ThemedText style={[styles.itemTitle, { color: colors.text }]}>
-                          Logout
+                          App Theme
                         </ThemedText>
                         <ThemedText style={[styles.itemValue, { color: colors.textSecondary }]}>
-                          Sign out from your account
+                          {getThemeLabel()}
                         </ThemedText>
                       </View>
                       <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
@@ -299,12 +539,34 @@ export default function ProfileMenu({ visible, onClose }) {
                 </View>
               </View>
 
+              {/* Account Section */}
+              <View style={styles.section}>
+                <ThemedText style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+                  ACCOUNT
+                </ThemedText>
+                <View style={styles.items}>
+                  {/* Logout Button */}
+                  <TouchableOpacity
+                    activeOpacity={.7}
+                    onPress={handleLogout}
+                  >
+                    <LinearGradient 
+                      colors={['#ef4444', '#dc2626']} 
+                      style={styles.logoutGradient}
+                    >
+                      <Feather name="log-out" size={18} color="#FFFFFF" />
+                      <ThemedText style={styles.logoutText}>Logout</ThemedText>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
               <View style={styles.footer}>
                 <ThemedText style={[styles.footerText, { color: colors.textSecondary }]}>
-                  Bluri High School App v2.4.1
+                  Bluri Developers v2.4.1
                 </ThemedText>
                 <ThemedText style={[styles.footerCopyright, { color: colors.textSecondary }]}>
-                  © 2024 All rights reserved
+                  © 2026 All rights reserved
                 </ThemedText>
               </View>
             </ScrollView>
@@ -312,56 +574,11 @@ export default function ProfileMenu({ visible, onClose }) {
         </View>
       </Modal>
 
+      {/* Theme Selection Modal */}
+      <ThemeSelectionModal />
+
       {/* Logout Confirmation Modal */}
-      <Modal
-        visible={showLogoutModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowLogoutModal(false)}
-        statusBarTranslucent
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
-            <View style={[styles.modalIcon, { backgroundColor: '#F4433620' }]}>
-              <Feather name="log-out" size={40} color="#F44336" />
-            </View>
-            
-            <ThemedText style={[styles.modalTitle, { color: colors.text }]}>
-              Confirm Logout
-            </ThemedText>
-            
-            <ThemedText style={[styles.modalMessage, { color: colors.textSecondary }]}>
-              Are you sure you want to logout from your account?
-            </ThemedText>
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel, { borderColor: colors.border }]}
-                onPress={() => setShowLogoutModal(false)}
-                disabled={logoutLoading}
-              >
-                <ThemedText style={[styles.modalButtonText, { color: colors.textSecondary }]}>
-                  Cancel
-                </ThemedText>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonDelete, logoutLoading && { opacity: 0.5 }]}
-                onPress={confirmLogout}
-                disabled={logoutLoading}
-              >
-                {logoutLoading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <ThemedText style={styles.modalButtonTextDelete}>
-                    Logout
-                  </ThemedText>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <LogoutConfirmationModal />
 
       {/* Toast Notification */}
       <ToastNotification
@@ -556,6 +773,21 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Regular',
     opacity: 0.7,
   },
+  logoutGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  logoutText: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    marginLeft: 8,
+    fontFamily: 'Poppins-SemiBold',
+  },
   footer: {
     alignItems: 'center',
     paddingTop: 20,
@@ -570,70 +802,190 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins-Regular',
     opacity: 0.5,
   },
-  // Logout Modal Styles
+  // Modal Overlay
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
-  modalContent: {
+  // Theme Modal Styles (matching your ThemeModal component)
+  themeOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  themeBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  themeBackdropAnimated: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  themeModalContainer: {
     width: SCREEN_WIDTH * 0.85,
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    maxWidth: 400,
+    paddingHorizontal: 20,
   },
-  modalIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  themeModalContent: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 20,
+      },
+    }),
+  },
+  themeHeaderGradient: {
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+  },
+  themeHeaderContent: {
+    alignItems: 'center',
+  },
+  themeIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 15,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontFamily: 'Poppins-SemiBold',
+  themeHeaderTitle: {
+    fontSize: 22,
+    color: '#FFFFFF',
     marginBottom: 8,
   },
-  modalMessage: {
+  themeHeaderSubtitle: {
     fontSize: 14,
-    fontFamily: 'Poppins-Regular',
+    color: 'rgba(255, 255, 255, 0.9)',
     textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 20,
   },
-  modalButtons: {
+  themeOptionsContainer: {
+    padding: 20,
+  },
+  themeOption: {
     flexDirection: 'row',
-    gap: 12,
-    width: '100%',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
   },
-  modalButton: {
+  themeOptionIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+  },
+  themeOptionText: {
     flex: 1,
-    height: 48,
+  },
+  themeOptionLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  themeSelected: {
+    width: 24,
+    height: 24,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    marginLeft: 10,
   },
-  modalButtonCancel: {
-    backgroundColor: 'transparent',
+  themeCloseBtn: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderTopWidth: 1,
+  },
+  themeCloseText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Logout Confirmation Modal Styles
+  confirmationModal: {
+    width: '90%',
+    maxWidth: 400,
+    borderRadius: 20,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.2,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 10,
+      },
+    }),
+  },
+  confirmationHeader: {
+    alignItems: 'center',
+    padding: 30,
+    paddingBottom: 20,
+  },
+  confirmationIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  confirmationTitle: {
+    fontSize: 22,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  confirmationMessage: {
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  confirmationButtons: {
+    flexDirection: 'row',
+    padding: 20,
+    paddingTop: 10,
+    gap: 12,
+  },
+  cancelBtn: {
+    flex: 1,
+    borderRadius: 12,
     borderWidth: 1,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  modalButtonDelete: {
-    backgroundColor: '#F44336',
-  },
-  modalButtonText: {
+  cancelBtnText: {
     fontSize: 16,
     fontFamily: 'Poppins-Medium',
   },
-  modalButtonTextDelete: {
-    color: '#FFFFFF',
+  confirmBtn: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  confirmBtnGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+  },
+  confirmBtnText: {
     fontSize: 16,
     fontFamily: 'Poppins-SemiBold',
+    color: '#FFFFFF',
+    marginLeft: 8,
   },
 })

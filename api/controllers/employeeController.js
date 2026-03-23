@@ -768,127 +768,127 @@ export const deleteEmployee = async (req, res) => {
 }
 
 /**
- * @desc    Search for employees with advanced fuzzy matching (name only)
- * @route   GET /api/employees/quick-search
+ * @desc    Search employees by name (ULTRA OPTIMIZED)
+ * @route   GET /api/employees/search
  * @access  Private
  */
 export const searchEmployees = async (req, res) => {
   try {
-    const { query, limit = 10, fuzzy = 'false' } = req.query
+    const {
+      query,
+      designation,
+      page = 1,
+      limit = 20,
+      sortBy = 'firstName',
+      sortOrder = 'asc',
+    } = req.query
 
-    if (!query || query.trim() === '') {
-      return res.status(200).json({
-        success: true,
-        data: []
-      })
+    // Build where clause with minimal overhead
+    const where = { isActive: true }
+    const searchTerm = query?.trim()
+
+    // OPTIMIZED: Single pass search logic
+    if (searchTerm) {
+      const searchWords = searchTerm.toLowerCase().split(' ').filter(w => w.length > 0)
+      
+      if (searchWords.length === 1) {
+        // Single word - fastest prefix search
+        where.OR = [
+          { firstName: { startsWith: searchWords[0], mode: 'insensitive' } },
+          { lastName: { startsWith: searchWords[0], mode: 'insensitive' } }
+        ]
+      } else if (searchWords.length >= 2) {
+        const firstWord = searchWords[0]
+        const lastWord = searchWords[searchWords.length - 1]
+        
+        // Two conditions only - fastest possible
+        where.OR = [
+          {
+            AND: [
+              { firstName: { startsWith: firstWord, mode: 'insensitive' } },
+              { lastName: { startsWith: lastWord, mode: 'insensitive' } }
+            ]
+          },
+          {
+            AND: [
+              { firstName: { contains: firstWord, mode: 'insensitive' } },
+              { lastName: { startsWith: lastWord, mode: 'insensitive' } }
+            ]
+          }
+        ]
+      }
     }
 
-    const searchTerm = query.trim()
-    let employees = []
+    // Apply designation filter
+    if (designation && designation !== 'All' && designation !== 'all') {
+      where.designation = designation
+    }
 
-    if (fuzzy === 'true' && process.env.DATABASE_URL?.includes('postgres')) {
-      // Use PostgreSQL trigram similarity for fuzzy matching
-      employees = await prisma.$queryRaw`
-        SELECT 
-          id, 
-          "firstName", 
-          "lastName", 
-          designation, 
-          "joiningDate",
-          "isActive",
-          GREATEST(
-            similarity("firstName", ${searchTerm}),
-            similarity("lastName", ${searchTerm}),
-            similarity(CONCAT("firstName", ' ', "lastName"), ${searchTerm})
-          ) as similarity
-        FROM "Employee"
-        WHERE "isActive" = true
-        AND (
-          "firstName" ILIKE ${searchTerm + '%'} OR
-          "lastName" ILIKE ${searchTerm + '%'} OR
-          CONCAT("firstName", ' ', "lastName") ILIKE ${'%' + searchTerm + '%'}
-        )
-        ORDER BY similarity DESC
-        LIMIT ${parseInt(limit)}
-      `
-    } else {
-      // Standard prefix matching for better performance
-      employees = await prisma.employee.findMany({
-        where: {
-          isActive: true,
-          OR: [
-            { firstName: { startsWith: searchTerm, mode: 'insensitive' } },
-            { lastName: { startsWith: searchTerm, mode: 'insensitive' } },
-            {
-              AND: [
-                { firstName: { contains: searchTerm, mode: 'insensitive' } },
-                { lastName: { contains: searchTerm, mode: 'insensitive' } }
-              ]
-            }
-          ]
-        },
-        take: parseInt(limit),
+    // Pagination
+    const pageNum = parseInt(page)
+    const limitNum = parseInt(limit)
+    const skip = (pageNum - 1) * limitNum
+
+    // Sorting with index optimization
+    const orderBy = {}
+    const sortField = ['firstName', 'lastName', 'designation', 'joiningDate'].includes(sortBy) ? sortBy : 'firstName'
+    orderBy[sortField] = sortOrder === 'desc' ? 'desc' : 'asc'
+
+    // Parallel execution for maximum speed
+    const [employees, total] = await Promise.all([
+      prisma.employee.findMany({
+        where,
+        orderBy,
+        take: limitNum,
+        skip,
         select: {
           id: true,
           firstName: true,
           lastName: true,
+          email: true,
+          gender: true,
+          phone: true,
           designation: true,
           joiningDate: true,
+          profilePicUrl: true,
           isActive: true,
-        },
-        orderBy: [
-          { firstName: 'asc' },
-          { lastName: 'asc' }
-        ]
-      })
-    }
+          createdAt: true,
+        }
+      }),
+      prisma.employee.count({ where })
+    ])
 
-    // Format and deduplicate results
-    const formattedEmployees = []
-    const seenIds = new Set()
-
-    for (const employee of employees) {
-      if (!seenIds.has(employee.id)) {
-        seenIds.add(employee.id)
-        
-        // Check if search term matches from start of either name
-        const firstNameMatch = employee.firstName?.toLowerCase().startsWith(searchTerm.toLowerCase())
-        const lastNameMatch = employee.lastName?.toLowerCase().startsWith(searchTerm.toLowerCase())
-        
-        formattedEmployees.push({
-          id: employee.id,
-          name: `${employee.firstName || ''} ${employee.lastName || ''}`.trim(),
-          firstName: employee.firstName,
-          lastName: employee.lastName,
-          designation: employee.designation,
-          joiningDate: employee.joiningDate,
-          isActive: employee.isActive,
-          matchType: firstNameMatch ? 'first-name' : (lastNameMatch ? 'last-name' : 'full-name'),
-          similarity: employee.similarity || undefined
-        })
-      }
-    }
-
-    // Sort by match type priority
-    formattedEmployees.sort((a, b) => {
-      const priority = { 'first-name': 3, 'last-name': 2, 'full-name': 1 }
-      return (priority[b.matchType] || 0) - (priority[a.matchType] || 0)
-    })
+    // Fast mapping without extra loops
+    const employeesWithDisplay = employees.map(employee => ({
+      ...employee,
+      name: `${employee.firstName || ''} ${employee.lastName || ''}`.trim(),
+      designationDisplay: getDesignationDisplayName(employee.designation),
+      gender: employee.gender,
+    }))
 
     res.status(200).json({
       success: true,
-      data: formattedEmployees.slice(0, parseInt(limit))
+      count: employees.length,
+      total,
+      pagination: {
+        current: pageNum,
+        totalPages: Math.ceil(total / limitNum),
+        hasNext: pageNum * limitNum < total,
+        hasPrev: pageNum > 1,
+      },
+      data: employeesWithDisplay,
     })
   } catch (error) {
-    console.error('Quick search employees error:', error)
+    console.error('Search employees error:', error)
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to search employees',
     })
   }
 }
+
 /**
- * @desc    Quick search for autocomplete (ULTRA OPTIMIZED)
+ * @desc    Quick search for employees autocomplete (ULTRA OPTIMIZED)
  * @route   GET /api/employees/quick-search
  * @access  Private
  */
@@ -903,33 +903,76 @@ export const quickSearchEmployees = async (req, res) => {
       })
     }
 
-    const searchTerm = query.trim()
+    const searchTerm = query.trim().toLowerCase()
+    const searchWords = searchTerm.split(' ').filter(word => word.length > 0)
+    const limitNum = parseInt(limit)
+    
+    let employees = []
 
-    // Ultra fast search - only returns id and name for autocomplete
-    const employees = await prisma.employee.findMany({
-      where: {
-        isActive: true,
-        OR: [
-          { firstName: { contains: searchTerm, mode: 'insensitive' } },
-          { lastName: { contains: searchTerm, mode: 'insensitive' } },
-          { email: { contains: searchTerm, mode: 'insensitive' } },
+    // SUPER FAST: Single optimized query for all scenarios
+    if (searchWords.length === 1) {
+      // Single word search - use prefix matching with index
+      employees = await prisma.employee.findMany({
+        where: {
+          isActive: true,
+          OR: [
+            { firstName: { startsWith: searchTerm, mode: 'insensitive' } },
+            { lastName: { startsWith: searchTerm, mode: 'insensitive' } }
+          ]
+        },
+        take: limitNum,
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          designation: true,
+          profilePicUrl: true,
+        },
+        orderBy: [
+          { firstName: 'asc' },
+          { lastName: 'asc' }
         ]
-      },
-      take: parseInt(limit),
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        designation: true,
-        profilePicUrl: true,
-      },
-      orderBy: [
-        { firstName: 'asc' },
-        { lastName: 'asc' }
-      ]
-    })
+      })
+    } else {
+      // Multi-word search - optimized with index-friendly conditions
+      const firstWord = searchWords[0]
+      const lastWord = searchWords[searchWords.length - 1]
+      
+      employees = await prisma.employee.findMany({
+        where: {
+          isActive: true,
+          OR: [
+            // Best match: firstName starts with first word AND lastName starts with last word
+            {
+              AND: [
+                { firstName: { startsWith: firstWord, mode: 'insensitive' } },
+                { lastName: { startsWith: lastWord, mode: 'insensitive' } }
+              ]
+            },
+            // Second best: firstName contains first word AND lastName starts with last word
+            {
+              AND: [
+                { firstName: { contains: firstWord, mode: 'insensitive' } },
+                { lastName: { startsWith: lastWord, mode: 'insensitive' } }
+              ]
+            }
+          ]
+        },
+        take: limitNum,
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          gender: true,
+          designation: true,
+          profilePicUrl: true,
+        }
+      })
+    }
 
+    // Ultra-fast formatting
     const formattedEmployees = employees.map(employee => ({
       id: employee.id,
       name: `${employee.firstName || ''} ${employee.lastName || ''}`.trim(),
@@ -937,6 +980,7 @@ export const quickSearchEmployees = async (req, res) => {
       lastName: employee.lastName,
       email: employee.email,
       designation: employee.designation,
+      gender: employee.gender,
       designationDisplay: getDesignationDisplayName(employee.designation),
       profilePicUrl: employee.profilePicUrl,
     }))
@@ -946,7 +990,7 @@ export const quickSearchEmployees = async (req, res) => {
       data: formattedEmployees
     })
   } catch (error) {
-    console.error('Quick search error:', error)
+    console.error('Quick search employees error:', error)
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to search employees',

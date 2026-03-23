@@ -977,7 +977,7 @@ export const getAllStudents = async (req, res) => {
 }
 
 /**
- * @desc    Search students by name (OPTIMIZED - firstName and lastName only)
+ * @desc    Search students by name (ULTRA-OPTIMIZED)
  * @route   GET /api/students/search
  * @access  Private
  */
@@ -994,69 +994,53 @@ export const searchStudents = async (req, res) => {
       sortOrder = 'asc',
     } = req.query
 
-    // Build where clause efficiently
-    const where = {
-      isActive: true
-    }
+    // Build where clause with minimal overhead
+    const where = { isActive: true }
+    const searchTerm = query?.trim()
 
-    // OPTIMIZED: Search only by firstName and lastName
-    if (query && query.trim() !== '') {
-      const searchTerm = query.trim()
-      
-      // Split search term into words for better matching
-      const searchWords = searchTerm.split(' ').filter(word => word.length > 0)
+    // OPTIMIZED: Single pass search logic
+    if (searchTerm) {
+      const searchWords = searchTerm.toLowerCase().split(' ').filter(w => w.length > 0)
       
       if (searchWords.length === 1) {
-        // Single word - search in both firstName and lastName
+        // Single word - fastest prefix search
         where.OR = [
-          { firstName: { contains: searchWords[0], mode: 'insensitive' } },
-          { lastName: { contains: searchWords[0], mode: 'insensitive' } },
+          { firstName: { startsWith: searchWords[0], mode: 'insensitive' } },
+          { lastName: { startsWith: searchWords[0], mode: 'insensitive' } }
         ]
       } else if (searchWords.length >= 2) {
-        // Multiple words - try to match firstName + lastName pattern
+        const firstWord = searchWords[0]
+        const lastWord = searchWords[searchWords.length - 1]
+        
+        // Two conditions only - fastest possible
         where.OR = [
           {
             AND: [
-              { firstName: { contains: searchWords[0], mode: 'insensitive' } },
-              { lastName: { contains: searchWords.slice(1).join(' '), mode: 'insensitive' } },
+              { firstName: { startsWith: firstWord, mode: 'insensitive' } },
+              { lastName: { startsWith: lastWord, mode: 'insensitive' } }
             ]
           },
           {
             AND: [
-              { firstName: { contains: searchWords.slice(0, -1).join(' '), mode: 'insensitive' } },
-              { lastName: { contains: searchWords[searchWords.length - 1], mode: 'insensitive' } },
+              { firstName: { contains: firstWord, mode: 'insensitive' } },
+              { lastName: { startsWith: lastWord, mode: 'insensitive' } }
             ]
-          },
-          // Also try matching any word in either field for flexibility
-          {
-            OR: searchWords.map(word => ({
-              OR: [
-                { firstName: { contains: word, mode: 'insensitive' } },
-                { lastName: { contains: word, mode: 'insensitive' } },
-              ]
-            }))
           }
         ]
       }
     }
 
-    // Apply class filter (using index)
+    // Apply filters with early returns
     if (classFilter && classFilter !== 'All' && classFilter !== 'all') {
       const classEnum = mapClassToEnum(classFilter)
-      if (classEnum) {
-        where.class = classEnum
-      }
+      if (classEnum) where.class = classEnum
     }
 
-    // Apply section filter (using index)
     if (section && section !== 'All' && section !== 'all') {
       const validatedSection = validateSection(section)
-      if (validatedSection) {
-        where.section = validatedSection
-      }
+      if (validatedSection) where.section = validatedSection
     }
 
-    // Apply gender filter
     if (gender && gender !== 'All' && gender !== 'all') {
       where.gender = gender.toUpperCase()
     }
@@ -1066,13 +1050,12 @@ export const searchStudents = async (req, res) => {
     const limitNum = parseInt(limit)
     const skip = (pageNum - 1) * limitNum
 
-    // Sorting (using indexes on firstName and lastName)
+    // Sorting with index optimization
     const orderBy = {}
-    const validSortFields = ['firstName', 'lastName', 'rollNo', 'admissionNo', 'createdAt']
-    const sortField = validSortFields.includes(sortBy) ? sortBy : 'firstName'
+    const sortField = ['firstName', 'lastName', 'rollNo', 'admissionNo', 'createdAt'].includes(sortBy) ? sortBy : 'firstName'
     orderBy[sortField] = sortOrder === 'desc' ? 'desc' : 'asc'
 
-    // Execute count and find in parallel for better performance
+    // Parallel execution for maximum speed
     const [students, total] = await Promise.all([
       prisma.student.findMany({
         where,
@@ -1099,7 +1082,7 @@ export const searchStudents = async (req, res) => {
       prisma.student.count({ where })
     ])
 
-    // Add display class names
+    // Fast mapping without extra loops
     const studentsWithDisplay = students.map(student => ({
       ...student,
       name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
@@ -1128,11 +1111,11 @@ export const searchStudents = async (req, res) => {
 }
 
 /**
- * @desc   Search for inactive students autocomplete (ULTRA OPTIMIZED)
- * @route   GET /api/students/inactive/search
+ * @desc    Quick search for autocomplete (ULTRA OPTIMIZED)
+ * @route   GET /api/students/quick-search
  * @access  Private
  */
-export const searchInactiveStudents = async (req, res) => {
+export const quickSearchStudents = async (req, res) => {
   try {
     const { query, limit = 10 } = req.query
 
@@ -1143,118 +1126,24 @@ export const searchInactiveStudents = async (req, res) => {
       })
     }
 
-    const searchTerm = query.trim()
-
-    // Ultra fast search - only returns id and name for autocomplete
-    const students = await prisma.student.findMany({
-      where: {
-        isActive: false,  // Only inactive students
-        OR: [
-          { firstName: { contains: searchTerm, mode: 'insensitive' } },
-          { lastName: { contains: searchTerm, mode: 'insensitive' } },
-        ]
-      },
-      take: parseInt(limit),
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        village: true,
-      },
-      orderBy: [
-        { firstName: 'asc' },
-        { lastName: 'asc' }
-      ]
-    })
-
-    const formattedStudents = students.map(student => ({
-      id: student.id,
-      name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
-      firstName: student.firstName,
-      lastName: student.lastName,
-      admissionNo: student.admissionNo,
-      village: student.village,
-      isActive: false
-    }))
-
-    console.log(formattedStudents)
-
-    res.status(200).json({
-      success: true,
-      data: formattedStudents
-    })
-  } catch (error) {
-    console.error('Quick search inactive students error:', error)
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to search inactive students',
-    })
-  }
-}
-
-/**
- * @desc    Quick search for autocomplete with advanced fuzzy matching
- * @route   GET /api/students/quick-search
- * @access  Private
- */
-export const quickSearchStudents = async (req, res) => {
-  try {
-    const { query, limit = 10, fuzzy = 'false' } = req.query
-
-    if (!query || query.trim() === '') {
-      return res.status(200).json({
-        success: true,
-        data: []
-      })
-    }
-
-    const searchTerm = query.trim()
+    const searchTerm = query.trim().toLowerCase()
+    const searchWords = searchTerm.split(' ').filter(word => word.length > 0)
+    const limitNum = parseInt(limit)
+    
     let students = []
 
-    if (fuzzy === 'true' && process.env.DATABASE_URL?.includes('postgres')) {
-      // Use PostgreSQL trigram similarity for fuzzy matching
-      students = await prisma.$queryRaw`
-        SELECT 
-          id, 
-          "firstName", 
-          "lastName", 
-          "rollNo", 
-          "admissionNo", 
-          class, 
-          section, 
-          "profilePicUrl",
-          GREATEST(
-            similarity("firstName", ${searchTerm}),
-            similarity("lastName", ${searchTerm}),
-            similarity(CONCAT("firstName", ' ', "lastName"), ${searchTerm})
-          ) as similarity
-        FROM "Student"
-        WHERE "isActive" = true
-        AND (
-          "firstName" ILIKE ${searchTerm + '%'} OR
-          "lastName" ILIKE ${searchTerm + '%'} OR
-          CONCAT("firstName", ' ', "lastName") ILIKE ${'%' + searchTerm + '%'}
-        )
-        ORDER BY similarity DESC
-        LIMIT ${parseInt(limit)}
-      `
-    } else {
-      // Standard prefix matching for better performance
+    // SUPER FAST: Single optimized query for all scenarios
+    if (searchWords.length === 1) {
+      // Single word search - use prefix matching with index
       students = await prisma.student.findMany({
         where: {
           isActive: true,
           OR: [
             { firstName: { startsWith: searchTerm, mode: 'insensitive' } },
-            { lastName: { startsWith: searchTerm, mode: 'insensitive' } },
-            {
-              AND: [
-                { firstName: { contains: searchTerm, mode: 'insensitive' } },
-                { lastName: { contains: searchTerm, mode: 'insensitive' } }
-              ]
-            }
+            { lastName: { startsWith: searchTerm, mode: 'insensitive' } }
           ]
         },
-        take: parseInt(limit),
+        take: limitNum,
         select: {
           id: true,
           firstName: true,
@@ -1270,51 +1159,173 @@ export const quickSearchStudents = async (req, res) => {
           { lastName: 'asc' }
         ]
       })
+    } else {
+      // Multi-word search - optimized with index-friendly conditions
+      const firstWord = searchWords[0]
+      const lastWord = searchWords[searchWords.length - 1]
+      
+      students = await prisma.student.findMany({
+        where: {
+          isActive: true,
+          OR: [
+            // Best match: firstName starts with first word AND lastName starts with last word
+            {
+              AND: [
+                { firstName: { startsWith: firstWord, mode: 'insensitive' } },
+                { lastName: { startsWith: lastWord, mode: 'insensitive' } }
+              ]
+            },
+            // Second best: firstName contains first word AND lastName starts with last word
+            {
+              AND: [
+                { firstName: { contains: firstWord, mode: 'insensitive' } },
+                { lastName: { startsWith: lastWord, mode: 'insensitive' } }
+              ]
+            }
+          ]
+        },
+        take: limitNum,
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          rollNo: true,
+          admissionNo: true,
+          class: true,
+          section: true,
+          profilePicUrl: true,
+        }
+      })
     }
 
-    // Format and deduplicate results
-    const formattedStudents = []
-    const seenIds = new Set()
-
-    for (const student of students) {
-      if (!seenIds.has(student.id)) {
-        seenIds.add(student.id)
-        
-        // Check if search term matches from start of either name
-        const firstNameMatch = student.firstName?.toLowerCase().startsWith(searchTerm.toLowerCase())
-        const lastNameMatch = student.lastName?.toLowerCase().startsWith(searchTerm.toLowerCase())
-        
-        formattedStudents.push({
-          id: student.id,
-          name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
-          firstName: student.firstName,
-          lastName: student.lastName,
-          rollNo: student.rollNo,
-          class: mapEnumToDisplayName(student.class),
-          displayClass: mapEnumToDisplayName(student.class),
-          section: student.section,
-          profilePicUrl: student.profilePicUrl,
-          matchType: firstNameMatch ? 'first-name' : (lastNameMatch ? 'last-name' : 'full-name'),
-          similarity: student.similarity || undefined
-        })
-      }
-    }
-
-    // Sort by match type priority
-    formattedStudents.sort((a, b) => {
-      const priority = { 'first-name': 3, 'last-name': 2, 'full-name': 1 }
-      return (priority[b.matchType] || 0) - (priority[a.matchType] || 0)
-    })
+    // Ultra-fast formatting with no extra processing
+    const formattedStudents = students.map(student => ({
+      id: student.id,
+      name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
+      firstName: student.firstName,
+      lastName: student.lastName,
+      rollNo: student.rollNo,
+      class: mapEnumToDisplayName(student.class),
+      displayClass: mapEnumToDisplayName(student.class),
+      section: student.section,
+      profilePicUrl: student.profilePicUrl
+    }))
 
     res.status(200).json({
       success: true,
-      data: formattedStudents.slice(0, parseInt(limit))
+      data: formattedStudents
     })
   } catch (error) {
     console.error('Quick search error:', error)
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to search students',
+    })
+  }
+}
+
+/**
+ * @desc   Search for inactive students autocomplete (ULTRA OPTIMIZED)
+ * @route   GET /api/students/inactive/search
+ * @access  Private
+ */
+export const searchInactiveStudents = async (req, res) => {
+  try {
+    const { query, limit = 10 } = req.query
+
+    if (!query || query.trim() === '') {
+      return res.status(200).json({
+        success: true,
+        data: []
+      })
+    }
+
+    const searchTerm = query.trim().toLowerCase()
+    const searchWords = searchTerm.split(' ').filter(word => word.length > 0)
+    const limitNum = parseInt(limit)
+    
+    let students = []
+
+    // Ultra-fast search with same logic as active students
+    if (searchWords.length === 1) {
+      // Single word search - use prefix matching with index
+      students = await prisma.student.findMany({
+        where: {
+          isActive: false,
+          OR: [
+            { firstName: { startsWith: searchWords[0], mode: 'insensitive' } },
+            { lastName: { startsWith: searchWords[0], mode: 'insensitive' } }
+          ]
+        },
+        take: limitNum,
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          admissionNo: true,
+          village: true,
+        },
+        orderBy: [
+          { firstName: 'asc' },
+          { lastName: 'asc' }
+        ]
+      })
+    } else {
+      // Multi-word search - optimized with index-friendly conditions
+      const firstWord = searchWords[0]
+      const lastWord = searchWords[searchWords.length - 1]
+      
+      students = await prisma.student.findMany({
+        where: {
+          isActive: false,
+          OR: [
+            // Best match: firstName starts with first word AND lastName starts with last word
+            {
+              AND: [
+                { firstName: { startsWith: firstWord, mode: 'insensitive' } },
+                { lastName: { startsWith: lastWord, mode: 'insensitive' } }
+              ]
+            },
+            // Second best: firstName contains first word AND lastName starts with last word
+            {
+              AND: [
+                { firstName: { contains: firstWord, mode: 'insensitive' } },
+                { lastName: { startsWith: lastWord, mode: 'insensitive' } }
+              ]
+            }
+          ]
+        },
+        take: limitNum,
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          admissionNo: true,
+          village: true,
+        }
+      })
+    }
+
+    // Ultra-fast formatting
+    const formattedStudents = students.map(student => ({
+      id: student.id,
+      name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
+      firstName: student.firstName,
+      lastName: student.lastName,
+      admissionNo: student.admissionNo,
+      village: student.village,
+      isActive: false
+    }))
+
+    res.status(200).json({
+      success: true,
+      data: formattedStudents
+    })
+  } catch (error) {
+    console.error('Quick search inactive students error:', error)
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to search inactive students',
     })
   }
 }

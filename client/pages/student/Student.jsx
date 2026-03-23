@@ -24,7 +24,6 @@ import { useSelector } from 'react-redux'
 import axiosApi from '@/utils/axiosApi'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import CreateStudent from '@/pages/menu/createStudent/CreateStudent'
-import StudentFeeDetails from '@/pages/menu/feeDetails/StudentFeeDetails'
 import StudentAttendance from './StudentAttendance'
 import StudentMarks from './StudentMarks'
 import { useDispatch } from 'react-redux'
@@ -37,35 +36,30 @@ const rolePermissions = {
   chairperson: {
     canEdit: true,
     canInactivate: true,
-    canViewFees: true,
     canViewAttendance: true,
     canViewMarks: true
   },
   accountant: {
     canEdit: true,
     canInactivate: true,
-    canViewFees: true,
     canViewAttendance: true,
     canViewMarks: true
   },
   principal: {
     canEdit: false,
     canInactivate: false,
-    canViewFees: false,
     canViewAttendance: true,
     canViewMarks: true
   },
   vice_principal: {
     canEdit: false,
     canInactivate: false,
-    canViewFees: false,
     canViewAttendance: true,
     canViewMarks: true
   },
   default: {
     canEdit: false,
     canInactivate: false,
-    canViewFees: false,
     canViewAttendance: true,
     canViewMarks: true
   }
@@ -264,7 +258,6 @@ export default function Student({ student, onClose }) {
   // UI state
   const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
-  const [showFeeDetails, setShowFeeDetails] = useState(false)
   const [showAttendanceModal, setShowAttendanceModal] = useState(false)
   const [showMarksModal, setShowMarksModal] = useState(false)
   
@@ -297,8 +290,6 @@ export default function Student({ student, onClose }) {
         return permissions.canEdit
       case 'inactive':
         return permissions.canInactivate
-      case 'fees':
-        return permissions.canViewFees
       case 'attendance':
         return permissions.canViewAttendance
       case 'marks':
@@ -379,11 +370,6 @@ export default function Student({ student, onClose }) {
   const handleEdit = () => {
     setShowMoreMenu(false)
     setShowEditModal(true)
-  }
-
-  const handleFeeDetails = () => {
-    setShowMoreMenu(false)
-    setShowFeeDetails(true)
   }
 
   const handleInactiveClick = () => {
@@ -469,15 +455,6 @@ export default function Student({ student, onClose }) {
       },
       { 
         id: 3, 
-        icon: 'currency-inr', 
-        iconSet: MaterialCommunityIcons, 
-        label: 'Fee Details', 
-        color: '#FF9800', 
-        action: 'fees', 
-        handler: handleFeeDetails 
-      },
-      { 
-        id: 4, 
         icon: 'edit', 
         iconSet: MaterialIcons, 
         label: 'Edit Student', 
@@ -486,7 +463,7 @@ export default function Student({ student, onClose }) {
         handler: handleEdit 
       },
       { 
-        id: 6, 
+        id: 4, 
         icon: 'delete', 
         iconSet: MaterialIcons, 
         label: 'Inactive Student', 
@@ -801,21 +778,6 @@ export default function Student({ student, onClose }) {
                 </ThemedText>
               </TouchableOpacity>
             )}
-
-            {hasPermission('fees') && (
-              <TouchableOpacity 
-                style={[styles.quickAction, { backgroundColor: '#4CAF5008', borderColor: '#4CAF5020' }]}
-                onPress={handleFeeDetails}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.quickActionIcon, { backgroundColor: '#4CAF5015' }]}>
-                  <MaterialCommunityIcons name="currency-inr" size={22} color="#4CAF50" />
-                </View>
-                <ThemedText style={[styles.quickActionText, { color: '#4CAF50' }]}>
-                  Fees
-                </ThemedText>
-              </TouchableOpacity>
-            )}
           </View>
 
           {/* Student Details Section */}
@@ -1030,19 +992,6 @@ export default function Student({ student, onClose }) {
             }
           }}
           studentData={studentData || student}
-        />
-      )}
-
-      {/* Fee Details Modal - Only render if has permission */}
-      {hasPermission('fees') && (
-        <StudentFeeDetails
-          visible={showFeeDetails}
-          onClose={() => setShowFeeDetails(false)}
-          student={studentData || student}
-          onPaymentSuccess={(result) => {
-            showToast('Payment completed successfully', 'success')
-            fetchStudentData()
-          }}
         />
       )}
 

@@ -612,12 +612,8 @@ export default function StudentManagement({ visible, onClose }) {
 
     try {
       // Use the same search endpoint as FeeDetails
-      const response = await axiosApi.get('/students/search', {
-        params: {
-          search: query,
-          page: 1,
-          limit: 50
-        }
+      const response = await axiosApi.get('/students/quick-search', {
+        params: { query, limit: 50 }
       })
 
       if (response.data.success) {

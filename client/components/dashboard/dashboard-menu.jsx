@@ -494,10 +494,10 @@ export default function DashboardMenu({ visible, onClose }) {
 
               <View style={styles.footer}>
                 <ThemedText style={[styles.footerText, { color: colors.textSecondary }]}>
-                  Bluri High School App v2.4.1
+                  Bluri Developers v2.4.1
                 </ThemedText>
                 <ThemedText style={[styles.footerCopyright, { color: colors.textSecondary }]}>
-                  © 2024 All rights reserved
+                  © 2026 All rights reserved
                 </ThemedText>
               </View>
             </ScrollView>

@@ -410,27 +410,6 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
     }
   }
 
-  const handleDownloadReceipt = async () => {
-    if (!receiptData) return
-    
-    try {
-      setDownloading(true)
-      showToast('Preparing receipt for download...', 'info')
-
-      // In a real app, you would generate a PDF receipt
-      // For now, we'll just simulate a download
-      setTimeout(() => {
-        showToast('Receipt downloaded successfully', 'success')
-        setDownloading(false)
-      }, 1500)
-
-    } catch (error) {
-      console.error('Download error:', error)
-      showToast('Failed to download receipt', 'error')
-      setDownloading(false)
-    }
-  }
-
   const handleReceiptClose = () => {
     setReceiptModalVisible(false)
     onClose() // Close the payment modal as well

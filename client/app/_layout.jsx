@@ -13,8 +13,8 @@ import { MaterialIcons } from '@expo/vector-icons'
 import { disconnectSocket, initializeSocket } from '@/socket/socket'
 import axiosApi from '@/utils/axiosApi'
 import { ToastNotification } from '@/components/ui/ToastNotification'
-import { BlurView } from 'expo-blur'
 import * as SplashScreen from 'expo-splash-screen'
+import * as Updates from 'expo-updates'
 
 // Fonts
 import PoppinsLight from '../assets/fonts/Poppins-Light.ttf'
@@ -260,6 +260,20 @@ const MainApp = () => {
       }
     }
   }, [employee.id, dispatch])
+
+  useEffect(() => {
+    async function checkUpdate() {
+      try {
+        const update = await Updates.checkForUpdateAsync()
+        if (update.isAvailable) {
+          await Updates.fetchUpdateAsync()
+          await Updates.reloadAsync()
+        }
+      } catch (error) {
+        console.log('Upload Check failed', error)
+      }
+    }
+  }, [])
   
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

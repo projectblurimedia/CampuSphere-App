@@ -2,7 +2,7 @@ import { Stack } from 'expo-router'
 import 'react-native-reanimated'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import * as Font from 'expo-font'
-import { View, ActivityIndicator, AppState, Text, TouchableOpacity, StyleSheet, Animated, Dimensions } from 'react-native'
+import { View, ActivityIndicator, AppState, Text, TouchableOpacity, StyleSheet, Animated, Dimensions, Modal } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { Provider, useDispatch, useSelector } from 'react-redux'
 import { store } from '@/redux/store'
@@ -34,6 +34,121 @@ export const unstable_settings = {
 }
 
 SplashScreen.preventAutoHideAsync()
+
+// Update Download Modal Component
+const UpdateDownloadModal = ({ visible, downloadProgress, onRestart }) => {
+  const spinValue = useRef(new Animated.Value(0)).current
+  const progressAnim = useRef(new Animated.Value(0)).current
+  const colors = useTheme().colors
+
+  useEffect(() => {
+    if (visible && downloadProgress < 1) {
+      // Rotation animation
+      Animated.loop(
+        Animated.timing(spinValue, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        })
+      ).start()
+
+      // Animate progress bar
+      Animated.timing(progressAnim, {
+        toValue: downloadProgress,
+        duration: 300,
+        useNativeDriver: false,
+      }).start()
+    } else {
+      spinValue.setValue(0)
+    }
+  }, [visible, downloadProgress])
+
+  const spin = spinValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  })
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  })
+
+  const isDownloadComplete = downloadProgress >= 1
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      statusBarTranslucent={true}
+    >
+      <View style={[styles.updateOverlay, { backgroundColor: 'rgba(0,0,0,0.85)' }]}>
+        <View style={[styles.updateContainer, { backgroundColor: colors.cardBackground }]}>
+          {!isDownloadComplete ? (
+            <>
+              <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                <MaterialIcons name="system-update" size={60} color={colors.primary} />
+              </Animated.View>
+              
+              <Text style={[styles.updateTitle, { color: colors.text }]}>
+                Update in Progress
+              </Text>
+              
+              <Text style={[styles.updateMessage, { color: colors.textSecondary }]}>
+                Please don't close the app while we're updating...
+              </Text>
+              
+              <View style={[styles.progressBarContainer, { backgroundColor: colors.border }]}>
+                <Animated.View 
+                  style={[
+                    styles.progressBarFill, 
+                    { 
+                      backgroundColor: colors.primary,
+                      width: progressWidth
+                    }
+                  ]} 
+                />
+              </View>
+              
+              <Text style={[styles.progressText, { color: colors.textSecondary }]}>
+                {Math.round(downloadProgress * 100)}% Downloaded
+              </Text>
+              
+              <View style={styles.loadingDots}>
+                <Animated.View style={[styles.dot, { backgroundColor: colors.primary }]} />
+                <Animated.View style={[styles.dot, { backgroundColor: colors.primary, animationDelay: '0.2s' }]} />
+                <Animated.View style={[styles.dot, { backgroundColor: colors.primary, animationDelay: '0.4s' }]} />
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={[styles.successIcon, { backgroundColor: colors.primary + '20' }]}>
+                <MaterialIcons name="check-circle" size={60} color={colors.primary} />
+              </View>
+              
+              <Text style={[styles.updateTitle, { color: colors.text }]}>
+                Update Ready!
+              </Text>
+              
+              <Text style={[styles.updateMessage, { color: colors.textSecondary }]}>
+                Your app has been updated successfully. Restart to see the changes.
+              </Text>
+              
+              <TouchableOpacity 
+                style={[styles.restartButton, { backgroundColor: colors.primary }]}
+                onPress={onRestart}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="restart-alt" size={24} color="#fff" />
+                <Text style={styles.restartButtonText}>Restart App</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
+  )
+}
 
 // Animated Loading Component
 const AnimatedLoadingScreen = ({ message, colors }) => {
@@ -91,7 +206,7 @@ const AnimatedLoadingScreen = ({ message, colors }) => {
 
   return (
     <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-      <Animated.View style={[styles.loadingCard, { backgroundColor: colors.cardBackground }]}>
+      <View style={[styles.loadingCard, { backgroundColor: colors.cardBackground }]}>
         <Animated.View>
           <MaterialIcons name="school" size={60} color={colors.primary} />
         </Animated.View>
@@ -116,7 +231,7 @@ const AnimatedLoadingScreen = ({ message, colors }) => {
         <ThemedText style={[styles.loadingSubtext, { color: colors.textSecondary }]}>
           Please wait while we prepare your experience
         </ThemedText>
-      </Animated.View>
+      </View>
     </View>
   )
 }
@@ -226,6 +341,59 @@ const MainApp = () => {
   const { colors } = useTheme()
   const appState = useRef(AppState.currentState)
   const socketConnected = useRef(false)
+  const [showUpdateModal, setShowUpdateModal] = useState(false)
+  const [downloadProgress, setDownloadProgress] = useState(0)
+
+  // Function to check for updates
+  const checkForUpdates = useCallback(async () => {
+    try {
+      const update = await Updates.checkForUpdateAsync()
+      
+      if (update.isAvailable) {
+        setShowUpdateModal(true)
+        setDownloadProgress(0)
+        
+        // Download the update
+        await Updates.fetchUpdateAsync({ 
+          eventListener: (event) => {
+            if (event.type === Updates.UpdateEventType.DOWNLOAD_STARTED) {
+              console.log('Download started')
+            } else if (event.type === Updates.UpdateEventType.DOWNLOAD_PROGRESS) {
+              const progress = event.manifest?.totalBytesWritten / event.manifest?.totalBytesExpectedToWrite
+              setDownloadProgress(progress)
+            } else if (event.type === Updates.UpdateEventType.DOWNLOAD_FINISHED) {
+              setDownloadProgress(1)
+            }
+          }
+        })
+      }
+    } catch (error) {
+      console.log('Update check failed', error)
+    }
+  }, [])
+
+  const handleRestart = async () => {
+    try {
+      await Updates.reloadAsync()
+    } catch (error) {
+      console.log('Restart failed', error)
+    }
+  }
+
+  // Check for updates periodically
+  useEffect(() => {
+    // Check for updates when app starts
+    checkForUpdates()
+
+    // Check for updates every 5 minutes (optional)
+    const interval = setInterval(() => {
+      if (appState.current === 'active') {
+        checkForUpdates()
+      }
+    }, 5 * 60 * 1000)
+
+    return () => clearInterval(interval)
+  }, [checkForUpdates])
 
   useEffect(() => {
     function handleAppStateChange(nextAppState) {
@@ -240,6 +408,8 @@ const MainApp = () => {
       } else if (isActive && !socketConnected.current) {
         initializeSocket(employee.id, dispatch)
         socketConnected.current = true
+        // Check for updates when app returns to foreground
+        checkForUpdates()
       }
 
       appState.current = nextAppState
@@ -259,21 +429,7 @@ const MainApp = () => {
         socketConnected.current = false
       }
     }
-  }, [employee.id, dispatch])
-
-  useEffect(() => {
-    async function checkUpdate() {
-      try {
-        const update = await Updates.checkForUpdateAsync()
-        if (update.isAvailable) {
-          await Updates.fetchUpdateAsync()
-          await Updates.reloadAsync()
-        }
-      } catch (error) {
-        console.log('Upload Check failed', error)
-      }
-    }
-  }, [])
+  }, [employee.id, dispatch, checkForUpdates])
   
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -310,6 +466,12 @@ const MainApp = () => {
           }} 
         />
       </Stack>
+      
+      <UpdateDownloadModal 
+        visible={showUpdateModal}
+        downloadProgress={downloadProgress}
+        onRestart={handleRestart}
+      />
     </View>
   )
 }
@@ -672,5 +834,89 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 14,
     fontFamily: 'Poppins-Medium',
+  },
+  updateOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.85)',
+  },
+  updateContainer: {
+    width: '85%',
+    maxWidth: 350,
+    padding: 30,
+    borderRadius: 20,
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  updateTitle: {
+    fontSize: 22,
+    fontFamily: 'Poppins-Bold',
+    marginTop: 20,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  updateMessage: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Regular',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  progressBarContainer: {
+    width: '100%',
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginVertical: 15,
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 14,
+    fontFamily: 'Poppins-Medium',
+    marginBottom: 15,
+  },
+  loadingDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    opacity: 0.6,
+  },
+  successIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  restartButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    marginTop: 10,
+    gap: 10,
+  },
+  restartButtonText: {
+    fontSize: 16,
+    fontFamily: 'Poppins-SemiBold',
+    color: '#fff',
   },
 })

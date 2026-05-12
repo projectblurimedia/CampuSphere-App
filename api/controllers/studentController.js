@@ -2453,7 +2453,7 @@ export const getMarksStatsByClassSection = async (req, res) => {
       })
     }
 
-    // Get all active students
+    // Get all active students with their details
     const allStudents = await prisma.student.findMany({
       where: {
         isActive: true
@@ -2466,37 +2466,32 @@ export const getMarksStatsByClassSection = async (req, res) => {
         section: true,
         rollNo: true,
         admissionNo: true
-      }
+      },
+      orderBy: [
+        { class: 'asc' },
+        { section: 'asc' },
+        { rollNo: 'asc' }
+      ]
     })
 
-    // Create a map of students by class-section for quick lookup
-    const studentsByClassSection = new Map()
+    // Get total count of students per class-section for quick lookup
+    const totalStudentsByClassSection = new Map()
     allStudents.forEach(student => {
-      const classKey = student.class
-      const sectionKey = student.section
-      const compositeKey = `${classKey}-${sectionKey}`
-
-      if (!studentsByClassSection.has(compositeKey)) {
-        studentsByClassSection.set(compositeKey, {
-          class: classKey,
-          classLabel: mapEnumToDisplayName(classKey),
-          section: sectionKey,
-          students: []
-        })
-      }
-      studentsByClassSection.get(compositeKey).students.push({
-        id: student.id,
-        name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
-        rollNo: student.rollNo || student.admissionNo,
-        hasMarks: false
-      })
+      const key = `${student.class}-${student.section}`
+      totalStudentsByClassSection.set(key, (totalStudentsByClassSection.get(key) || 0) + 1)
     })
 
-    // Get all marks records
+    // Get all marks records with student details in a single query
     const allMarks = await prisma.marks.findMany({
+      where: {
+        student: {
+          isActive: true
+        }
+      },
       include: {
         student: {
           select: {
+            id: true,
             firstName: true,
             lastName: true,
             class: true,
@@ -2507,38 +2502,64 @@ export const getMarksStatsByClassSection = async (req, res) => {
         }
       },
       orderBy: [
-        { uploadedAt: 'desc' }
+        { examType: 'asc' },
+        { student: { class: 'asc' } },
+        { student: { section: 'asc' } }
       ]
     })
 
-    // Group marks by exam type and class-section
+    // Define grade order for consistent sorting
+    const GRADE_ORDER = {
+      'A_PLUS': 1,
+      'A': 2,
+      'B_PLUS': 3,
+      'B': 4,
+      'C': 5,
+      'D': 6,
+      'E': 7,
+      'F': 8,
+      'NA': 9
+    }
+
+    // Group marks by exam type
     const examData = new Map()
 
-    allMarks.forEach(marks => {
+    // Initialize exam data structure
+    examTypes.forEach(exam => {
+      examData.set(exam.examType, {
+        examType: exam.examType,
+        examTypeLabel: exam.examType.replace(/_/g, ' '),
+        classSections: new Map(),
+        totalStudentsWithMarks: 0,
+        totalObtained: 0,
+        totalMaximum: 0,
+        subjectSummary: new Map()
+      })
+    })
+
+    // Process each marks record
+    for (const marks of allMarks) {
       const examType = marks.examType
-      const studentClass = marks.student.class
-      const studentSection = marks.student.section
-      const compositeKey = `${examType}-${studentClass}-${studentSection}`
-
-      if (!examData.has(examType)) {
-        examData.set(examType, {
-          examType,
-          examTypeLabel: marks.examType.replace(/_/g, ' '),
-          totalStudentsWithMarks: 0,
-          classSections: new Map(),
-          subjectSummary: new Map()
-        })
-      }
-
       const exam = examData.get(examType)
       
-      if (!exam.classSections.has(compositeKey)) {
-        exam.classSections.set(compositeKey, {
+      if (!exam) continue
+
+      const studentClass = marks.student.class
+      const studentSection = marks.student.section
+      const classSectionKey = `${studentClass}-${studentSection}`
+      const examClassSectionKey = `${examType}-${classSectionKey}`
+
+      // Initialize class-section data for this exam if not exists
+      if (!exam.classSections.has(examClassSectionKey)) {
+        const totalStudents = totalStudentsByClassSection.get(classSectionKey) || 0
+        
+        exam.classSections.set(examClassSectionKey, {
           class: studentClass,
           classLabel: mapEnumToDisplayName(studentClass),
           section: studentSection,
-          totalStudents: 0,
+          totalStudents: totalStudents,
           studentsWithMarks: 0,
+          studentsWithoutMarks: totalStudents,
           totalObtained: 0,
           totalMaximum: 0,
           gradeDistribution: {
@@ -2547,102 +2568,95 @@ export const getMarksStatsByClassSection = async (req, res) => {
           resultDistribution: {
             PASS: 0, FAIL: 0, NA: 0
           },
-          subjectStats: new Map(),
-          students: []
+          subjectStats: new Map()
         })
       }
 
-      const sectionStats = exam.classSections.get(compositeKey)
+      const sectionStats = exam.classSections.get(examClassSectionKey)
       
-      // Get the base student info from our map
-      const studentCompositeKey = `${studentClass}-${studentSection}`
-      const classSectionData = studentsByClassSection.get(studentCompositeKey)
+      // Update section stats
+      sectionStats.studentsWithMarks++
+      sectionStats.studentsWithoutMarks = sectionStats.totalStudents - sectionStats.studentsWithMarks
+      sectionStats.totalObtained += marks.totalObtained || 0
+      sectionStats.totalMaximum += marks.totalMaximum || 0
       
-      if (classSectionData) {
-        const studentInfo = classSectionData.students.find(s => s.id === marks.studentId)
-        
-        if (studentInfo) {
-          sectionStats.totalStudents = classSectionData.students.length
-          sectionStats.studentsWithMarks++
-          exam.totalStudentsWithMarks++
+      // Update grade distribution for this exam (overall grade per student)
+      if (marks.overallGrade && marks.overallGrade !== 'NA') {
+        sectionStats.gradeDistribution[marks.overallGrade] = 
+          (sectionStats.gradeDistribution[marks.overallGrade] || 0) + 1
+      } else {
+        sectionStats.gradeDistribution.NA++
+      }
+      
+      // Update result distribution for this exam
+      if (marks.overallResult && marks.overallResult !== 'NA') {
+        sectionStats.resultDistribution[marks.overallResult] = 
+          (sectionStats.resultDistribution[marks.overallResult] || 0) + 1
+      } else {
+        sectionStats.resultDistribution.NA++
+      }
 
-          // Add marks totals
-          sectionStats.totalObtained += marks.totalObtained || 0
-          sectionStats.totalMaximum += marks.totalMaximum || 0
-
-          // Update grade distribution
-          if (marks.overallGrade) {
-            sectionStats.gradeDistribution[marks.overallGrade] = 
-              (sectionStats.gradeDistribution[marks.overallGrade] || 0) + 1
-          }
-
-          // Update result distribution
-          if (marks.overallResult) {
-            sectionStats.resultDistribution[marks.overallResult] = 
-              (sectionStats.resultDistribution[marks.overallResult] || 0) + 1
-          }
-
-          // Parse marksData for subject-wise statistics
-          if (marks.marksData && typeof marks.marksData === 'object') {
-            Object.entries(marks.marksData).forEach(([subjectName, subjectData]) => {
-              // Update section subject stats
-              if (!sectionStats.subjectStats.has(subjectName)) {
-                sectionStats.subjectStats.set(subjectName, {
-                  subject: subjectName,
-                  totalObtained: 0,
-                  totalMaximum: 0,
-                  count: 0,
-                  gradeDistribution: {},
-                  resultDistribution: {}
-                })
+      // Parse marksData for subject-wise statistics
+      if (marks.marksData && typeof marks.marksData === 'object') {
+        Object.entries(marks.marksData).forEach(([subjectName, subjectData]) => {
+          // Update section subject stats
+          if (!sectionStats.subjectStats.has(subjectName)) {
+            sectionStats.subjectStats.set(subjectName, {
+              subject: subjectName,
+              totalObtained: 0,
+              totalMaximum: 0,
+              count: 0,
+              gradeDistribution: {
+                A_PLUS: 0, A: 0, B_PLUS: 0, B: 0, C: 0, D: 0, E: 0, F: 0, NA: 0
+              },
+              resultDistribution: {
+                PASS: 0, FAIL: 0, NA: 0
               }
-              
-              const subjectStats = sectionStats.subjectStats.get(subjectName)
-              subjectStats.totalObtained += subjectData.marks || 0
-              subjectStats.totalMaximum += subjectData.totalMarks || 0
-              subjectStats.count++
-              
-              if (subjectData.grade) {
-                subjectStats.gradeDistribution[subjectData.grade] = 
-                  (subjectStats.gradeDistribution[subjectData.grade] || 0) + 1
-              }
-              
-              if (subjectData.result) {
-                subjectStats.resultDistribution[subjectData.result] = 
-                  (subjectStats.resultDistribution[subjectData.result] || 0) + 1
-              }
-
-              // Update exam-wide subject summary
-              if (!exam.subjectSummary.has(subjectName)) {
-                exam.subjectSummary.set(subjectName, {
-                  subject: subjectName,
-                  totalObtained: 0,
-                  totalMaximum: 0,
-                  count: 0
-                })
-              }
-              const examSubjectStats = exam.subjectSummary.get(subjectName)
-              examSubjectStats.totalObtained += subjectData.marks || 0
-              examSubjectStats.totalMaximum += subjectData.totalMarks || 0
-              examSubjectStats.count++
             })
           }
+          
+          const subjectStats = sectionStats.subjectStats.get(subjectName)
+          subjectStats.totalObtained += subjectData.marks || 0
+          subjectStats.totalMaximum += subjectData.totalMarks || 0
+          subjectStats.count++
+          
+          // Update subject grade distribution
+          if (subjectData.grade && subjectData.grade !== 'NA') {
+            subjectStats.gradeDistribution[subjectData.grade] = 
+              (subjectStats.gradeDistribution[subjectData.grade] || 0) + 1
+          } else {
+            subjectStats.gradeDistribution.NA++
+          }
+          
+          // Update subject result distribution
+          if (subjectData.result && subjectData.result !== 'NA') {
+            subjectStats.resultDistribution[subjectData.result] = 
+              (subjectStats.resultDistribution[subjectData.result] || 0) + 1
+          } else {
+            subjectStats.resultDistribution.NA++
+          }
 
-          // Add student marks details
-          sectionStats.students.push({
-            studentId: marks.studentId,
-            name: studentInfo.name,
-            rollNo: studentInfo.rollNo,
-            totalObtained: marks.totalObtained || 0,
-            totalMaximum: marks.totalMaximum || 0,
-            percentage: marks.percentage ? Number(marks.percentage.toFixed(2)) : 0,
-            grade: marks.overallGrade || 'NA',
-            result: marks.overallResult || 'NA',
-            subjectWise: marks.marksData
-          })
-        }
+          // Update exam-wide subject summary
+          if (!exam.subjectSummary.has(subjectName)) {
+            exam.subjectSummary.set(subjectName, {
+              subject: subjectName,
+              totalObtained: 0,
+              totalMaximum: 0,
+              count: 0
+            })
+          }
+          const examSubjectStats = exam.subjectSummary.get(subjectName)
+          examSubjectStats.totalObtained += subjectData.marks || 0
+          examSubjectStats.totalMaximum += subjectData.totalMarks || 0
+          examSubjectStats.count++
+        })
       }
-    })
+
+      // Update exam totals
+      exam.totalStudentsWithMarks++
+      exam.totalObtained += marks.totalObtained || 0
+      exam.totalMaximum += marks.totalMaximum || 0
+    }
 
     // Format the response
     const formattedExams = []
@@ -2651,10 +2665,13 @@ export const getMarksStatsByClassSection = async (req, res) => {
       const classSections = []
       let examTotalObtained = 0
       let examTotalMaximum = 0
-      let examTotalStudents = 0
 
       for (const [_, sectionStats] of exam.classSections) {
         // Calculate section averages
+        const avgMarks = sectionStats.studentsWithMarks > 0
+          ? Number((sectionStats.totalObtained / sectionStats.studentsWithMarks).toFixed(2))
+          : 0
+          
         const avgPercentage = sectionStats.totalMaximum > 0
           ? Number(((sectionStats.totalObtained / sectionStats.totalMaximum) * 100).toFixed(2))
           : 0
@@ -2663,19 +2680,49 @@ export const getMarksStatsByClassSection = async (req, res) => {
           ? Number(((sectionStats.resultDistribution.PASS / sectionStats.studentsWithMarks) * 100).toFixed(2))
           : 0
 
-        // Format subject stats for this section
-        const subjectStats = Array.from(sectionStats.subjectStats.values()).map(subject => ({
-          subject: subject.subject,
-          averageMarks: subject.count > 0 
-            ? Number((subject.totalObtained / subject.count).toFixed(2))
-            : 0,
-          averagePercentage: subject.totalMaximum > 0
-            ? Number(((subject.totalObtained / subject.totalMaximum) * 100).toFixed(2))
-            : 0,
-          gradeDistribution: subject.gradeDistribution,
-          resultDistribution: subject.resultDistribution,
-          studentCount: subject.count
-        }))
+        // Sort grade distribution by defined order
+        const sortedGradeDistribution = {}
+        Object.keys(GRADE_ORDER).sort((a, b) => GRADE_ORDER[a] - GRADE_ORDER[b]).forEach(grade => {
+          sortedGradeDistribution[grade] = sectionStats.gradeDistribution[grade] || 0
+        })
+
+        // Sort result distribution (PASS, FAIL, NA order)
+        const sortedResultDistribution = {
+          PASS: sectionStats.resultDistribution.PASS || 0,
+          FAIL: sectionStats.resultDistribution.FAIL || 0,
+          NA: sectionStats.resultDistribution.NA || 0
+        }
+
+        // Format subject stats for this section with sorted grades
+        const subjectStats = Array.from(sectionStats.subjectStats.values()).map(subject => {
+          // Sort subject grade distribution
+          const sortedSubjectGradeDist = {}
+          Object.keys(GRADE_ORDER).sort((a, b) => GRADE_ORDER[a] - GRADE_ORDER[b]).forEach(grade => {
+            sortedSubjectGradeDist[grade] = subject.gradeDistribution[grade] || 0
+          })
+
+          // Sort subject result distribution
+          const sortedSubjectResultDist = {
+            PASS: subject.resultDistribution.PASS || 0,
+            FAIL: subject.resultDistribution.FAIL || 0,
+            NA: subject.resultDistribution.NA || 0
+          }
+
+          return {
+            subject: subject.subject,
+            totalObtained: subject.totalObtained,
+            totalMaximum: subject.totalMaximum,
+            studentCount: subject.count,
+            averageMarks: subject.count > 0 
+              ? Number((subject.totalObtained / subject.count).toFixed(2))
+              : 0,
+            averagePercentage: subject.totalMaximum > 0
+              ? Number(((subject.totalObtained / subject.totalMaximum) * 100).toFixed(2))
+              : 0,
+            gradeDistribution: sortedSubjectGradeDist,
+            resultDistribution: sortedSubjectResultDist
+          }
+        }).sort((a, b) => a.subject.localeCompare(b.subject))
 
         classSections.push({
           class: sectionStats.class,
@@ -2684,24 +2731,20 @@ export const getMarksStatsByClassSection = async (req, res) => {
           summary: {
             totalStudents: sectionStats.totalStudents,
             studentsWithMarks: sectionStats.studentsWithMarks,
-            studentsWithoutMarks: sectionStats.totalStudents - sectionStats.studentsWithMarks,
+            studentsWithoutMarks: sectionStats.studentsWithoutMarks,
             totalObtained: sectionStats.totalObtained,
             totalMaximum: sectionStats.totalMaximum,
-            averageMarks: sectionStats.studentsWithMarks > 0
-              ? Number((sectionStats.totalObtained / sectionStats.studentsWithMarks).toFixed(2))
-              : 0,
+            averageMarks: avgMarks,
             averagePercentage: avgPercentage,
-            passPercentage,
-            gradeDistribution: sectionStats.gradeDistribution,
-            resultDistribution: sectionStats.resultDistribution
+            passPercentage: passPercentage,
+            gradeDistribution: sortedGradeDistribution,
+            resultDistribution: sortedResultDistribution
           },
-          subjectStats,
-          students: sectionStats.students.sort((a, b) => a.rollNo.localeCompare(b.rollNo))
+          subjectStats
         })
 
         examTotalObtained += sectionStats.totalObtained
         examTotalMaximum += sectionStats.totalMaximum
-        examTotalStudents += sectionStats.studentsWithMarks
       }
 
       // Format exam-wide subject summary
@@ -2709,14 +2752,22 @@ export const getMarksStatsByClassSection = async (req, res) => {
         subject: subject.subject,
         totalObtained: subject.totalObtained,
         totalMaximum: subject.totalMaximum,
+        studentCount: subject.count,
         averageMarks: subject.count > 0
           ? Number((subject.totalObtained / subject.count).toFixed(2))
           : 0,
         averagePercentage: subject.totalMaximum > 0
           ? Number(((subject.totalObtained / subject.totalMaximum) * 100).toFixed(2))
-          : 0,
-        studentCount: subject.count
-      }))
+          : 0
+      })).sort((a, b) => a.subject.localeCompare(b.subject))
+
+      // Sort class sections
+      const sortedClassSections = classSections.sort((a, b) => {
+        if (a.classLabel === b.classLabel) {
+          return a.section.localeCompare(b.section)
+        }
+        return a.classLabel.localeCompare(b.classLabel)
+      })
 
       formattedExams.push({
         examType: exam.examType,
@@ -2730,22 +2781,22 @@ export const getMarksStatsByClassSection = async (req, res) => {
             : 0,
           subjectSummary: examSubjectSummary
         },
-        classSections: classSections.sort((a, b) => {
-          if (a.classLabel === b.classLabel) {
-            return a.section.localeCompare(b.section)
-          }
-          return a.classLabel.localeCompare(b.classLabel)
-        })
+        classSections: sortedClassSections
       })
     }
 
     // Calculate school-wide summary
+    const uniqueStudentsWithMarks = new Set(allMarks.map(m => m.studentId)).size
+    
     const schoolSummary = {
       totalStudents: allStudents.length,
       totalExams: examTypes.length,
-      studentsWithMarks: allMarks.length, // This is number of marks records, not unique students
-      uniqueStudentsWithMarks: new Set(allMarks.map(m => m.studentId)).size,
-      studentsWithoutAnyMarks: allStudents.length - new Set(allMarks.map(m => m.studentId)).size
+      totalMarksRecords: allMarks.length,
+      uniqueStudentsWithMarks: uniqueStudentsWithMarks,
+      studentsWithoutAnyMarks: allStudents.length - uniqueStudentsWithMarks,
+      studentsWithMarksPercentage: allStudents.length > 0 
+        ? Number(((uniqueStudentsWithMarks / allStudents.length) * 100).toFixed(2))
+        : 0
     }
 
     res.status(200).json({

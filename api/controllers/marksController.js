@@ -443,14 +443,17 @@ export const getStudentsForMarks = asyncHandler(async (req, res) => {
         firstName: true,
         lastName: true,
         admissionNo: true
-      },
-      orderBy: [
-        { rollNo: 'asc' },
-        { firstName: 'asc' }
-      ]
+      }
     })
 
-    const formattedStudents = students.map(student => ({
+    // Sort by roll number as numeric value
+    const sortedStudents = students.sort((a, b) => {
+      const rollA = a.rollNo ? parseInt(a.rollNo, 10) : 0
+      const rollB = b.rollNo ? parseInt(b.rollNo, 10) : 0
+      return rollA - rollB
+    })
+
+    const formattedStudents = sortedStudents.map(student => ({
       id: student.id,
       rollNo: student.rollNo,
       firstName: student.firstName,

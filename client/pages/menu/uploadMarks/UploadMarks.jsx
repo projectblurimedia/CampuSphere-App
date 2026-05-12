@@ -785,7 +785,7 @@ const StudentListItem = React.memo(({
   
   const styles = StyleSheet.create({
     studentCard: {
-      backgroundColor: marksExist ? '#fff7ed' : colors.cardBackground,
+      backgroundColor: marksExist ? '#fffaf4' : colors.cardBackground,
       borderRadius: 16,
       borderTopLeftRadius: 4,
       borderBottomLeftRadius: 4,
@@ -845,7 +845,7 @@ const StudentListItem = React.memo(({
     },
     absentLabel: {
       fontSize: 14,
-      color: isAbsent ? '#dc2626' : colors.textSecondary,
+      color: isAbsent ? '#9ca3af' : (marksExist ? '#c2410c' : (isInvalid ? '#dc2626' : colors.text)),
       fontFamily: 'Poppins-Medium',
       marginRight: 10,
     },

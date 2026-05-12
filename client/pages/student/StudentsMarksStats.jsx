@@ -199,8 +199,17 @@ export default function StudentsMarksStats({ visible, onClose }) {
     </View>
   )
 
-  // Exam Card Component
+  // Exam Card Component - Fixed version with proper grade ordering
   const ExamCard = ({ exam }) => {
+    const [expandedSections, setExpandedSections] = useState({})
+
+    const toggleSection = (sectionKey) => {
+      setExpandedSections(prev => ({
+        ...prev,
+        [sectionKey]: !prev[sectionKey]
+      }))
+    }
+
     const getGradeColor = (grade) => {
       switch(grade) {
         case 'A+': return '#10b981'
@@ -215,6 +224,12 @@ export default function StudentsMarksStats({ visible, onClose }) {
       }
     }
 
+    // Calculate total students with marks for this exam
+    const totalStudentsWithMarks = exam.classSections.reduce(
+      (sum, section) => sum + (section.summary?.studentsWithMarks || 0), 
+      0
+    )
+
     return (
       <View style={styles.examCard}>
         <View style={styles.examHeader}>
@@ -226,68 +241,179 @@ export default function StudentsMarksStats({ visible, onClose }) {
           <View style={styles.studentCountBadge}>
             <Ionicons name="people-outline" size={12} color={colors.textSecondary} />
             <ThemedText style={styles.studentCountText}>
-              {exam.summary.totalStudentsWithMarks} students
+              {totalStudentsWithMarks} students
             </ThemedText>
           </View>
         </View>
 
-        {/* Class Sections Preview */}
+        {/* Class Sections List */}
         <View style={styles.classSectionsPreview}>
-          {exam.classSections.map((section, idx) => (
-            <View key={idx} style={styles.classSectionPreviewItem}>
-              <View style={styles.classSectionPreviewHeader}>
-                <View style={styles.classSectionTitleContainer}>
-                  <ThemedText style={styles.classSectionPreviewClass}>
-                    {section.classLabel}
-                  </ThemedText>
-                  <View style={[styles.sectionBadge, { backgroundColor: colors.inputBackground }]}>
-                    <ThemedText style={styles.sectionPreviewText}>
-                      Section: {section.section}
+          {exam.classSections.map((section, idx) => {
+            const sectionKey = `${section.class}-${section.section}`
+            const isExpanded = expandedSections[sectionKey]
+            
+            // Handle both array and object formats for backward compatibility
+            let gradeDistributionArray = []
+            let resultDistribution = section.summary?.resultDistribution || {}
+            
+            if (Array.isArray(section.summary?.gradeDistribution)) {
+              // New format: array already sorted
+              gradeDistributionArray = section.summary.gradeDistribution
+            } else {
+              // Old format: object, need to sort
+              const gradeOrder = { 'A+': 1, 'A': 2, 'B+': 3, 'B': 4, 'C': 5, 'D': 6, 'E': 7, 'F': 8, 'NA': 9 }
+              const gradeDist = section.summary?.gradeDistribution || {}
+              gradeDistributionArray = Object.entries(gradeDist)
+                .filter(([_, count]) => count > 0)
+                .map(([grade, count]) => ({
+                  grade: grade.replace('_PLUS', '+').replace('_', ' '),
+                  count: count,
+                  key: grade
+                }))
+                .sort((a, b) => (gradeOrder[a.grade] || 99) - (gradeOrder[b.grade] || 99))
+            }
+            
+            const studentsWithMarks = section.summary?.studentsWithMarks || 0
+            const totalAccounted = gradeDistributionArray.reduce((sum, item) => sum + item.count, 0)
+            const countsMatch = totalAccounted === studentsWithMarks
+
+            return (
+              <View key={idx} style={styles.classSectionPreviewItem}>
+                {/* Section Header - Tappable */}
+                <TouchableOpacity 
+                  onPress={() => toggleSection(sectionKey)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.classSectionPreviewHeader}>
+                    <View style={styles.classSectionTitleContainer}>
+                      <ThemedText style={styles.classSectionPreviewClass}>
+                        {section.classLabel}
+                      </ThemedText>
+                      <View style={[styles.sectionBadge, { backgroundColor: colors.inputBackground }]}>
+                        <ThemedText style={styles.sectionPreviewText}>
+                          Section: {section.section}
+                        </ThemedText>
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <ThemedText style={[styles.classSectionPreviewPercent, { color: getGradeColor(
+                        section.summary?.averagePercentage >= 90 ? 'A+' : 
+                        section.summary?.averagePercentage >= 75 ? 'A' : 
+                        section.summary?.averagePercentage >= 60 ? 'B' : 
+                        section.summary?.averagePercentage >= 45 ? 'C' : 'D'
+                      ) }]}>
+                        {section.summary?.averagePercentage || 0}%
+                      </ThemedText>
+                      <Ionicons 
+                        name={isExpanded ? "chevron-up" : "chevron-down"} 
+                        size={18} 
+                        color={colors.textSecondary} 
+                      />
+                    </View>
+                  </View>
+                </TouchableOpacity>
+                
+                {/* Stats Row */}
+                <View style={styles.classStatsRow}>
+                  <View style={styles.classStatItem}>
+                    <ThemedText style={styles.classStatLabel}>Pass</ThemedText>
+                    <ThemedText style={[styles.classStatValue, { color: '#10b981' }]}>
+                      {section.summary?.passPercentage || 0}%
+                    </ThemedText>
+                  </View>
+                  <View style={styles.classStatDivider} />
+                  <View style={styles.classStatItem}>
+                    <ThemedText style={styles.classStatLabel}>Students</ThemedText>
+                    <ThemedText style={[styles.classStatValue, { color: colors.primary }]}>
+                      {section.summary?.studentsWithMarks || 0}/{section.summary?.totalStudents || 0}
+                    </ThemedText>
+                  </View>
+                  <View style={styles.classStatDivider} />
+                  <View style={styles.classStatItem}>
+                    <ThemedText style={styles.classStatLabel}>Avg Marks</ThemedText>
+                    <ThemedText style={[styles.classStatValue, { color: colors.text }]}>
+                      {section.summary?.averageMarks || 0}
                     </ThemedText>
                   </View>
                 </View>
-                <ThemedText style={[styles.classSectionPreviewPercent, { color: getGradeColor(section.summary.averagePercentage >= 90 ? 'A+' : section.summary.averagePercentage >= 75 ? 'A' : section.summary.averagePercentage >= 60 ? 'B' : 'C') }]}>
-                  {section.summary.averagePercentage}%
-                </ThemedText>
-              </View>
-              
-              {/* Stats Row */}
-              <View style={styles.classStatsRow}>
-                <View style={styles.classStatItem}>
-                  <ThemedText style={styles.classStatLabel}>Pass</ThemedText>
-                  <ThemedText style={[styles.classStatValue, { color: '#10b981' }]}>
-                    {section.summary.passPercentage}%
-                  </ThemedText>
-                </View>
-                <View style={styles.classStatDivider} />
-                <View style={styles.classStatItem}>
-                  <ThemedText style={styles.classStatLabel}>Students</ThemedText>
-                  <ThemedText style={[styles.classStatValue, { color: colors.primary }]}>
-                    {section.summary.studentsWithMarks}/{section.summary.totalStudents}
-                  </ThemedText>
-                </View>
-              </View>
 
-              {/* Grade Distribution Preview - Shows top grades achieved */}
-              <View style={styles.gradePreviewContainer}>
-                {Object.entries(section.summary.gradeDistribution)
-                  .filter(([_, count]) => count > 0)
-                  .sort((a, b) => {
-                    // Sort by grade precedence (A+ first, then A, etc.)
-                    const gradeOrder = { 'A+': 1, 'A': 2, 'B+': 3, 'B': 4, 'C': 5, 'D': 6, 'E': 7, 'F': 8 }
-                    return (gradeOrder[a[0]] || 99) - (gradeOrder[b[0]] || 99)
-                  })
-                  .slice(0, 3)
-                  .map(([grade, count]) => (
-                    <View key={grade} style={[styles.gradePreviewBadge, { backgroundColor: getGradeColor(formatGrade(grade)) + '20' }]}>
-                      <ThemedText style={[styles.gradePreviewText, { color: getGradeColor(formatGrade(grade)) }]}>
-                        {formatGrade(grade)} : {count}
-                      </ThemedText>
+                {/* Expanded Content - Grade Distribution */}
+                {isExpanded && (
+                  <View style={styles.expandedContent}>
+                    {/* Grade Distribution Section */}
+                    <View style={styles.gradeSection}>
+                      <View style={styles.gradeSectionHeader}>
+                        <ThemedText style={styles.gradeSectionTitle}>Grade Distribution</ThemedText>
+                        <View style={styles.verificationBadge}>
+                          <Ionicons 
+                            name={countsMatch ? "checkmark-circle" : "alert-circle"} 
+                            size={14} 
+                            color={countsMatch ? "#10b981" : "#ef4444"} 
+                          />
+                          <ThemedText style={[styles.verificationText, { color: countsMatch ? "#10b981" : "#ef4444" }]}>
+                            {countsMatch ? `${studentsWithMarks}/${studentsWithMarks}` : `${totalAccounted}/${studentsWithMarks}`}
+                          </ThemedText>
+                        </View>
+                      </View>
+                      
+                      {gradeDistributionArray.length > 0 ? (
+                        <View style={styles.gradeGrid}>
+                          {gradeDistributionArray.map((item) => (
+                            <View 
+                              key={item.grade} 
+                              style={[
+                                styles.gradeCard, 
+                                { backgroundColor: getGradeColor(item.grade) + '15' }
+                              ]}
+                            >
+                              <View style={[styles.gradeBadge, { backgroundColor: getGradeColor(item.grade) }]}>
+                                <ThemedText style={styles.gradeBadgeText}>
+                                  {item.grade}
+                                </ThemedText>
+                              </View>
+                              <ThemedText style={[styles.gradeCount, { color: getGradeColor(item.grade) }]}>
+                                {item.count}
+                              </ThemedText>
+                              <ThemedText style={styles.gradePercent}>
+                                {((item.count / studentsWithMarks) * 100).toFixed(1)}%
+                              </ThemedText>
+                            </View>
+                          ))}
+                        </View>
+                      ) : (
+                        <View style={styles.emptyGrades}>
+                          <ThemedText style={styles.emptyGradesText}>
+                            No grade data available
+                          </ThemedText>
+                        </View>
+                      )}
+
+                      {/* Result Distribution */}
+                      {resultDistribution && Object.values(resultDistribution).some(count => count > 0) && (
+                        <View style={styles.resultSection}>
+                          <ThemedText style={styles.resultSectionTitle}>Result Distribution</ThemedText>
+                          <View style={styles.resultRow}>
+                            <View style={[styles.resultBadge, { backgroundColor: '#10b98120' }]}>
+                              <Ionicons name="checkmark-circle" size={14} color="#10b981" />
+                              <ThemedText style={[styles.resultText, { color: '#10b981' }]}>
+                                Pass: {resultDistribution.PASS || 0}
+                              </ThemedText>
+                            </View>
+                            <View style={[styles.resultBadge, { backgroundColor: '#ef444420' }]}>
+                              <Ionicons name="close-circle" size={14} color="#ef4444" />
+                              <ThemedText style={[styles.resultText, { color: '#ef4444' }]}>
+                                Fail: {resultDistribution.FAIL || 0}
+                              </ThemedText>
+                            </View>
+                          </View>
+                        </View>
+                      )}
                     </View>
-                  ))}
+                  </View>
+                )}
               </View>
-            </View>
-          ))}
+            )
+          })}
         </View>
       </View>
     )
@@ -488,6 +614,153 @@ export default function StudentsMarksStats({ visible, onClose }) {
     examName: {
       fontSize: 14,
       fontFamily: 'Poppins-SemiBold',
+    },
+    // Add these styles to your existing StyleSheet
+    expandedContent: {
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    gradeSection: {
+      marginBottom: 12,
+    },
+    gradeSectionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 10,
+    },
+    gradeSectionTitle: {
+      fontSize: 13,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+    },
+    verificationBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 12,
+      backgroundColor: colors.inputBackground,
+    },
+    verificationText: {
+      fontSize: 11,
+      fontFamily: 'Poppins-Medium',
+    },
+    gradeGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+      marginBottom: 12,
+    },
+    gradeCard: {
+      flex: 1,
+      minWidth: 80,
+      alignItems: 'center',
+      padding: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    gradeBadge: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 6,
+    },
+    gradeBadgeText: {
+      fontSize: 14,
+      fontFamily: 'Poppins-Bold',
+      color: '#FFFFFF',
+    },
+    gradeCount: {
+      fontSize: 18,
+      fontFamily: 'Poppins-Bold',
+      marginBottom: 2,
+    },
+    gradePercent: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      fontFamily: 'Poppins-Medium',
+    },
+    emptyGrades: {
+      padding: 20,
+      alignItems: 'center',
+      backgroundColor: colors.inputBackground,
+      borderRadius: 10,
+    },
+    emptyGradesText: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontFamily: 'Poppins-Medium',
+    },
+    resultSection: {
+      marginTop: 8,
+    },
+    resultSectionTitle: {
+      fontSize: 13,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+      marginBottom: 8,
+    },
+    resultRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    resultBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 20,
+      gap: 6,
+    },
+    resultText: {
+      fontSize: 13,
+      fontFamily: 'Poppins-Medium',
+    },
+    studentsSection: {
+      marginTop: 12,
+    },
+    studentsSectionTitle: {
+      fontSize: 12,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.textSecondary,
+      marginBottom: 8,
+    },
+    studentsHorizontalScroll: {
+      flexDirection: 'row',
+    },
+    studentChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 20,
+      marginRight: 8,
+      gap: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    studentChipName: {
+      fontSize: 12,
+      fontFamily: 'Poppins-Medium',
+      color: colors.text,
+      maxWidth: 150,
+    },
+    studentChipGrade: {
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 12,
+    },
+    studentChipGradeText: {
+      fontSize: 10,
+      fontFamily: 'Poppins-Bold',
+      color: '#FFFFFF',
     },
     studentCountBadge: {
       flexDirection: 'row',

@@ -1621,7 +1621,6 @@ export default function Attendance({ visible, onClose }) {
     sessionStatusLabel: {
       fontSize: 12,
       fontFamily: 'Poppins-Medium',
-      color: colors.textSecondary,
       marginBottom: 4,
     },
     sessionStatusValue: {
@@ -1829,7 +1828,7 @@ export default function Attendance({ visible, onClose }) {
                 borderColor: morningColors.borderColor
               }
             ]}>
-              <ThemedText style={styles.sessionStatusLabel}>
+              <ThemedText style={[styles.sessionStatusLabel, { color: morningColors.textColor }]}>
                 Morning
               </ThemedText>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -1858,7 +1857,7 @@ export default function Attendance({ visible, onClose }) {
                 borderColor: afternoonColors.borderColor
               }
             ]}>
-              <ThemedText style={styles.sessionStatusLabel}>
+              <ThemedText style={[styles.sessionStatusLabel, { color: afternoonColors.textColor }]}>
                 Afternoon
               </ThemedText>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>

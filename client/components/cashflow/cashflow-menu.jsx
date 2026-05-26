@@ -16,7 +16,6 @@ import { Ionicons, MaterialIcons, Feather, FontAwesome6 } from '@expo/vector-ico
 import { useTheme } from '@/hooks/useTheme'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import Dashboard from '@/components/dynamicModals/Dashboard'
-import { schoolDetails } from '@/schoolDetails'
 import { useDispatch } from 'react-redux'
 import { useRouter } from 'expo-router'
 import { logoutEmployee } from '@/redux/employeeSlice'
@@ -496,10 +495,10 @@ export default function CashflowMenu({ visible, onClose }) {
                   <Ionicons name="cash-outline" size={28} color="#FFFFFF" />
                   <View style={styles.headerText}>
                     <ThemedText style={styles.schoolName} numberOfLines={1}>
-                      {schoolDetails?.name || 'School'}
+                      Cashflow
                     </ThemedText>
                     <ThemedText style={styles.menuTitle}>
-                      Cashflow Menu
+                      And it's Menu Items
                     </ThemedText>
                   </View>
                 </View>

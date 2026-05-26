@@ -10,6 +10,18 @@ import { createIncome } from '../utils/createIncome.js'
 
 // ========== HELPER FUNCTIONS ==========
 
+// Helper function to get school details from database
+const getSchoolDetails = async () => {
+  const school = await prisma.school.findFirst()
+  return {
+    name: school?.name || 'Your School Name',
+    address: school?.address || 'School Address',
+    phone: school?.phone || 'School Phone',
+    email: school?.email || 'school@email.com',
+    principal: school?.principal || 'Principal Name'
+  }
+}
+
 /**
  * Generate unique receipt number
  * Format: RCPT-YYYYMMDD-XXXX
@@ -3816,6 +3828,9 @@ export const getPaymentReceipt = async (req, res) => {
       })
     }
 
+    // Get school details from database
+    const schoolInfo = await getSchoolDetails()
+
     // Get metadata from payment record
     const metadata = payment.metadata || {}
     
@@ -3862,11 +3877,11 @@ export const getPaymentReceipt = async (req, res) => {
         metadata: metadata
       },
       schoolInfo: {
-        name: process.env.SCHOOL_NAME || 'Your School Name',
-        address: process.env.SCHOOL_ADDRESS || 'School Address',
-        phone: process.env.SCHOOL_PHONE || 'School Phone',
-        email: process.env.SCHOOL_EMAIL || 'school@email.com',
-        principal: process.env.SCHOOL_PRINCIPAL || 'Principal Name'
+        name: schoolInfo.name,
+        address: schoolInfo.address,
+        phone: schoolInfo.phone,
+        email: schoolInfo.email,
+        principal: schoolInfo.principal
       },
       generatedAt: new Date()
     }

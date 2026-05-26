@@ -25,7 +25,6 @@ import Dashboard from '@/components/dynamicModals/Dashboard'
 import { useDispatch } from 'react-redux'
 import { useRouter } from 'expo-router'
 import { logoutEmployee } from '@/redux/employeeSlice'
-import { schoolDetails } from '@/schoolDetails'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window')
 
@@ -400,10 +399,10 @@ export default function DashboardMenu({ visible, onClose }) {
                   <FontAwesome5 name="school" size={32} color="#FFFFFF" />
                   <View style={styles.headerText}>
                     <ThemedText type='subtitle' style={styles.schoolName} numberOfLines={1} >
-                      {schoolDetails?.name}
+                      Dashboard
                     </ThemedText>
                     <ThemedText style={styles.menuTitle}>
-                      Dashboard Menu
+                      And it's Menu Items
                     </ThemedText>
                   </View>
                 </View>

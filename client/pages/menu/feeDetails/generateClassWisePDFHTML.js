@@ -1,6 +1,31 @@
-import { schoolDetails } from "@/schoolDetails"
+import axiosApi from '@/utils/axiosApi'
 
-export const generateClassWisePDFHTML = (data) => {
+const fetchSchoolDetails = async () => {
+  try {
+    const response = await axiosApi.get('/school')
+    if (response.data.success) {
+      return response.data.data
+    }
+    return {
+      name: 'School Name',
+      address: 'School Address',
+      phone: 'School Phone',
+      email: 'School Email',
+      principal: 'Principal Name'
+    }
+  } catch (error) {
+    console.error('Error fetching school details:', error)
+    return {
+      name: 'School Name',
+      address: 'School Address',
+      phone: 'School Phone',
+      email: 'School Email',
+      principal: 'Principal Name'
+    }
+  }
+}
+
+export const generateClassWisePDFHTML = async (data) => {
   const {
     selectedClass,
     selectedSection,
@@ -9,6 +34,8 @@ export const generateClassWisePDFHTML = (data) => {
     grandTotals,
     generatedAt
   } = data
+
+  const schoolDetails = await fetchSchoolDetails()
 
   // Safe number formatter - FIXED: Returns 0 for undefined/null
   const safeNumber = (value) => {

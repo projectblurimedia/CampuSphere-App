@@ -1558,7 +1558,7 @@ export const getStudentsByClassAndSection = async (req, res) => {
     const {
       class: classInput,
       section,
-      sortBy = 'firstName',
+      sortBy = 'rollNo',
       sortOrder = 'asc',
     } = req.query
 
@@ -1602,15 +1602,9 @@ export const getStudentsByClassAndSection = async (req, res) => {
       isActive: true
     }
 
-    const orderBy = {}
-    const validSortFields = ['firstName', 'lastName', 'rollNo', 'admissionNo', 'createdAt']
-    const sortField = validSortFields.includes(sortBy) ? sortBy : 'firstName'
-    orderBy[sortField] = sortOrder === 'desc' ? 'desc' : 'asc'
-
-    // Get only basic student info - no relations
+    // Get students from database
     const students = await prisma.student.findMany({
       where,
-      orderBy,
       select: {
         id: true,
         firstName: true,
@@ -1625,7 +1619,32 @@ export const getStudentsByClassAndSection = async (req, res) => {
       }
     })
 
-    const studentsWithDisplay = students.map(student => ({
+    // Sort by roll number as numeric value
+    let sortedStudents = [...students]
+    
+    if (sortBy === 'rollNo') {
+      sortedStudents = students.sort((a, b) => {
+        // Handle cases where rollNo might be null or undefined
+        const rollA = a.rollNo ? parseInt(a.rollNo, 10) : 0
+        const rollB = b.rollNo ? parseInt(b.rollNo, 10) : 0
+        return sortOrder === 'asc' ? rollA - rollB : rollB - rollA
+      })
+    } else {
+      // For other fields, use string comparison
+      const validSortFields = ['firstName', 'lastName', 'admissionNo', 'createdAt']
+      const sortField = validSortFields.includes(sortBy) ? sortBy : 'firstName'
+      sortedStudents = students.sort((a, b) => {
+        const valA = a[sortField] || ''
+        const valB = b[sortField] || ''
+        if (sortOrder === 'asc') {
+          return valA.toString().localeCompare(valB.toString())
+        } else {
+          return valB.toString().localeCompare(valA.toString())
+        }
+      })
+    }
+
+    const studentsWithDisplay = sortedStudents.map(student => ({
       id: student.id,
       firstName: student.firstName,
       lastName: student.lastName,
@@ -1640,12 +1659,14 @@ export const getStudentsByClassAndSection = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      count: students.length,
+      count: studentsWithDisplay.length,
       data: studentsWithDisplay,
       filters: {
         class: classEnum,
         classLabel: mapEnumToDisplayName(classEnum),
         section: validatedSection,
+        sortBy: sortBy,
+        sortOrder: sortOrder
       },
     })
   } catch (error) {

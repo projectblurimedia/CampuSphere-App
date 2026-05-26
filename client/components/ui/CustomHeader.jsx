@@ -10,9 +10,8 @@ import StudentsMenu from '@/components/students/students-menu'
 import EmployeeMenu from '@/components/employee/employee-menu'
 import CashflowMenu from '@/components/cashflow/cashflow-menu'
 import ProfileMenu from '@/components/profile/profile-menu'
-import { schoolDetails } from '@/schoolDetails'
 
-export default function CustomHeader({ title, showBackButton = false, iconName = 'school', currentRoute = 'index' }) {
+export default function CustomHeader({ title, desc, showBackButton = false, iconName = 'school', currentRoute = 'index' }) {
   const navigation = useNavigation()
   const { colors, isDark } = useTheme()
   const [menuVisible, setMenuVisible] = useState(false)
@@ -127,7 +126,7 @@ export default function CustomHeader({ title, showBackButton = false, iconName =
 
           <View style={styles.centerSection}>
             <ThemedText style={styles.title}>{title}</ThemedText>
-            <ThemedText style={styles.schoolName}>{schoolDetails?.name}</ThemedText>
+            <ThemedText style={styles.schoolName}>{desc}</ThemedText>
           </View>
 
           {/* Right section: Only 3 bars menu button */}

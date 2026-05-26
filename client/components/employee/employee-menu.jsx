@@ -12,10 +12,9 @@ import {
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
-import { Ionicons, FontAwesome6, Feather } from '@expo/vector-icons'
+import { Ionicons, FontAwesome6, Feather, FontAwesome5 } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 import { ToastNotification } from '@/components/ui/ToastNotification'
-import { schoolDetails } from '@/schoolDetails'
 import { useDispatch } from 'react-redux'
 import { useRouter } from 'expo-router'
 import { logoutEmployee } from '@/redux/employeeSlice'
@@ -516,13 +515,13 @@ export default function EmployeeMenu({ visible, onClose }) {
             >
               <View style={styles.headerRow}>
                 <View style={styles.headerLeft}>
-                  <Ionicons name="school" size={28} color="#FFFFFF" />
+                  <FontAwesome5 name="chalkboard-teacher" size={26} color="#FFFFFF" />
                   <View style={styles.headerText}>
                     <ThemedText style={styles.schoolName} numberOfLines={1}>
-                      {schoolDetails?.name || 'School'}
+                      Employees
                     </ThemedText>
                     <ThemedText style={styles.menuTitle}>
-                      Employee Menu
+                      And it's Menu Items
                     </ThemedText>
                   </View>
                 </View>

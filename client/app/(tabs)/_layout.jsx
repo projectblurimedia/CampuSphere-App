@@ -96,6 +96,7 @@ export default function TabLayout() {
           return (
             <CustomHeader
               title={options.title || route.name}
+              desc={options.desc || 'All Information Provided'}
               showBackButton={false}
               iconName={iconName}
               currentRoute={route.name}
@@ -111,6 +112,7 @@ export default function TabLayout() {
         name="students"
         options={{ 
           title: "Students", 
+          desc: "Check All Students Info...",
           tabBarIcon: () => null,
           href: allowedTabs.includes("students") ? "/(tabs)/students" : null
         }}
@@ -121,6 +123,7 @@ export default function TabLayout() {
         name="employees"
         options={{ 
           title: "Employees", 
+          desc: "Check All Employees Info...",
           tabBarIcon: () => null,
           href: allowedTabs.includes("employees") ? "/(tabs)/employees" : null
         }}
@@ -131,6 +134,7 @@ export default function TabLayout() {
         name="index"
         options={{ 
           title: "Dashboard", 
+          desc: "Check All Dashboard Info...",
           tabBarIcon: () => null,
           href: allowedTabs.includes("index") ? "/(tabs)/index" : null
         }}
@@ -140,7 +144,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="cashflow"
         options={{ 
-          title: "Cashflow", 
+          title: "Cashflow",
+          desc: "Check All Cashflow Info...",
           tabBarIcon: () => null,
           href: allowedTabs.includes("cashflow") ? "/(tabs)/cashflow" : null
         }}
@@ -151,6 +156,7 @@ export default function TabLayout() {
         name="profile"
         options={{ 
           title: "Profile", 
+          desc: "Profile Information...",
           tabBarIcon: () => null,
           href: "/(tabs)/profile"
         }}

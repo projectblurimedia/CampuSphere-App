@@ -368,7 +368,7 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
     try {
       setDownloading(true)
 
-      const htmlContent = generateReceiptHTML(receiptData)
+      const htmlContent = await generateReceiptHTML(receiptData)
 
       // Generate PDF
       const { uri } = await Print.printToFileAsync({ html: htmlContent })
@@ -394,7 +394,7 @@ export default function FeePaymentModal({ visible, onClose, paymentData, student
     try {
       setPrinting(true)
 
-      const htmlContent = generatePrintHTML(receiptData)
+      const htmlContent = await generatePrintHTML(receiptData)
 
       // Print the receipt
       await Print.printAsync({

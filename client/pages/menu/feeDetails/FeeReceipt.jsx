@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   View,
   StyleSheet,
@@ -13,7 +13,32 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
 import { FontAwesome5, Feather, MaterialIcons, Ionicons } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
-import { schoolDetails } from '@/schoolDetails.js'
+import axiosApi from '@/utils/axiosApi'
+
+const fetchSchoolDetails = async () => {
+  try {
+    const response = await axiosApi.get('/school')
+    if (response.data.success) {
+      return response.data.data
+    }
+    return {
+      name: 'School Name',
+      address: 'School Address',
+      phone: 'School Phone',
+      email: 'School Email',
+      principal: 'Principal Name'
+    }
+  } catch (error) {
+    console.error('Error fetching school details:', error)
+    return {
+      name: 'School Name',
+      address: 'School Address',
+      phone: 'School Phone',
+      email: 'School Email',
+      principal: 'Principal Name'
+    }
+  }
+}
 
 export default function FeeReceipt({ 
   visible, 
@@ -26,6 +51,31 @@ export default function FeeReceipt({
   onPrint 
 }) {
   const { colors } = useTheme()
+
+  const [schoolDetails, setSchoolDetails] = useState({
+    name: 'School Name',
+    address: 'School Address',
+    phone: 'School Phone',
+    email: 'School Email',
+    principal: 'Principal Name',
+    website: 'www.school.com'
+  })
+
+  const [loadingSchool, setLoadingSchool] = useState(true)
+
+  // Fetch school details when component mounts or becomes visible
+  useEffect(() => {
+    if (visible) {
+      loadSchoolDetails()
+    }
+  }, [visible])
+
+  const loadSchoolDetails = async () => {
+    setLoadingSchool(true)
+    const details = await fetchSchoolDetails()
+    setSchoolDetails(details)
+    setLoadingSchool(false)
+  }
 
   const formatDate = (dateString) => {
     if (!dateString) return ''
@@ -185,7 +235,7 @@ export default function FeeReceipt({
           </SafeAreaView>
         </LinearGradient>
 
-        {loading ? (
+        {loading || loadingSchool ? (
           <LoadingOverlay />
         ) : (
           <ScrollView style={styles.content} showsVerticalScrollIndicator={true}>

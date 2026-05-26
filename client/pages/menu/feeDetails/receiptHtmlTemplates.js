@@ -1,6 +1,34 @@
-import { schoolDetails } from "@/schoolDetails"
+import axiosApi from '@/utils/axiosApi'
 
-export const generateReceiptHTML = (receiptData) => {
+const fetchSchoolDetails = async () => {
+  try {
+    const response = await axiosApi.get('/school')
+    console.log(response.data)
+    if (response.data.success) {
+      return response.data.data
+    }
+    return {
+      name: 'School Name',
+      address: 'School Address',
+      phone: 'School Phone',
+      email: 'School Email',
+      principal: 'Principal Name'
+    }
+  } catch (error) {
+    console.error('Error fetching school details:', error)
+    return {
+      name: 'School Name',
+      address: 'School Address',
+      phone: 'School Phone',
+      email: 'School Email',
+      principal: 'Principal Name'
+    }
+  }
+}
+
+export const generateReceiptHTML = async (receiptData) => {
+  const schoolDetails = await fetchSchoolDetails()
+
   // Get metadata which contains the breakdown
   const metadata = receiptData.payment?.metadata || {}
   
@@ -453,7 +481,9 @@ export const generateReceiptHTML = (receiptData) => {
   `
 }
 
-export const generatePrintHTML = (receiptData) => {
+export const generatePrintHTML = async (receiptData) => {
+  const schoolDetails = await fetchSchoolDetails()
+
   // Get metadata which contains the breakdown
   const metadata = receiptData.payment?.metadata || {}
   

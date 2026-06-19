@@ -2,9 +2,9 @@ import { immediateLogout } from '@/redux/employeeSlice'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import io from 'socket.io-client'
 
-const SOCKET_URL = 'http://192.168.31.232:5000'
+// const SOCKET_URL = 'http://192.168.31.232:5000'
 // const SOCKET_URL = 'https://campusphere-app-socket.onrender.com'
-// const SOCKET_URL = 'https://campusphere-app-socket-8rmj.onrender.com'
+const SOCKET_URL = 'https://campusphere-app-socket-8rmj.onrender.com'
 
 let socket = null
 

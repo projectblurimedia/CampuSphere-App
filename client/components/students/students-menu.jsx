@@ -338,14 +338,7 @@ export default function StudentsMenu({ visible, onClose }) {
             style={styles.themeBackdrop}
             activeOpacity={1}
             onPress={() => setThemeModalVisible(false)}
-          >
-            <Animated.View 
-              style={[
-                styles.themeBackdropAnimated,
-                { opacity: modalOpacity }
-              ]}
-            />
-          </TouchableOpacity>
+          />
           
           <Animated.View 
             style={[
@@ -825,24 +818,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
-  // Theme Modal Styles
+  // Theme Modal Styles - FIXED
   themeOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 9999,
+    paddingHorizontal: 20,
   },
   themeBackdrop: {
     ...StyleSheet.absoluteFillObject,
   },
-  themeBackdropAnimated: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-  },
   themeModalContainer: {
-    width: SCREEN_WIDTH * 0.85,
+    width: '90%',
     maxWidth: 400,
-    paddingHorizontal: 20,
   },
   themeModalContent: {
     borderRadius: 20,

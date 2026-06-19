@@ -502,12 +502,14 @@ export default function DashboardMenu({ visible, onClose }) {
             </ScrollView>
           </Animated.View>
 
-          <ThemeModal
-            visible={themeModalVisible}
-            onClose={() => setThemeModalVisible(false)}
-          />
         </View>
       </Modal>
+
+      {/* Theme Modal - This component already has the fix applied */}
+      <ThemeModal
+        visible={themeModalVisible}
+        onClose={() => setThemeModalVisible(false)}
+      />
 
       {/* Logout Confirmation Modal */}
       <LogoutConfirmationModal />

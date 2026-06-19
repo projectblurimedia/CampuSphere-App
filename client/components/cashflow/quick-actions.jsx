@@ -2,7 +2,7 @@ import { View, StyleSheet, Dimensions, TouchableOpacity } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { MaterialIcons, FontAwesome5, Ionicons, Feather } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
-import { useNavigation } from '@react-navigation/native'
+import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import Dashboard from '@/components/dynamicModals/Dashboard'
@@ -11,7 +11,7 @@ const { width } = Dimensions.get('window')
 
 export default function QuickActions({ actions = [] }) {
   const { colors } = useTheme()
-  const navigation = useNavigation()
+  const router = useRouter()
   
   // Modal state
   const [activeModal, setActiveModal] = useState(null)
@@ -28,10 +28,7 @@ export default function QuickActions({ actions = [] }) {
 
   const handleModalClose = () => {
     setActiveModal(null)
-    // Refresh dashboard data
-    if (navigation.getParent()?.params?.refresh) {
-      navigation.getParent().params.refresh()
-    }
+    router.setParams({ refresh: Date.now() })
   }
 
   const getIcon = (type, name, size, color) => {

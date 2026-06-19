@@ -259,14 +259,7 @@ export default function ProfileMenu({ visible, onClose }) {
             style={styles.themeBackdrop}
             activeOpacity={1}
             onPress={() => setThemeModalVisible(false)}
-          >
-            <Animated.View 
-              style={[
-                styles.themeBackdropAnimated,
-                { opacity: modalOpacity }
-              ]}
-            />
-          </TouchableOpacity>
+          />
           
           <Animated.View 
             style={[
@@ -810,24 +803,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
-  // Theme Modal Styles (matching your ThemeModal component)
+  // Theme Modal Styles - FIXED
   themeOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1, // Changed from absoluteFillObject
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 9999,
+    paddingHorizontal: 20, // Added padding for spacing
   },
   themeBackdrop: {
     ...StyleSheet.absoluteFillObject,
   },
-  themeBackdropAnimated: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-  },
   themeModalContainer: {
-    width: SCREEN_WIDTH * 0.85,
+    width: '90%', // Changed from SCREEN_WIDTH * 0.85
     maxWidth: 400,
-    paddingHorizontal: 20,
+    // Removed paddingHorizontal: 20 from here
   },
   themeModalContent: {
     borderRadius: 20,

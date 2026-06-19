@@ -1670,8 +1670,9 @@ export default function UploadMarks({ visible, onClose }) {
 
   // Calculate statistics
   const calculateStatistics = useCallback(() => {
-    const marksArray = Object.values(marks)
-      .map(value => parseFloat(value))
+    const marksArray = Object.entries(marks)
+      .filter(([studentId]) => !absences[studentId])
+      .map(([, value]) => parseFloat(value))
       .filter(value => !isNaN(value) && value !== '')
     
     const absentCount = Object.values(absences).filter(isAbsent => isAbsent).length

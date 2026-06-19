@@ -6,6 +6,7 @@ import {
   Platform,
   Dimensions,
   Animated,
+  Modal,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
@@ -15,23 +16,23 @@ import { useTheme } from '@/hooks/useTheme'
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
 const themeOptions = [
-  { 
-    id: 'system', 
-    label: 'System Default', 
+  {
+    id: 'system',
+    label: 'System Default',
     icon: 'settings',
-    gradient: ['#667eea', '#764ba2']
+    gradient: ['#667eea', '#764ba2'],
   },
-  { 
-    id: 'light', 
-    label: 'Light Mode', 
+  {
+    id: 'light',
+    label: 'Light Mode',
     icon: 'sun',
-    gradient: ['#fbbf24', '#f59e0b']
+    gradient: ['#fbbf24', '#f59e0b'],
   },
-  { 
-    id: 'dark', 
-    label: 'Dark Mode', 
+  {
+    id: 'dark',
+    label: 'Dark Mode',
     icon: 'moon',
-    gradient: ['#4f46e5', '#7c3aed']
+    gradient: ['#4f46e5', '#7c3aed'],
   },
 ]
 
@@ -77,132 +78,115 @@ const ThemeModal = ({ visible, onClose }) => {
     setTimeout(() => onClose(), 300)
   }
 
-  if (!visible) return null
-
   return (
-    <View style={styles.overlay}>
-      <TouchableOpacity 
-        style={styles.backdrop}
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <Animated.View 
-          style={[
-            styles.backdropAnimated,
-            { opacity: modalOpacity }
-          ]}
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <Animated.View style={[styles.overlay, { opacity: modalOpacity }]}>
+        <TouchableOpacity
+          style={StyleSheet.absoluteFillObject}
+          activeOpacity={1}
+          onPress={onClose}
         />
-      </TouchableOpacity>
-      
-      <Animated.View 
-        style={[
-          styles.modalContainer,
-          { 
-            opacity: modalOpacity,
-            transform: [{ scale: modalScale }]
-          }
-        ]}
-      >
-        <View style={[
-          styles.modalContent,
-          { backgroundColor: colors.cardBackground }
-        ]}>
-          <LinearGradient
-            colors={[colors.gradientStart, colors.gradientEnd]}
-            style={styles.headerGradient}
-          >
-            <View style={styles.headerContent}>
-              <View style={styles.iconContainer}>
-                <FontAwesome6 name="palette" size={28} color="#FFFFFF" />
+        <Animated.View
+          style={[
+            styles.card,
+            { transform: [{ scale: modalScale }] },
+          ]}
+        >
+          <View style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}>
+            <LinearGradient
+              colors={[colors.gradientStart, colors.gradientEnd]}
+              style={styles.headerGradient}
+            >
+              <View style={styles.headerContent}>
+                <View style={styles.iconContainer}>
+                  <FontAwesome6 name="palette" size={28} color="#FFFFFF" />
+                </View>
+                <ThemedText type="subtitle" style={styles.headerTitle}>
+                  Choose Theme
+                </ThemedText>
+                <ThemedText style={styles.headerSubtitle}>
+                  Select your preferred app theme
+                </ThemedText>
               </View>
-              <ThemedText type='subtitle' style={styles.headerTitle}>
-                Choose Theme
-              </ThemedText>
-              <ThemedText style={styles.headerSubtitle}>
-                Select your preferred app theme
-              </ThemedText>
-            </View>
-          </LinearGradient>
+            </LinearGradient>
 
-          <View style={styles.optionsContainer}>
-            {themeOptions.map((option) => {
-              // FIXED: Compare with the stored preference (theme), not the applied theme (currentTheme)
-              const isSelected = theme === option.id
-              
-              return (
-                <TouchableOpacity
-                  key={option.id}
-                  style={[
-                    styles.option,
-                    { 
-                      backgroundColor: colors.cardBackground,
-                      borderWidth: isSelected ? 2 : 1,
-                      borderColor: isSelected ? colors.tint : colors.border,
-                    }
-                  ]}
-                  activeOpacity={0.7}
-                  onPress={() => handleThemeSelect(option.id)}
-                >
-                  <LinearGradient
-                    colors={option.gradient}
-                    style={styles.optionIcon}
+            <View style={styles.optionsContainer}>
+              {themeOptions.map((option) => {
+                const isSelected = theme === option.id
+                return (
+                  <TouchableOpacity
+                    key={option.id}
+                    style={[
+                      styles.option,
+                      {
+                        backgroundColor: colors.cardBackground,
+                        borderWidth: isSelected ? 2 : 1,
+                        borderColor: isSelected ? colors.tint : colors.border,
+                      },
+                    ]}
+                    activeOpacity={0.7}
+                    onPress={() => handleThemeSelect(option.id)}
                   >
-                    <Feather name={option.icon} size={24} color="#FFFFFF" />
-                  </LinearGradient>
-                  
-                  <View style={styles.optionText}>
-                    <ThemedText 
-                      style={[
-                        styles.optionLabel,
-                        { color: isSelected ? colors.tint : colors.text }
-                      ]}
+                    <LinearGradient
+                      colors={option.gradient}
+                      style={styles.optionIcon}
                     >
-                      {option.label}
-                    </ThemedText>
-                  </View>
-                  
-                  {isSelected && (
-                    <View style={[styles.selected, { backgroundColor: colors.tint }]}>
-                      <Feather name="check" size={16} color="#FFFFFF" />
-                    </View>
-                  )}
-                </TouchableOpacity>
-              )
-            })}
-          </View>
+                      <Feather name={option.icon} size={24} color="#FFFFFF" />
+                    </LinearGradient>
 
-          <TouchableOpacity
-            style={[styles.closeBtn, { borderTopColor: colors.border }]}
-            onPress={onClose}
-          >
-            <ThemedText style={[styles.closeText, { color: colors.textSecondary }]}>
-              Close
-            </ThemedText>
-          </TouchableOpacity>
-        </View>
+                    <View style={styles.optionText}>
+                      <ThemedText
+                        style={[
+                          styles.optionLabel,
+                          { color: isSelected ? colors.tint : colors.text },
+                        ]}
+                      >
+                        {option.label}
+                      </ThemedText>
+                    </View>
+
+                    {isSelected && (
+                      <View style={[styles.selected, { backgroundColor: colors.tint }]}>
+                        <Feather name="check" size={16} color="#FFFFFF" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.closeBtn, { borderTopColor: colors.border }]}
+              onPress={onClose}
+            >
+              <ThemedText style={[styles.closeText, { color: colors.textSecondary }]}>
+                Close
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
       </Animated.View>
-    </View>
+    </Modal>
   )
 }
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 9999,
+    paddingHorizontal: 30,
   },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  backdropAnimated: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-  },
-  modalContainer: {
-    width: SCREEN_WIDTH * 0.85,
+  card: {
+    width: '100%',
     maxWidth: 400,
-    paddingHorizontal: 20,
   },
   modalContent: {
     borderRadius: 20,

@@ -169,18 +169,18 @@ const PaymentItem = React.memo(({ item, onPress, colors, formatDate, getPaymentM
             )}
           </View>
           <View style={styles.studentDetails}>
-            <ThemedText style={styles.studentName}>{item.student?.name || 'N/A'}</ThemedText>
+            <ThemedText style={[styles.studentName, { color: colors.text }]}>{item.student?.name || 'N/A'}</ThemedText>
             <View style={styles.classSectionRow}>
               <View style={styles.classSectionBadge}>
                 <MaterialIcons name="class" size={10} color={colors.primary} />
-                <ThemedText style={styles.classSectionText}>
+                <ThemedText style={[styles.classSectionText, { color: colors.textSecondary }]}>
                   {item.student?.displayClass || 'N/A'} - {item.student?.section || 'N/A'}
                 </ThemedText>
               </View>
-              <View style={styles.separatorDot} />
+              <View style={[styles.separatorDot, { backgroundColor: colors.textSecondary }]} />
               <View style={styles.dateBadge}>
                 <Feather name="calendar" size={10} color={colors.textSecondary} />
-                <ThemedText style={styles.dateText}>{formatDate(item.date)}</ThemedText>
+                <ThemedText style={[styles.dateText, { color: colors.textSecondary }]}>{formatDate(item.date)}</ThemedText>
               </View>
             </View>
           </View>

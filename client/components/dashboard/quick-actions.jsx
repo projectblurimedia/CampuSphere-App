@@ -3,7 +3,7 @@ import { View, StyleSheet, Dimensions, TouchableOpacity } from 'react-native'
 import { ThemedText } from '@/components/ui/themed-text'
 import { MaterialIcons, FontAwesome5, Ionicons, Feather } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation } from 'expo-router'
 import { ToastNotification } from '@/components/ui/ToastNotification'
 import Dashboard from '@/components/dynamicModals/Dashboard'
 

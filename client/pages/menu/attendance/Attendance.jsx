@@ -625,9 +625,214 @@ const DeleteConfirmationModal = ({
   )
 }
 
+// Submit Confirmation Modal Component
+const SubmitConfirmationModal = ({
+  visible,
+  onConfirm,
+  onCancel,
+  date,
+  session,
+  className,
+  section,
+  totalStudents,
+  presentCount,
+  absentCount,
+  isOverride
+}) => {
+  const { colors } = useTheme()
+
+  const styles = StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+    },
+    modalContainer: {
+      width: '90%',
+      backgroundColor: colors.cardBackground,
+      borderRadius: 20,
+      padding: 24,
+      elevation: 5,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+    },
+    iconContainer: {
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    submitIcon: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: colors.primary + '20',
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 2,
+      borderColor: colors.primary + '50',
+    },
+    title: {
+      fontSize: 20,
+      fontFamily: 'Poppins-Bold',
+      textAlign: 'center',
+      marginBottom: 8,
+      color: colors.text,
+    },
+    message: {
+      fontSize: 13,
+      fontFamily: 'Poppins-Medium',
+      textAlign: 'center',
+      marginBottom: 4,
+      color: colors.textSecondary,
+      lineHeight: 20,
+    },
+    details: {
+      backgroundColor: colors.inputBackground,
+      borderRadius: 12,
+      padding: 16,
+      marginVertical: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    detailRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    detailLabel: {
+      fontSize: 13,
+      fontFamily: 'Poppins-Medium',
+      color: colors.textSecondary,
+    },
+    detailValue: {
+      fontSize: 13,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+      maxWidth: '55%',
+      textAlign: 'right',
+    },
+    buttonContainer: {
+      flexDirection: 'row',
+      marginTop: 8,
+      gap: 12,
+    },
+    cancelButton: {
+      flex: 1,
+      backgroundColor: colors.inputBackground,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    cancelButtonText: {
+      fontSize: 15,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+    },
+    confirmButton: {
+      flex: 1,
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: 'center',
+    },
+    confirmButtonText: {
+      fontSize: 15,
+      fontFamily: 'Poppins-SemiBold',
+      color: '#ffffff',
+    },
+  })
+
+  const formatDateObj = (dateObj) => {
+    return dateObj.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    })
+  }
+
+  const getSessionLabel = (s) => s === 'morning' ? 'Morning Session' : 'Afternoon Session'
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onCancel}
+      statusBarTranslucent
+    >
+      <View style={styles.overlay}>
+        <View style={styles.modalContainer}>
+          <View style={styles.iconContainer}>
+            <View style={styles.submitIcon}>
+              <FontAwesome5 name="check-circle" size={26} color={colors.primary} />
+            </View>
+          </View>
+
+          <ThemedText style={styles.title}>
+            {isOverride ? 'Confirm Override' : 'Confirm Attendance'}
+          </ThemedText>
+
+          <ThemedText style={styles.message}>
+            {isOverride
+              ? 'This will override existing attendance records.'
+              : 'Are you sure you want to save attendance?'}
+          </ThemedText>
+
+          <View style={styles.details}>
+            <View style={styles.detailRow}>
+              <ThemedText style={styles.detailLabel}>Date:</ThemedText>
+              <ThemedText style={styles.detailValue}>{formatDateObj(date)}</ThemedText>
+            </View>
+            <View style={styles.detailRow}>
+              <ThemedText style={styles.detailLabel}>Session:</ThemedText>
+              <ThemedText style={styles.detailValue}>{getSessionLabel(session)}</ThemedText>
+            </View>
+            <View style={styles.detailRow}>
+              <ThemedText style={styles.detailLabel}>Class & Section:</ThemedText>
+              <ThemedText style={styles.detailValue}>{className} - {section}</ThemedText>
+            </View>
+            <View style={[styles.detailRow, { marginBottom: 0 }]}>
+              <ThemedText style={styles.detailLabel}>Students:</ThemedText>
+              <ThemedText style={styles.detailValue}>
+                {totalStudents} ({presentCount} present, {absentCount} absent)
+              </ThemedText>
+            </View>
+          </View>
+
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={onCancel}
+              activeOpacity={0.7}
+            >
+              <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.confirmButton}
+              onPress={onConfirm}
+              activeOpacity={0.7}
+            >
+              <ThemedText style={styles.confirmButtonText}>
+                {isOverride ? 'Override' : 'Save'}
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
+}
+
 export default function Attendance({ visible, onClose }) {
   const { colors } = useTheme()
-  
+
   // Get employee from Redux
   const employee = useSelector(state => state.employee.employee)
   const teacherName = employee ? `${employee.firstName} ${employee.lastName}` : 'Teacher'
@@ -658,7 +863,8 @@ export default function Attendance({ visible, onClose }) {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [showDeleteOption, setShowDeleteOption] = useState(false)
-  
+  const [showSubmitModal, setShowSubmitModal] = useState(false)
+
   // New state for classes and sections
   const [classesAndSections, setClassesAndSections] = useState({})
   const [isLoadingClasses, setIsLoadingClasses] = useState(false)
@@ -2166,7 +2372,7 @@ export default function Attendance({ visible, onClose }) {
                 style={styles.saveBtnGradient}
               >
                 <TouchableOpacity
-                  onPress={handleSave}
+                  onPress={() => setShowSubmitModal(true)}
                   activeOpacity={0.9}
                   style={styles.saveBtnPressable}
                   disabled={saving || isLoading || isLoadingClasses || deleting}
@@ -2199,6 +2405,20 @@ export default function Attendance({ visible, onClose }) {
         </View>
       </Modal>
 
+      {/* Submit Confirmation Modal */}
+      <SubmitConfirmationModal
+        visible={showSubmitModal}
+        onConfirm={() => { setShowSubmitModal(false); handleSave() }}
+        onCancel={() => setShowSubmitModal(false)}
+        date={selectedDate}
+        session={selectedSession}
+        className={selectedClass || ''}
+        section={selectedSection || ''}
+        totalStudents={students.length}
+        presentCount={Object.values(attendance).filter(v => v === true).length}
+        absentCount={Object.values(attendance).filter(v => v === false).length}
+        isOverride={attendanceExists?.exists || false}
+      />
       {/* Override Confirmation Modal */}
       <OverrideConfirmationModal
         visible={showOverrideModal}

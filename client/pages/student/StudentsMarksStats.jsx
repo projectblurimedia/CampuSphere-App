@@ -15,11 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { ThemedText } from '@/components/ui/themed-text'
-import {
-  FontAwesome5,
-  Feather,
-  Ionicons,
-} from '@expo/vector-icons'
+import { FontAwesome5, Feather, Ionicons, MaterialIcons } from '@expo/vector-icons'
 import { useTheme } from '@/hooks/useTheme'
 import axiosApi from '@/utils/axiosApi'
 import { ToastNotification } from '@/components/ui/ToastNotification'
@@ -27,90 +23,361 @@ import StudentCard from '@/components/students/student-card'
 import StudentMarks from '@/pages/student/StudentMarks'
 import { useDebounce } from '@/utils/useDebounce'
 
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const EXAM_TYPE_LABELS = {
+  FORMATIVE_1: 'Formative 1',
+  FORMATIVE_2: 'Formative 2',
+  FORMATIVE_3: 'Formative 3',
+  SUMMATIVE_1: 'Summative 1',
+  SUMMATIVE_2: 'Summative 2',
+  PRE_FINAL_1: 'Pre-Final 1',
+  PRE_FINAL_2: 'Pre-Final 2',
+  PRE_FINAL_3: 'Pre-Final 3',
+  FINAL: 'Final',
+}
+
+const SUBJECT_LABELS = {
+  TELUGU: 'Telugu',
+  MATHEMATICS: 'Mathematics',
+  SCIENCE: 'Science',
+  ENGLISH: 'English',
+  HINDI: 'Hindi',
+  SOCIAL: 'Social Studies',
+  COMPUTERS: 'Computers',
+  PHYSICS: 'Physics',
+  BIOLOGY: 'Biology',
+}
+
+const CLASS_ORDER = [
+  'PRE_NURSERY', 'NURSERY', 'LKG', 'UKG',
+  'CLASS_1', 'CLASS_2', 'CLASS_3', 'CLASS_4', 'CLASS_5',
+  'CLASS_6', 'CLASS_7', 'CLASS_8', 'CLASS_9', 'CLASS_10',
+]
+
+const CLASS_LABELS = {
+  PRE_NURSERY: 'Pre-Nursery',
+  NURSERY: 'Nursery',
+  LKG: 'LKG',
+  UKG: 'UKG',
+  CLASS_1: 'Class 1',
+  CLASS_2: 'Class 2',
+  CLASS_3: 'Class 3',
+  CLASS_4: 'Class 4',
+  CLASS_5: 'Class 5',
+  CLASS_6: 'Class 6',
+  CLASS_7: 'Class 7',
+  CLASS_8: 'Class 8',
+  CLASS_9: 'Class 9',
+  CLASS_10: 'Class 10',
+}
+
+const GRADE_DISPLAY_ORDER = ['A+', 'A', 'B+', 'B', 'C', 'D', 'E', 'F']
+
+// ─── Pure helpers (outside component for stable refs) ────────────────────────
+
+const getGradeColor = (grade) => {
+  const g = typeof grade === 'string' ? grade.replace('_PLUS', '+') : grade
+  switch (g) {
+    case 'A+': case 'A_PLUS': return '#10b981'
+    case 'A': return '#3b82f6'
+    case 'B+': case 'B_PLUS': return '#8b5cf6'
+    case 'B': return '#f59e0b'
+    case 'C': return '#f97316'
+    case 'D': return '#ef4444'
+    case 'E': return '#6b7280'
+    case 'F': return '#dc2626'
+    default: return '#94a3b8'
+  }
+}
+
+const getResultColor = (result) => {
+  if (result === 'PASS') return '#10b981'
+  if (result === 'FAIL') return '#ef4444'
+  return '#94a3b8'
+}
+
+const formatGrade = (grade) => {
+  if (!grade || grade === 'NA') return 'NA'
+  return grade.replace('_PLUS', '+').replace(/_/g, ' ')
+}
+
+// ─── StudentReportCard ───────────────────────────────────────────────────────
+
+function StudentReportCard({ student, colors, selectedClass, selectedSection, onPressViewFull }) {
+  const [expanded, setExpanded] = useState(false)
+
+  const resultColor = getResultColor(student.overallResult)
+  const subjects = student.marksData ? Object.entries(student.marksData) : []
+
+  const s = StyleSheet.create({
+    card: {
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.cardBackground,
+      marginBottom: 8,
+      overflow: 'hidden',
+    },
+    headerRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 12,
+    },
+    left: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+    rollBadge: {
+      width: 34, height: 34, borderRadius: 17,
+      justifyContent: 'center', alignItems: 'center',
+      backgroundColor: colors.primary + '20',
+    },
+    rollText: { fontSize: 12, fontFamily: 'Poppins-Bold', color: colors.primary },
+    nameBox: { flex: 1 },
+    name: { fontSize: 14, fontFamily: 'Poppins-SemiBold', color: colors.text },
+    summary: { fontSize: 11, fontFamily: 'Poppins-Medium', marginTop: 1 },
+    right: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    resultBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+    resultText: { fontSize: 10, fontFamily: 'Poppins-Bold' },
+    expanded: { borderTopWidth: 1, borderTopColor: colors.border },
+    overallRow: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      paddingHorizontal: 12, paddingVertical: 10,
+      backgroundColor: colors.primary + '0D',
+    },
+    overallLabel: { fontSize: 13, fontFamily: 'Poppins-Bold', color: colors.text },
+    rightGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    marksVal: { fontSize: 13, fontFamily: 'Poppins-SemiBold', color: colors.text },
+    pill: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
+    pillText: { fontSize: 10, color: '#FFFFFF', fontFamily: 'Poppins-Bold' },
+    pct: { fontSize: 13, fontFamily: 'Poppins-Bold', minWidth: 48, textAlign: 'right' },
+    subjectRow: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      paddingHorizontal: 12, paddingVertical: 8,
+      borderTopWidth: 0.5, borderTopColor: colors.border,
+    },
+    subjectName: { fontSize: 12, fontFamily: 'Poppins-Medium', color: colors.textSecondary, flex: 1 },
+    subjectRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    absentPill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, backgroundColor: '#ef444420' },
+    absentText: { fontSize: 10, color: '#ef4444', fontFamily: 'Poppins-Medium' },
+    resPill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, minWidth: 36, alignItems: 'center' },
+    resPillText: { fontSize: 9, fontFamily: 'Poppins-Bold' },
+    viewBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+      gap: 6, margin: 10, padding: 8, borderRadius: 10,
+      borderWidth: 1, borderColor: colors.primary + '50',
+      backgroundColor: colors.primary + '08',
+    },
+    viewBtnText: { fontSize: 12, fontFamily: 'Poppins-SemiBold', color: colors.primary },
+    noMarksNote: {
+      flexDirection: 'row', alignItems: 'center', gap: 8,
+      padding: 12, borderTopWidth: 1, borderTopColor: colors.border,
+    },
+    noMarksText: { fontSize: 12, fontFamily: 'Poppins-Medium', color: colors.textSecondary },
+  })
+
+  return (
+    <View style={s.card}>
+      <TouchableOpacity style={s.headerRow} onPress={() => setExpanded(!expanded)} activeOpacity={0.7}>
+        <View style={s.left}>
+          <View style={s.rollBadge}>
+            <ThemedText style={s.rollText}>{student.rollNo || '—'}</ThemedText>
+          </View>
+          <View style={s.nameBox}>
+            <ThemedText style={s.name} numberOfLines={1}>{student.fullName}</ThemedText>
+            {student.hasMarks ? (
+              <ThemedText style={[s.summary, { color: colors.textSecondary }]}>
+                {student.totalObtained}/{student.totalMaximum} • {student.percentage?.toFixed(1)}%
+              </ThemedText>
+            ) : (
+              <ThemedText style={[s.summary, { color: '#f59e0b' }]}>Marks not uploaded</ThemedText>
+            )}
+          </View>
+        </View>
+        <View style={s.right}>
+          <View style={[s.resultBadge, { backgroundColor: resultColor + '20' }]}>
+            <ThemedText style={[s.resultText, { color: resultColor }]}>
+              {student.hasMarks ? student.overallResult : 'NO DATA'}
+            </ThemedText>
+          </View>
+          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textSecondary} />
+        </View>
+      </TouchableOpacity>
+
+      {expanded && student.hasMarks && (
+        <View style={s.expanded}>
+          {/* Overall summary row */}
+          <View style={s.overallRow}>
+            <ThemedText style={s.overallLabel}>Overall</ThemedText>
+            <View style={s.rightGroup}>
+              <ThemedText style={s.marksVal}>
+                {student.totalObtained}/{student.totalMaximum}
+              </ThemedText>
+              <View style={[s.pill, { backgroundColor: getGradeColor(student.overallGrade) }]}>
+                <ThemedText style={s.pillText}>{formatGrade(student.overallGrade)}</ThemedText>
+              </View>
+              <ThemedText style={[s.pct, { color: getGradeColor(student.overallGrade) }]}>
+                {student.percentage?.toFixed(1)}%
+              </ThemedText>
+            </View>
+          </View>
+
+          {/* Per-subject rows */}
+          {subjects.map(([subjectKey, sub]) => {
+            const label = SUBJECT_LABELS[subjectKey] || subjectKey
+            const grade = formatGrade(sub.grade)
+            const gradeColor = getGradeColor(sub.grade)
+            const resColor = getResultColor(sub.result)
+            const pct = sub.totalMarks > 0
+              ? ((sub.marks / sub.totalMarks) * 100).toFixed(1)
+              : '0.0'
+
+            return (
+              <View key={subjectKey} style={s.subjectRow}>
+                <ThemedText style={s.subjectName} numberOfLines={1}>{label}</ThemedText>
+                <View style={s.subjectRight}>
+                  {sub.isAbsent ? (
+                    <View style={s.absentPill}>
+                      <ThemedText style={s.absentText}>Absent</ThemedText>
+                    </View>
+                  ) : (
+                    <>
+                      <ThemedText style={[s.marksVal, { fontSize: 12 }]}>
+                        {sub.marks}/{sub.totalMarks}
+                      </ThemedText>
+                      <View style={[s.pill, { backgroundColor: gradeColor }]}>
+                        <ThemedText style={s.pillText}>{grade}</ThemedText>
+                      </View>
+                      <ThemedText style={[s.pct, { color: gradeColor, fontSize: 12, minWidth: 44 }]}>
+                        {pct}%
+                      </ThemedText>
+                    </>
+                  )}
+                  <View style={[s.resPill, { backgroundColor: resColor + '20' }]}>
+                    <ThemedText style={[s.resPillText, { color: resColor }]}>
+                      {sub.result}
+                    </ThemedText>
+                  </View>
+                </View>
+              </View>
+            )
+          })}
+
+          {/* View full marks button */}
+          <TouchableOpacity style={s.viewBtn} onPress={() => onPressViewFull(student)}>
+            <MaterialIcons name="assignment" size={14} color={colors.primary} />
+            <ThemedText style={s.viewBtnText}>View Full Marks Report</ThemedText>
+            <Ionicons name="arrow-forward" size={13} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {expanded && !student.hasMarks && (
+        <View style={s.noMarksNote}>
+          <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
+          <ThemedText style={s.noMarksText}>No marks recorded for this exam</ThemedText>
+        </View>
+      )}
+    </View>
+  )
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
 export default function StudentsMarksStats({ visible, onClose }) {
   const { colors } = useTheme()
-  const scrollViewRef = useRef(null)
   const searchInputRef = useRef(null)
-  
-  const [stats, setStats] = useState(null)
-  const [schoolSummary, setSchoolSummary] = useState(null)
+
+  // Stats from API
+  const [stats, setStats] = useState([])
   const [availableExams, setAvailableExams] = useState([])
-  
+
+  // Filter state
+  const [selectedExamType, setSelectedExamType] = useState(null)
+  const [selectedClass, setSelectedClass] = useState(null)
+  const [selectedSection, setSelectedSection] = useState(null)
+
+  // Class-level student detail data
+  const [classStudents, setClassStudents] = useState(null)
+  const [classLoading, setClassLoading] = useState(false)
+
   const [isLoading, setIsLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState(null)
   const [toast, setToast] = useState(null)
-  
-  // Search state
+
+  // Search
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
   const [searchLoading, setSearchLoading] = useState(false)
-  
-  // Debounce search query
   const debouncedSearchQuery = useDebounce(searchQuery, 300)
-  
-  // Student Marks Modal state
+
+  // Student marks modal
   const [selectedStudent, setSelectedStudent] = useState(null)
   const [showStudentMarks, setShowStudentMarks] = useState(false)
 
-  // Toast functions
-  const showToast = (message, type = 'error', duration = 3000) => {
+  const showToast = (message, type = 'error', duration = 3000) =>
     setToast({ message, type, duration })
-  }
+  const hideToast = () => setToast(null)
 
-  const hideToast = () => {
-    setToast(null)
-  }
+  // ── API calls ──────────────────────────────────────────────────────────────
 
-  // Fetch marks statistics
   const fetchStats = useCallback(async (showLoading = true) => {
     if (showLoading) setIsLoading(true)
     setError(null)
-
     try {
-      const response = await axiosApi.get('/students/marks-stats')
-
-      if (response.data.success) {
-        setStats(response.data.data?.exams || [])
-        setSchoolSummary(response.data.data?.schoolSummary || null)
-        setAvailableExams(response.data.data?.availableExams || [])
+      const res = await axiosApi.get('/students/marks-stats')
+      if (res.data.success) {
+        setStats(res.data.data?.exams || [])
+        setAvailableExams(res.data.data?.availableExams || [])
       } else {
-        throw new Error(response.data.message || 'Failed to fetch statistics')
+        throw new Error(res.data.message || 'Failed to fetch statistics')
       }
     } catch (err) {
-      console.error('Error fetching marks stats:', err)
-      const errorMsg = err.response?.data?.message || err.message || 'Failed to load statistics'
-      setError(errorMsg)
-      showToast(errorMsg, 'error')
+      const msg = err.response?.data?.message || err.message || 'Failed to load statistics'
+      setError(msg)
+      showToast(msg, 'error')
     } finally {
       if (showLoading) setIsLoading(false)
       setRefreshing(false)
     }
   }, [])
 
-  // Search students function
+  const fetchClassStudents = useCallback(async (examType, className, section) => {
+    setClassLoading(true)
+    setClassStudents(null)
+    try {
+      const res = await axiosApi.get('/marks/exam', {
+        params: { examType, className, section },
+      })
+      if (res.data.success) {
+        setClassStudents(res.data.data)
+      } else {
+        throw new Error(res.data.message || 'Failed to fetch student data')
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to load student data'
+      showToast(msg, 'error')
+    } finally {
+      setClassLoading(false)
+    }
+  }, [])
+
   const searchStudents = useCallback(async (query) => {
     if (!query.trim()) {
       setSearchResults([])
       setIsSearching(false)
       return
     }
-
     setSearchLoading(true)
     setIsSearching(true)
-    
     try {
-      const response = await axiosApi.get('/students/quick-search', {
-        params: { query, limit: 50 }
+      const res = await axiosApi.get('/students/quick-search', {
+        params: { query, limit: 50 },
       })
-      
-      if (response.data.success) {
-        setSearchResults(response.data.data)
-      }
-    } catch (err) {
-      console.error('Search error:', err)
+      if (res.data.success) setSearchResults(res.data.data)
+    } catch {
       showToast('Failed to search students', 'error')
       setSearchResults([])
     } finally {
@@ -118,7 +385,8 @@ export default function StudentsMarksStats({ visible, onClose }) {
     }
   }, [])
 
-  // Effect for debounced search
+  // ── Effects ────────────────────────────────────────────────────────────────
+
   useEffect(() => {
     if (debouncedSearchQuery) {
       searchStudents(debouncedSearchQuery)
@@ -128,309 +396,162 @@ export default function StudentsMarksStats({ visible, onClose }) {
     }
   }, [debouncedSearchQuery, searchStudents])
 
-  // Initial load
   useEffect(() => {
     if (visible) {
       fetchStats()
+      setSelectedExamType(null)
+      setSelectedClass(null)
+      setSelectedSection(null)
+      setClassStudents(null)
       setSearchQuery('')
-      setSelectedStudent(null)
     }
-  }, [visible, fetchStats])
+  }, [visible])
 
-  // Refresh
-  const onRefresh = useCallback(() => {
-    setRefreshing(true)
-    if (searchQuery.trim()) {
-      setSearchQuery('')
-      setSearchResults([])
-      setIsSearching(false)
+  useEffect(() => {
+    if (selectedExamType && selectedClass && selectedSection) {
+      fetchClassStudents(selectedExamType, selectedClass, selectedSection)
     } else {
-      fetchStats(false)
+      setClassStudents(null)
     }
-  }, [searchQuery, fetchStats])
+  }, [selectedExamType, selectedClass, selectedSection])
 
-  // Handle search clear
-  const handleClearSearch = useCallback(() => {
-    setSearchQuery('')
-    setSearchResults([])
-    setIsSearching(false)
-    searchInputRef.current?.focus()
-  }, [])
+  // ── Filter handlers ────────────────────────────────────────────────────────
 
-  // Handle scroll view touch to dismiss keyboard
-  const handleScrollViewTouch = useCallback(() => {
-    if (!isSearchFocused) {
-      Keyboard.dismiss()
+  const handleExamTypeSelect = (examType) => {
+    setSelectedExamType((prev) => (prev === examType ? null : examType))
+    setSelectedClass(null)
+    setSelectedSection(null)
+    setClassStudents(null)
+  }
+
+  const handleClassSelect = (cls) => {
+    setSelectedClass((prev) => (prev === cls ? null : cls))
+    setSelectedSection(null)
+    setClassStudents(null)
+  }
+
+  const handleSectionSelect = (sec) => {
+    setSelectedSection((prev) => (prev === sec ? null : sec))
+  }
+
+  // ── Derived data ───────────────────────────────────────────────────────────
+
+  const getSelectedExamData = () =>
+    stats.find((e) => e.examType === selectedExamType) || null
+
+  const getAvailableClasses = () => {
+    const exam = getSelectedExamData()
+    if (!exam) return []
+    const cls = [...new Set(exam.classSections.map((s) => s.class))]
+    return cls.sort((a, b) => CLASS_ORDER.indexOf(a) - CLASS_ORDER.indexOf(b))
+  }
+
+  const getAvailableSections = () => {
+    const exam = getSelectedExamData()
+    if (!exam || !selectedClass) return []
+    return exam.classSections
+      .filter((s) => s.class === selectedClass)
+      .map((s) => s.section)
+      .sort()
+  }
+
+  const getSchoolSummary = () => {
+    const exam = getSelectedExamData()
+    if (!exam) return null
+
+    const { summary } = exam
+    let totalPass = 0
+    let totalFail = 0
+    const gradeDistribution = {}
+
+    exam.classSections.forEach((cs) => {
+      totalPass += cs.summary?.resultDistribution?.PASS || 0
+      totalFail += cs.summary?.resultDistribution?.FAIL || 0
+      const gd = cs.summary?.gradeDistribution || {}
+      Object.entries(gd).forEach(([grade, count]) => {
+        if (count > 0) {
+          const display = grade.replace('_PLUS', '+')
+          gradeDistribution[display] = (gradeDistribution[display] || 0) + count
+        }
+      })
+    })
+
+    const passPercentage =
+      summary.totalStudentsWithMarks > 0
+        ? ((totalPass / summary.totalStudentsWithMarks) * 100).toFixed(1)
+        : '0.0'
+
+    return {
+      totalStudentsWithMarks: summary.totalStudentsWithMarks,
+      totalPass,
+      totalFail,
+      passPercentage,
+      avgPercentage:
+        summary.averagePercentage != null
+          ? summary.averagePercentage.toFixed(1)
+          : '0.0',
+      gradeDistribution,
     }
-  }, [isSearchFocused])
+  }
 
-  // Handle student press - Open StudentMarks Modal
+  // ── Student press handlers ─────────────────────────────────────────────────
+
   const handleStudentPress = (student) => {
+    setSelectedStudent({
+      ...student,
+      displayClass: CLASS_LABELS[selectedClass] || selectedClass,
+      section: selectedSection,
+      class: selectedClass,
+    })
+    setShowStudentMarks(true)
+  }
+
+  const handleSearchStudentPress = (student) => {
     setSelectedStudent(student)
     setShowStudentMarks(true)
   }
 
-  // Handle close student modal
   const handleCloseStudentModal = () => {
     setShowStudentMarks(false)
     setSelectedStudent(null)
   }
 
-  // Format grade display (A+ instead of A_PLUS)
-  const formatGrade = (grade) => {
-    return grade.replace('_PLUS', '+').replace('_', ' ')
+  const handleClearSearch = () => {
+    setSearchQuery('')
+    setSearchResults([])
+    setIsSearching(false)
+    searchInputRef.current?.focus()
   }
 
-  // Get result text for search count
-  const getResultText = (count) => {
-    return count === 1 ? 'student' : 'students'
-  }
-
-  // Overall Stat Card Component
-  const OverallStatCard = ({ title, value, icon, color }) => (
-    <View style={[styles.overallCard, { borderLeftColor: color }]}>
-      <View style={styles.overallCardHeader}>
-        <View style={[styles.overallIconContainer, { backgroundColor: color + '20' }]}>
-          <Feather name={icon} size={18} color={color} />
-        </View>
-        <ThemedText style={styles.overallCardValue}>{value}</ThemedText>
-      </View>
-      <ThemedText style={styles.overallCardTitle}>{title}</ThemedText>
-    </View>
-  )
-
-  // Exam Card Component - Fixed version with proper grade ordering
-  const ExamCard = ({ exam }) => {
-    const [expandedSections, setExpandedSections] = useState({})
-
-    const toggleSection = (sectionKey) => {
-      setExpandedSections(prev => ({
-        ...prev,
-        [sectionKey]: !prev[sectionKey]
-      }))
+  const onRefresh = useCallback(() => {
+    setRefreshing(true)
+    fetchStats(false)
+    if (selectedExamType && selectedClass && selectedSection) {
+      fetchClassStudents(selectedExamType, selectedClass, selectedSection)
     }
+  }, [selectedExamType, selectedClass, selectedSection])
 
-    const getGradeColor = (grade) => {
-      switch(grade) {
-        case 'A+': return '#10b981'
-        case 'A': return '#3b82f6'
-        case 'B+': return '#8b5cf6'
-        case 'B': return '#f59e0b'
-        case 'C': return '#f97316'
-        case 'D': return '#ef4444'
-        case 'E': return '#6b7280'
-        case 'F': return '#dc2626'
-        default: return '#94a3b8'
-      }
-    }
+  // ── Header subtitle ────────────────────────────────────────────────────────
 
-    // Calculate total students with marks for this exam
-    const totalStudentsWithMarks = exam.classSections.reduce(
-      (sum, section) => sum + (section.summary?.studentsWithMarks || 0), 
-      0
-    )
-
-    return (
-      <View style={styles.examCard}>
-        <View style={styles.examHeader}>
-          <View style={[styles.examBadge, { backgroundColor: colors.primary + '20' }]}>
-            <ThemedText style={[styles.examName, { color: colors.primary }]}>
-              {exam.examTypeLabel}
-            </ThemedText>
-          </View>
-          <View style={styles.studentCountBadge}>
-            <Ionicons name="people-outline" size={12} color={colors.textSecondary} />
-            <ThemedText style={styles.studentCountText}>
-              {totalStudentsWithMarks} students
-            </ThemedText>
-          </View>
-        </View>
-
-        {/* Class Sections List */}
-        <View style={styles.classSectionsPreview}>
-          {exam.classSections.map((section, idx) => {
-            const sectionKey = `${section.class}-${section.section}`
-            const isExpanded = expandedSections[sectionKey]
-            
-            // Handle both array and object formats for backward compatibility
-            let gradeDistributionArray = []
-            let resultDistribution = section.summary?.resultDistribution || {}
-            
-            if (Array.isArray(section.summary?.gradeDistribution)) {
-              // New format: array already sorted
-              gradeDistributionArray = section.summary.gradeDistribution
-            } else {
-              // Old format: object, need to sort
-              const gradeOrder = { 'A+': 1, 'A': 2, 'B+': 3, 'B': 4, 'C': 5, 'D': 6, 'E': 7, 'F': 8, 'NA': 9 }
-              const gradeDist = section.summary?.gradeDistribution || {}
-              gradeDistributionArray = Object.entries(gradeDist)
-                .filter(([_, count]) => count > 0)
-                .map(([grade, count]) => ({
-                  grade: grade.replace('_PLUS', '+').replace('_', ' '),
-                  count: count,
-                  key: grade
-                }))
-                .sort((a, b) => (gradeOrder[a.grade] || 99) - (gradeOrder[b.grade] || 99))
-            }
-            
-            const studentsWithMarks = section.summary?.studentsWithMarks || 0
-            const totalAccounted = gradeDistributionArray.reduce((sum, item) => sum + item.count, 0)
-            const countsMatch = totalAccounted === studentsWithMarks
-
-            return (
-              <View key={idx} style={styles.classSectionPreviewItem}>
-                {/* Section Header - Tappable */}
-                <TouchableOpacity 
-                  onPress={() => toggleSection(sectionKey)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.classSectionPreviewHeader}>
-                    <View style={styles.classSectionTitleContainer}>
-                      <ThemedText style={styles.classSectionPreviewClass}>
-                        {section.classLabel}
-                      </ThemedText>
-                      <View style={[styles.sectionBadge, { backgroundColor: colors.inputBackground }]}>
-                        <ThemedText style={styles.sectionPreviewText}>
-                          Section: {section.section}
-                        </ThemedText>
-                      </View>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <ThemedText style={[styles.classSectionPreviewPercent, { color: getGradeColor(
-                        section.summary?.averagePercentage >= 90 ? 'A+' : 
-                        section.summary?.averagePercentage >= 75 ? 'A' : 
-                        section.summary?.averagePercentage >= 60 ? 'B' : 
-                        section.summary?.averagePercentage >= 45 ? 'C' : 'D'
-                      ) }]}>
-                        {section.summary?.averagePercentage || 0}%
-                      </ThemedText>
-                      <Ionicons 
-                        name={isExpanded ? "chevron-up" : "chevron-down"} 
-                        size={18} 
-                        color={colors.textSecondary} 
-                      />
-                    </View>
-                  </View>
-                </TouchableOpacity>
-                
-                {/* Stats Row */}
-                <View style={styles.classStatsRow}>
-                  <View style={styles.classStatItem}>
-                    <ThemedText style={styles.classStatLabel}>Pass</ThemedText>
-                    <ThemedText style={[styles.classStatValue, { color: '#10b981' }]}>
-                      {section.summary?.passPercentage || 0}%
-                    </ThemedText>
-                  </View>
-                  <View style={styles.classStatDivider} />
-                  <View style={styles.classStatItem}>
-                    <ThemedText style={styles.classStatLabel}>Students</ThemedText>
-                    <ThemedText style={[styles.classStatValue, { color: colors.primary }]}>
-                      {section.summary?.studentsWithMarks || 0}/{section.summary?.totalStudents || 0}
-                    </ThemedText>
-                  </View>
-                  <View style={styles.classStatDivider} />
-                  <View style={styles.classStatItem}>
-                    <ThemedText style={styles.classStatLabel}>Avg Marks</ThemedText>
-                    <ThemedText style={[styles.classStatValue, { color: colors.text }]}>
-                      {section.summary?.averageMarks || 0}
-                    </ThemedText>
-                  </View>
-                </View>
-
-                {/* Expanded Content - Grade Distribution */}
-                {isExpanded && (
-                  <View style={styles.expandedContent}>
-                    {/* Grade Distribution Section */}
-                    <View style={styles.gradeSection}>
-                      <View style={styles.gradeSectionHeader}>
-                        <ThemedText style={styles.gradeSectionTitle}>Grade Distribution</ThemedText>
-                        <View style={styles.verificationBadge}>
-                          <Ionicons 
-                            name={countsMatch ? "checkmark-circle" : "alert-circle"} 
-                            size={14} 
-                            color={countsMatch ? "#10b981" : "#ef4444"} 
-                          />
-                          <ThemedText style={[styles.verificationText, { color: countsMatch ? "#10b981" : "#ef4444" }]}>
-                            {countsMatch ? `${studentsWithMarks}/${studentsWithMarks}` : `${totalAccounted}/${studentsWithMarks}`}
-                          </ThemedText>
-                        </View>
-                      </View>
-                      
-                      {gradeDistributionArray.length > 0 ? (
-                        <View style={styles.gradeGrid}>
-                          {gradeDistributionArray.map((item) => (
-                            <View 
-                              key={item.grade} 
-                              style={[
-                                styles.gradeCard, 
-                                { backgroundColor: getGradeColor(item.grade) + '15' }
-                              ]}
-                            >
-                              <View style={[styles.gradeBadge, { backgroundColor: getGradeColor(item.grade) }]}>
-                                <ThemedText style={styles.gradeBadgeText}>
-                                  {item.grade}
-                                </ThemedText>
-                              </View>
-                              <ThemedText style={[styles.gradeCount, { color: getGradeColor(item.grade) }]}>
-                                {item.count}
-                              </ThemedText>
-                              <ThemedText style={styles.gradePercent}>
-                                {((item.count / studentsWithMarks) * 100).toFixed(1)}%
-                              </ThemedText>
-                            </View>
-                          ))}
-                        </View>
-                      ) : (
-                        <View style={styles.emptyGrades}>
-                          <ThemedText style={styles.emptyGradesText}>
-                            No grade data available
-                          </ThemedText>
-                        </View>
-                      )}
-
-                      {/* Result Distribution */}
-                      {resultDistribution && Object.values(resultDistribution).some(count => count > 0) && (
-                        <View style={styles.resultSection}>
-                          <ThemedText style={styles.resultSectionTitle}>Result Distribution</ThemedText>
-                          <View style={styles.resultRow}>
-                            <View style={[styles.resultBadge, { backgroundColor: '#10b98120' }]}>
-                              <Ionicons name="checkmark-circle" size={14} color="#10b981" />
-                              <ThemedText style={[styles.resultText, { color: '#10b981' }]}>
-                                Pass: {resultDistribution.PASS || 0}
-                              </ThemedText>
-                            </View>
-                            <View style={[styles.resultBadge, { backgroundColor: '#ef444420' }]}>
-                              <Ionicons name="close-circle" size={14} color="#ef4444" />
-                              <ThemedText style={[styles.resultText, { color: '#ef4444' }]}>
-                                Fail: {resultDistribution.FAIL || 0}
-                              </ThemedText>
-                            </View>
-                          </View>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                )}
-              </View>
-            )
-          })}
-        </View>
-      </View>
-    )
+  const getHeaderSubtitle = () => {
+    if (isSearching) return 'Search Results'
+    if (selectedExamType && selectedClass && selectedSection)
+      return `${CLASS_LABELS[selectedClass]} — Sec ${selectedSection} · ${EXAM_TYPE_LABELS[selectedExamType] || selectedExamType}`
+    if (selectedExamType)
+      return EXAM_TYPE_LABELS[selectedExamType] || selectedExamType
+    return 'Select exam type to view report'
   }
+
+  // ── Styles (dynamic, depend on colors/focus) ───────────────────────────────
 
   const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
+    container: { flex: 1, backgroundColor: colors.background },
     header: {
       paddingTop: Platform.OS === 'ios' ? 70 : 50,
       paddingBottom: 16,
       paddingHorizontal: 20,
       borderBottomLeftRadius: 24,
       borderBottomRightRadius: 24,
-      zIndex: 10,
     },
     headerRow: {
       flexDirection: 'row',
@@ -438,469 +559,625 @@ export default function StudentsMarksStats({ visible, onClose }) {
       justifyContent: 'space-between',
     },
     backButton: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: 'rgba(255, 255, 255, 0.18)',
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.4)',
+      width: 44, height: 44, borderRadius: 22,
+      justifyContent: 'center', alignItems: 'center',
+      backgroundColor: 'rgba(255,255,255,0.18)',
+      borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
     },
-    headerTitle: {
-      fontSize: 18,
-      color: '#FFFFFF',
-      fontFamily: 'Poppins-SemiBold',
+    headerTitle: { fontSize: 18, color: '#FFFFFF', fontFamily: 'Poppins-SemiBold' },
+    headerSubtitle: { fontSize: 11, color: 'rgba(255,255,255,0.9)', marginTop: 2 },
+
+    // Filters
+    filtersWrapper: {
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
     },
-    headerSubtitle: {
-      fontSize: 11,
-      color: 'rgba(255,255,255,0.9)',
-      marginTop: 2,
+    filterBlock: { marginBottom: 10 },
+    filterLabel: {
+      fontSize: 10, fontFamily: 'Poppins-SemiBold',
+      color: colors.textSecondary, marginBottom: 6,
+      textTransform: 'uppercase', letterSpacing: 0.5,
     },
-    // Search bar styles
+    chipsRow: { flexDirection: 'row', gap: 8, paddingRight: 4 },
+    chip: {
+      paddingHorizontal: 14, paddingVertical: 7,
+      borderRadius: 20, borderWidth: 1.5,
+      borderColor: colors.border,
+      backgroundColor: colors.inputBackground,
+    },
+    chipSelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    chipText: { fontSize: 12, fontFamily: 'Poppins-Medium', color: colors.text },
+    chipTextSelected: { color: '#FFFFFF' },
+
+    // Search
     searchContainer: {
-      marginHorizontal: 20,
-      marginTop: 16,
-      marginBottom: 8,
+      marginHorizontal: 16, marginTop: 10, marginBottom: 4,
     },
     searchBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      height: 48,
-      paddingHorizontal: 14,
-      borderRadius: 24,
-      borderWidth: 1,
+      flexDirection: 'row', alignItems: 'center',
+      height: 44, paddingHorizontal: 14,
+      borderRadius: 22, borderWidth: isSearchFocused ? 2 : 1,
       backgroundColor: colors.cardBackground,
       borderColor: isSearchFocused ? colors.primary : colors.border,
-      borderWidth: isSearchFocused ? 2 : 1,
-    },
-    searchIcon: {
-      marginRight: 8,
     },
     searchInput: {
-      flex: 1,
-      fontSize: 15,
-      paddingVertical: Platform.OS === 'ios' ? 10 : 8,
-      paddingHorizontal: 0,
-      lineHeight: 20,
-      fontWeight: '500',
+      flex: 1, fontSize: 14, paddingVertical: 8,
       color: colors.text,
-    },
-    clearButton: {
-      padding: 4,
-      marginLeft: 6,
     },
     searchInfoText: {
-      fontSize: 13,
-      color: colors.textSecondary,
-      marginHorizontal: 20,
-      marginBottom: 12,
-      fontStyle: 'italic',
+      fontSize: 12, color: colors.textSecondary,
+      marginHorizontal: 16, marginBottom: 8, fontStyle: 'italic',
     },
-    schoolSummarySection: {
-      marginBottom: 10,
-    },
-    overallCardsGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      justifyContent: 'space-between',
-    },
-    overallCard: {
-      width: '48%',
-      backgroundColor: colors.cardBackground,
-      borderRadius: 6,
-      borderTopRightRadius: 12,
-      borderBottomRightRadius: 12,
-      padding: 16,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderLeftWidth: 4,
-    },
-    overallCardHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 8,
-    },
-    overallIconContainer: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    overallCardValue: {
-      fontSize: 22,
-      fontFamily: 'Poppins-Bold',
-      color: colors.text,
-    },
-    overallCardTitle: {
-      fontSize: 13,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
-    },
-    scrollView: {
-      flex: 1,
-    },
-    scrollContent: {
-      padding: 16,
-      paddingTop: 8,
-      paddingBottom: 40,
-    },
+
+    // Scroll
+    scrollView: { flex: 1 },
+    scrollContent: { padding: 16, paddingBottom: 40 },
+
+    // States
     loadingContainer: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 60,
+      alignItems: 'center', justifyContent: 'center', paddingVertical: 60,
     },
-    loadingText: {
-      marginTop: 12,
-      color: colors.textSecondary,
-      fontSize: 14,
-    },
+    loadingText: { marginTop: 12, fontSize: 14, color: colors.textSecondary },
     errorContainer: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 60,
-      paddingHorizontal: 20,
+      alignItems: 'center', justifyContent: 'center', paddingVertical: 60,
     },
-    errorText: {
-      textAlign: 'center',
-      color: '#dc2626',
-      marginTop: 12,
-      fontSize: 14,
-    },
+    errorText: { textAlign: 'center', color: '#dc2626', marginTop: 12, fontSize: 14 },
     emptyContainer: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 60,
-      paddingHorizontal: 20,
-    },
-    emptyIcon: {
-      marginBottom: 16,
+      alignItems: 'center', justifyContent: 'center',
+      paddingVertical: 50, paddingHorizontal: 20,
     },
     emptyTitle: {
-      fontSize: 18,
-      fontFamily: 'Poppins-Bold',
-      color: colors.text,
-      marginBottom: 8,
-      textAlign: 'center',
+      fontSize: 18, fontFamily: 'Poppins-Bold',
+      color: colors.text, marginTop: 16, marginBottom: 8,
     },
     emptyMessage: {
-      fontSize: 14,
-      color: colors.textSecondary,
-      textAlign: 'center',
-      lineHeight: 20,
+      fontSize: 14, color: colors.textSecondary,
+      textAlign: 'center', lineHeight: 20,
     },
-    examCard: {
+
+    // Hero card
+    heroCard: { borderRadius: 16, padding: 20, marginBottom: 16 },
+    heroTopRow: {
+      flexDirection: 'row', justifyContent: 'space-between',
+      alignItems: 'flex-start', marginBottom: 16,
+    },
+    heroLabel: { fontSize: 13, color: 'rgba(255,255,255,0.85)', fontFamily: 'Poppins-Medium' },
+    heroExamBadge: { fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 3 },
+    heroBigValue: {
+      fontSize: 46, color: '#FFFFFF', fontFamily: 'Poppins-Bold', lineHeight: 52,
+    },
+    heroStatsRow: {
+      flexDirection: 'row', justifyContent: 'space-around',
+      borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)',
+      paddingTop: 14,
+    },
+    heroStat: { alignItems: 'center', flex: 1 },
+    heroStatVal: { fontSize: 18, color: '#FFFFFF', fontFamily: 'Poppins-Bold' },
+    heroStatLbl: {
+      fontSize: 10, color: 'rgba(255,255,255,0.75)',
+      fontFamily: 'Poppins-Medium', marginTop: 2,
+    },
+    heroStatDiv: {
+      width: 1, height: 32,
+      backgroundColor: 'rgba(255,255,255,0.25)', alignSelf: 'center',
+    },
+
+    // Grade distribution
+    gradeSectionCard: {
       backgroundColor: colors.cardBackground,
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 16,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    examHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
+      borderRadius: 16, padding: 16,
+      borderWidth: 1, borderColor: colors.border,
       marginBottom: 16,
     },
-    examBadge: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 20,
+    sectionTitle: {
+      fontSize: 14, fontFamily: 'Poppins-SemiBold',
+      color: colors.text, marginBottom: 12,
     },
-    examName: {
-      fontSize: 14,
-      fontFamily: 'Poppins-SemiBold',
+    gradeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    gradeBox: {
+      flex: 1, minWidth: 68, alignItems: 'center',
+      padding: 10, borderRadius: 12, borderWidth: 1,
     },
-    // Add these styles to your existing StyleSheet
-    expandedContent: {
-      marginTop: 12,
-      paddingTop: 12,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
+    gradeDot: {
+      width: 34, height: 34, borderRadius: 17,
+      justifyContent: 'center', alignItems: 'center', marginBottom: 4,
     },
-    gradeSection: {
-      marginBottom: 12,
+    gradeDotText: { fontSize: 11, color: '#FFFFFF', fontFamily: 'Poppins-Bold' },
+    gradeCount: { fontSize: 18, fontFamily: 'Poppins-Bold', marginBottom: 2 },
+    gradePercent: { fontSize: 10, fontFamily: 'Poppins-Medium', color: colors.textSecondary },
+
+    // Section header row
+    sectionHeaderRow: {
+      flexDirection: 'row', justifyContent: 'space-between',
+      alignItems: 'center', marginBottom: 10,
     },
-    gradeSectionHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 10,
-    },
-    gradeSectionTitle: {
-      fontSize: 13,
-      fontFamily: 'Poppins-SemiBold',
-      color: colors.text,
-    },
-    verificationBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 12,
-      backgroundColor: colors.inputBackground,
-    },
-    verificationText: {
-      fontSize: 11,
-      fontFamily: 'Poppins-Medium',
-    },
-    gradeGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 10,
-      marginBottom: 12,
-    },
-    gradeCard: {
-      flex: 1,
-      minWidth: 80,
-      alignItems: 'center',
-      padding: 10,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    gradeBadge: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 6,
-    },
-    gradeBadgeText: {
-      fontSize: 14,
-      fontFamily: 'Poppins-Bold',
-      color: '#FFFFFF',
-    },
-    gradeCount: {
-      fontSize: 18,
-      fontFamily: 'Poppins-Bold',
-      marginBottom: 2,
-    },
-    gradePercent: {
-      fontSize: 11,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
-    },
-    emptyGrades: {
-      padding: 20,
-      alignItems: 'center',
-      backgroundColor: colors.inputBackground,
-      borderRadius: 10,
-    },
-    emptyGradesText: {
-      fontSize: 13,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
-    },
-    resultSection: {
-      marginTop: 8,
-    },
-    resultSectionTitle: {
-      fontSize: 13,
-      fontFamily: 'Poppins-SemiBold',
-      color: colors.text,
-      marginBottom: 8,
-    },
-    resultRow: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    resultBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 20,
-      gap: 6,
-    },
-    resultText: {
-      fontSize: 13,
-      fontFamily: 'Poppins-Medium',
-    },
-    studentsSection: {
-      marginTop: 12,
-    },
-    studentsSectionTitle: {
-      fontSize: 12,
-      fontFamily: 'Poppins-SemiBold',
-      color: colors.textSecondary,
-      marginBottom: 8,
-    },
-    studentsHorizontalScroll: {
-      flexDirection: 'row',
-    },
-    studentChip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 20,
-      marginRight: 8,
-      gap: 8,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    studentChipName: {
-      fontSize: 12,
-      fontFamily: 'Poppins-Medium',
-      color: colors.text,
-      maxWidth: 150,
-    },
-    studentChipGrade: {
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 12,
-    },
-    studentChipGradeText: {
-      fontSize: 10,
-      fontFamily: 'Poppins-Bold',
-      color: '#FFFFFF',
-    },
-    studentCountBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      backgroundColor: colors.inputBackground,
-      borderRadius: 12,
-    },
-    studentCountText: {
-      fontSize: 11,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
-    },
-    classSectionsPreview: {
-      gap: 16,
-    },
-    classSectionPreviewItem: {
-      backgroundColor: colors.inputBackground,
-      borderRadius: 12,
-      padding: 12,
-    },
-    classSectionPreviewHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 8,
-    },
-    classSectionTitleContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
-    classSectionPreviewClass: {
-      fontSize: 14,
-      color: colors.text,
-      fontFamily: 'Poppins-SemiBold',
-    },
-    sectionBadge: {
-      paddingHorizontal: 8,
-      paddingVertical: 2,
-      borderRadius: 10,
-    },
-    sectionPreviewText: {
-      fontSize: 12,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
-    },
-    classSectionPreviewPercent: {
-      fontSize: 16,
-      fontFamily: 'Poppins-Bold',
-    },
-    classStatsRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-around',
-      marginBottom: 8,
+    sectionHint: { fontSize: 11, color: colors.textSecondary, fontFamily: 'Poppins-Medium' },
+
+    // Class overview cards
+    classCard: {
       backgroundColor: colors.cardBackground,
-      borderRadius: 8,
-      padding: 8,
+      borderRadius: 14, borderWidth: 1,
+      borderColor: colors.border, marginBottom: 10,
+      overflow: 'hidden',
     },
-    classStatItem: {
-      alignItems: 'center',
-      flex: 1,
+    classCardHeader: {
+      flexDirection: 'row', justifyContent: 'space-between',
+      alignItems: 'center', padding: 12,
     },
-    classStatLabel: {
-      fontSize: 10,
-      color: colors.textSecondary,
-      fontFamily: 'Poppins-Medium',
-      marginBottom: 2,
+    classCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    classCardTitle: { fontSize: 14, fontFamily: 'Poppins-SemiBold', color: colors.text },
+    secBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+    secBadgeText: { fontSize: 11, fontFamily: 'Poppins-Medium' },
+    passBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+    passBadgeText: { fontSize: 11, fontFamily: 'Poppins-SemiBold' },
+    classStatsStrip: {
+      flexDirection: 'row', justifyContent: 'space-around',
+      padding: 10, backgroundColor: colors.inputBackground,
     },
-    classStatValue: {
-      fontSize: 14,
-      fontFamily: 'Poppins-Bold',
+    classStat: { alignItems: 'center', flex: 1 },
+    classStatVal: { fontSize: 14, fontFamily: 'Poppins-Bold', color: colors.text },
+    classStatLbl: {
+      fontSize: 9, fontFamily: 'Poppins-Medium',
+      color: colors.textSecondary, marginTop: 2, textTransform: 'uppercase',
     },
-    classStatDivider: {
-      width: 1,
-      height: 20,
-      backgroundColor: colors.border,
+    divider: { width: 1, height: 28, alignSelf: 'center', backgroundColor: colors.border },
+
+    // Class summary (detail view)
+    classSummaryCard: {
+      backgroundColor: colors.cardBackground,
+      borderRadius: 16, borderWidth: 1,
+      borderColor: colors.border, marginBottom: 16,
+      overflow: 'hidden',
     },
-    gradePreviewContainer: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 6,
+    classSummaryHeader: {
+      flexDirection: 'row', justifyContent: 'space-between',
+      alignItems: 'flex-start', padding: 16,
     },
-    gradePreviewBadge: {
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 12,
-      flexDirection: 'row',
-      alignItems: 'center',
+    classSummaryTitle: {
+      fontSize: 16, fontFamily: 'Poppins-Bold', color: colors.text,
     },
-    gradePreviewText: {
-      fontSize: 14,
-      fontFamily: 'Poppins-SemiBold',
-      marginRight: 4,
+    classSummaryExam: {
+      fontSize: 12, fontFamily: 'Poppins-Medium',
+      color: colors.textSecondary, marginTop: 2,
     },
-    resultCount: {
-      fontSize: 15,
-      color: colors.textSecondary,
-      marginBottom: 12,
-      paddingHorizontal: 4,
+    classSummaryStats: {
+      flexDirection: 'row', justifyContent: 'space-around',
+      padding: 12, backgroundColor: colors.inputBackground,
     },
-    availableExamsHint: {
-      fontSize: 12,
-      color: colors.textSecondary,
-      marginBottom: 16,
-      fontFamily: 'Poppins-Medium',
-      paddingHorizontal: 4,
+    csStat: { alignItems: 'center', flex: 1 },
+    csStatVal: { fontSize: 16, fontFamily: 'Poppins-Bold' },
+    csStatLbl: {
+      fontSize: 9, fontFamily: 'Poppins-Medium',
+      color: colors.textSecondary, marginTop: 2, textTransform: 'uppercase',
     },
-    searchInfoContainer: {
-      marginBottom: 12,
+
+    listLabel: {
+      fontSize: 11, fontFamily: 'Poppins-SemiBold',
+      color: colors.textSecondary, marginBottom: 10,
+      textTransform: 'uppercase', letterSpacing: 0.5,
     },
   })
 
+  // ── Render: Exam type filter chips ────────────────────────────────────────
+
+  const renderExamFilter = () => {
+    if (availableExams.length === 0) return null
+    return (
+      <View style={styles.filterBlock}>
+        <ThemedText style={styles.filterLabel}>Exam Type</ThemedText>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
+          {availableExams.map((exam) => {
+            const sel = selectedExamType === exam.examType
+            return (
+              <TouchableOpacity
+                key={exam.examType}
+                style={[styles.chip, sel && styles.chipSelected]}
+                onPress={() => handleExamTypeSelect(exam.examType)}
+              >
+                <ThemedText style={[styles.chipText, sel && styles.chipTextSelected]}>
+                  {EXAM_TYPE_LABELS[exam.examType] || exam.examTypeLabel}
+                </ThemedText>
+              </TouchableOpacity>
+            )
+          })}
+        </ScrollView>
+      </View>
+    )
+  }
+
+  const renderClassFilter = () => {
+    if (!selectedExamType) return null
+    const classes = getAvailableClasses()
+    if (classes.length === 0) return null
+    return (
+      <View style={styles.filterBlock}>
+        <ThemedText style={styles.filterLabel}>Class</ThemedText>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
+          {classes.map((cls) => {
+            const sel = selectedClass === cls
+            return (
+              <TouchableOpacity
+                key={cls}
+                style={[styles.chip, sel && styles.chipSelected]}
+                onPress={() => handleClassSelect(cls)}
+              >
+                <ThemedText style={[styles.chipText, sel && styles.chipTextSelected]}>
+                  {CLASS_LABELS[cls] || cls}
+                </ThemedText>
+              </TouchableOpacity>
+            )
+          })}
+        </ScrollView>
+      </View>
+    )
+  }
+
+  const renderSectionFilter = () => {
+    if (!selectedClass) return null
+    const sections = getAvailableSections()
+    if (sections.length === 0) return null
+    return (
+      <View style={styles.filterBlock}>
+        <ThemedText style={styles.filterLabel}>Section</ThemedText>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
+          {sections.map((sec) => {
+            const sel = selectedSection === sec
+            return (
+              <TouchableOpacity
+                key={sec}
+                style={[styles.chip, sel && styles.chipSelected]}
+                onPress={() => handleSectionSelect(sec)}
+              >
+                <ThemedText style={[styles.chipText, sel && styles.chipTextSelected]}>
+                  Section {sec}
+                </ThemedText>
+              </TouchableOpacity>
+            )
+          })}
+        </ScrollView>
+      </View>
+    )
+  }
+
+  // ── Render: School overview (exam selected, no class/section) ─────────────
+
+  const renderSchoolOverview = () => {
+    const examData = getSelectedExamData()
+    const summary = getSchoolSummary()
+
+    if (!examData || !summary) {
+      return (
+        <View style={styles.emptyContainer}>
+          <ThemedText style={styles.emptyMessage}>No data for this exam type</ThemedText>
+        </View>
+      )
+    }
+
+    const gradeEntries = GRADE_DISPLAY_ORDER
+      .filter((g) => summary.gradeDistribution[g] > 0)
+      .map((g) => ({ grade: g, count: summary.gradeDistribution[g] }))
+
+    return (
+      <View>
+        {/* Hero pass % card */}
+        <LinearGradient
+          colors={['#047857', '#10b981']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.heroCard}
+        >
+          <View style={styles.heroTopRow}>
+            <View>
+              <ThemedText style={styles.heroLabel}>School Pass Percentage</ThemedText>
+              <ThemedText style={styles.heroExamBadge}>
+                {EXAM_TYPE_LABELS[selectedExamType] || selectedExamType}
+              </ThemedText>
+            </View>
+            <ThemedText style={styles.heroBigValue}>{summary.passPercentage}%</ThemedText>
+          </View>
+          <View style={styles.heroStatsRow}>
+            <View style={styles.heroStat}>
+              <ThemedText style={styles.heroStatVal}>{summary.totalStudentsWithMarks}</ThemedText>
+              <ThemedText style={styles.heroStatLbl}>Tested</ThemedText>
+            </View>
+            <View style={styles.heroStatDiv} />
+            <View style={styles.heroStat}>
+              <ThemedText style={styles.heroStatVal}>{summary.totalPass}</ThemedText>
+              <ThemedText style={styles.heroStatLbl}>Passed</ThemedText>
+            </View>
+            <View style={styles.heroStatDiv} />
+            <View style={styles.heroStat}>
+              <ThemedText style={styles.heroStatVal}>{summary.totalFail}</ThemedText>
+              <ThemedText style={styles.heroStatLbl}>Failed</ThemedText>
+            </View>
+            <View style={styles.heroStatDiv} />
+            <View style={styles.heroStat}>
+              <ThemedText style={styles.heroStatVal}>{summary.avgPercentage}%</ThemedText>
+              <ThemedText style={styles.heroStatLbl}>Avg Score</ThemedText>
+            </View>
+          </View>
+        </LinearGradient>
+
+        {/* Grade distribution */}
+        {gradeEntries.length > 0 && (
+          <View style={styles.gradeSectionCard}>
+            <ThemedText style={styles.sectionTitle}>Grade Distribution</ThemedText>
+            <View style={styles.gradeGrid}>
+              {gradeEntries.map(({ grade, count }) => {
+                const color = getGradeColor(grade)
+                const pct =
+                  summary.totalStudentsWithMarks > 0
+                    ? ((count / summary.totalStudentsWithMarks) * 100).toFixed(1)
+                    : '0'
+                return (
+                  <View
+                    key={grade}
+                    style={[styles.gradeBox, { backgroundColor: color + '18', borderColor: color + '35' }]}
+                  >
+                    <View style={[styles.gradeDot, { backgroundColor: color }]}>
+                      <ThemedText style={styles.gradeDotText}>{grade}</ThemedText>
+                    </View>
+                    <ThemedText style={[styles.gradeCount, { color }]}>{count}</ThemedText>
+                    <ThemedText style={styles.gradePercent}>{pct}%</ThemedText>
+                  </View>
+                )
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* Class-wise breakdown */}
+        <View style={styles.sectionHeaderRow}>
+          <ThemedText style={styles.sectionTitle}>Class-wise Breakdown</ThemedText>
+          <ThemedText style={styles.sectionHint}>Tap class → section for details</ThemedText>
+        </View>
+
+        {examData.classSections.map((cs, idx) => {
+          const sum = cs.summary
+          const passColor =
+            sum.passPercentage >= 75 ? '#10b981' : sum.passPercentage >= 50 ? '#f59e0b' : '#ef4444'
+          const avgColor =
+            sum.averagePercentage >= 75 ? '#10b981' : sum.averagePercentage >= 50 ? '#f59e0b' : '#ef4444'
+
+          return (
+            <View key={idx} style={styles.classCard}>
+              <View style={styles.classCardHeader}>
+                <View style={styles.classCardLeft}>
+                  <ThemedText style={styles.classCardTitle}>{cs.classLabel}</ThemedText>
+                  <View style={[styles.secBadge, { backgroundColor: colors.primary + '15' }]}>
+                    <ThemedText style={[styles.secBadgeText, { color: colors.primary }]}>
+                      Sec {cs.section}
+                    </ThemedText>
+                  </View>
+                </View>
+                <View style={[styles.passBadge, { backgroundColor: passColor + '18' }]}>
+                  <ThemedText style={[styles.passBadgeText, { color: passColor }]}>
+                    {sum.passPercentage}% Pass
+                  </ThemedText>
+                </View>
+              </View>
+              <View style={styles.classStatsStrip}>
+                <View style={styles.classStat}>
+                  <ThemedText style={[styles.classStatVal, { color: colors.primary }]}>
+                    {sum.studentsWithMarks}/{sum.totalStudents}
+                  </ThemedText>
+                  <ThemedText style={styles.classStatLbl}>Students</ThemedText>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.classStat}>
+                  <ThemedText style={[styles.classStatVal, { color: avgColor }]}>
+                    {sum.averagePercentage}%
+                  </ThemedText>
+                  <ThemedText style={styles.classStatLbl}>Avg Score</ThemedText>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.classStat}>
+                  <ThemedText style={[styles.classStatVal, { color: colors.text }]}>
+                    {sum.averageMarks}
+                  </ThemedText>
+                  <ThemedText style={styles.classStatLbl}>Avg Marks</ThemedText>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.classStat}>
+                  <ThemedText style={[styles.classStatVal, { color: '#ef4444' }]}>
+                    {sum.resultDistribution?.FAIL || 0}
+                  </ThemedText>
+                  <ThemedText style={styles.classStatLbl}>Failed</ThemedText>
+                </View>
+              </View>
+            </View>
+          )
+        })}
+      </View>
+    )
+  }
+
+  // ── Render: Class-section detail with student reports ─────────────────────
+
+  const renderClassReport = () => {
+    if (classLoading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <ThemedText style={styles.loadingText}>Loading student reports...</ThemedText>
+        </View>
+      )
+    }
+    if (!classStudents) return null
+
+    const { students, summary } = classStudents
+
+    // Correct weighted average: total obtained across all students / total maximum
+    const avgPct =
+      summary.classTotalMaximum > 0
+        ? ((summary.classTotalObtained / summary.classTotalMaximum) * 100).toFixed(1)
+        : '0.0'
+
+    const withMarks = students.filter((s) => s.hasMarks)
+    const passCount = withMarks.filter((s) => s.overallResult === 'PASS').length
+    const failCount = withMarks.filter((s) => s.overallResult === 'FAIL').length
+    const passPercentage =
+      withMarks.length > 0
+        ? ((passCount / withMarks.length) * 100).toFixed(1)
+        : '0.0'
+    const passColor =
+      parseFloat(passPercentage) >= 75
+        ? '#10b981'
+        : parseFloat(passPercentage) >= 50
+        ? '#f59e0b'
+        : '#ef4444'
+
+    return (
+      <View>
+        {/* Class summary card */}
+        <View style={styles.classSummaryCard}>
+          <View style={styles.classSummaryHeader}>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={styles.classSummaryTitle}>
+                {CLASS_LABELS[selectedClass]} — Section {selectedSection}
+              </ThemedText>
+              <ThemedText style={styles.classSummaryExam}>
+                {EXAM_TYPE_LABELS[selectedExamType] || selectedExamType}
+              </ThemedText>
+            </View>
+            <View style={[styles.passBadge, { backgroundColor: passColor + '18' }]}>
+              <ThemedText style={[styles.passBadgeText, { color: passColor }]}>
+                {passPercentage}% Pass
+              </ThemedText>
+            </View>
+          </View>
+          <View style={styles.classSummaryStats}>
+            <View style={styles.csStat}>
+              <ThemedText style={[styles.csStatVal, { color: colors.primary }]}>
+                {summary.withMarks}/{summary.totalStudents}
+              </ThemedText>
+              <ThemedText style={styles.csStatLbl}>Marked</ThemedText>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.csStat}>
+              <ThemedText style={[styles.csStatVal, { color: '#10b981' }]}>{passCount}</ThemedText>
+              <ThemedText style={styles.csStatLbl}>Passed</ThemedText>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.csStat}>
+              <ThemedText style={[styles.csStatVal, { color: '#ef4444' }]}>{failCount}</ThemedText>
+              <ThemedText style={styles.csStatLbl}>Failed</ThemedText>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.csStat}>
+              <ThemedText style={[styles.csStatVal, { color: colors.text }]}>{avgPct}%</ThemedText>
+              <ThemedText style={styles.csStatLbl}>Class Avg</ThemedText>
+            </View>
+          </View>
+        </View>
+
+        {/* Students list */}
+        <ThemedText style={styles.listLabel}>
+          All Students ({summary.totalStudents})
+        </ThemedText>
+
+        {students.map((student) => (
+          <StudentReportCard
+            key={student.id}
+            student={student}
+            colors={colors}
+            selectedClass={selectedClass}
+            selectedSection={selectedSection}
+            onPressViewFull={handleStudentPress}
+          />
+        ))}
+      </View>
+    )
+  }
+
+  // ── Render: Main content ──────────────────────────────────────────────────
+
+  const renderContent = () => {
+    if (isLoading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <ThemedText style={styles.loadingText}>Loading marks data...</ThemedText>
+        </View>
+      )
+    }
+
+    if (error) {
+      return (
+        <View style={styles.errorContainer}>
+          <Feather name="alert-triangle" size={50} color="#dc2626" />
+          <ThemedText style={styles.errorText}>{error}</ThemedText>
+        </View>
+      )
+    }
+
+    if (!selectedExamType) {
+      if (availableExams.length === 0) {
+        return (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="analytics-outline" size={70} color={colors.textSecondary + '60'} />
+            <ThemedText style={styles.emptyTitle}>No Data Available</ThemedText>
+            <ThemedText style={styles.emptyMessage}>
+              No marks records found in the system
+            </ThemedText>
+          </View>
+        )
+      }
+      return (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="filter-outline" size={60} color={colors.textSecondary + '80'} />
+          <ThemedText style={styles.emptyTitle}>Select Exam Type</ThemedText>
+          <ThemedText style={styles.emptyMessage}>
+            Choose an exam type above to view the school marks report
+          </ThemedText>
+        </View>
+      )
+    }
+
+    if (selectedExamType && selectedClass && selectedSection) {
+      return renderClassReport()
+    }
+
+    if (selectedExamType && selectedClass) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="albums-outline" size={60} color={colors.textSecondary + '80'} />
+          <ThemedText style={styles.emptyTitle}>Select Section</ThemedText>
+          <ThemedText style={styles.emptyMessage}>
+            Choose a section to view student-wise marks
+          </ThemedText>
+        </View>
+      )
+    }
+
+    return renderSchoolOverview()
+  }
+
+  // ── Return ─────────────────────────────────────────────────────────────────
+
   return (
     <>
-      <Modal
-        visible={visible}
-        animationType="fade"
-        onRequestClose={onClose}
-        statusBarTranslucent
-      >
+      <Modal visible={visible} animationType="fade" onRequestClose={onClose} statusBarTranslucent>
         <View style={styles.container}>
           <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-          <LinearGradient
-            colors={[colors.gradientStart, colors.gradientEnd]}
-            style={styles.header}
-          >
+          {/* Header */}
+          <LinearGradient colors={[colors.gradientStart, colors.gradientEnd]} style={styles.header}>
             <SafeAreaView edges={['top']}>
               <View style={styles.headerRow}>
                 <TouchableOpacity style={styles.backButton} onPress={onClose}>
-                  <FontAwesome5 style={{ marginLeft: -2 }} name="chevron-left" size={20} color="#FFFFFF" />
+                  <FontAwesome5 name="chevron-left" style={{ marginLeft: -2 }} size={20} color="#FFFFFF" />
                 </TouchableOpacity>
                 <View style={{ flex: 1, alignItems: 'center' }}>
-                  <ThemedText style={styles.headerTitle}>Marks Statistics</ThemedText>
-                  <ThemedText style={styles.headerSubtitle}>
-                    {isSearching ? 'Search Results' : 'All Exams Overview'}
+                  <ThemedText style={styles.headerTitle}>Marks Report</ThemedText>
+                  <ThemedText style={styles.headerSubtitle} numberOfLines={1}>
+                    {getHeaderSubtitle()}
                   </ThemedText>
                 </View>
                 <View style={{ width: 44 }} />
@@ -908,16 +1185,19 @@ export default function StudentsMarksStats({ visible, onClose }) {
             </SafeAreaView>
           </LinearGradient>
 
-          {/* Search Bar - Inline Design */}
+          {/* Filters (hidden when searching) */}
+          {!isSearching && (
+            <View style={styles.filtersWrapper}>
+              {renderExamFilter()}
+              {renderClassFilter()}
+              {renderSectionFilter()}
+            </View>
+          )}
+
+          {/* Search bar */}
           <View style={styles.searchContainer}>
             <View style={styles.searchBar}>
-              <Ionicons
-                name="search"
-                size={18}
-                color={colors.textSecondary}
-                style={styles.searchIcon}
-              />
-              
+              <Ionicons name="search" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
               <TextInput
                 ref={searchInputRef}
                 style={styles.searchInput}
@@ -928,45 +1208,36 @@ export default function StudentsMarksStats({ visible, onClose }) {
                 onFocus={() => setIsSearchFocused(true)}
                 onBlur={() => setIsSearchFocused(false)}
                 cursorColor={colors.primary}
-                returnKeyType="search"
-                clearButtonMode="never"
                 autoCorrect={false}
                 autoCapitalize="none"
-                enablesReturnKeyAutomatically
+                returnKeyType="search"
               />
-
               {searchLoading ? (
                 <ActivityIndicator size="small" color={colors.primary} style={{ marginLeft: 6 }} />
               ) : searchQuery.length > 0 ? (
                 <TouchableOpacity
                   onPress={handleClearSearch}
-                  style={styles.clearButton}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Ionicons
-                    name="close-circle"
-                    size={18}
-                    color={colors.textSecondary}
-                  />
+                  <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
                 </TouchableOpacity>
               ) : null}
             </View>
           </View>
 
-          {/* Search results info */}
-          {isSearching && debouncedSearchQuery && (
+          {isSearching && debouncedSearchQuery ? (
             <ThemedText style={styles.searchInfoText}>
-              Found {searchResults.length} {getResultText(searchResults.length)} for "{debouncedSearchQuery}"
+              Found {searchResults.length} {searchResults.length === 1 ? 'student' : 'students'} for "{debouncedSearchQuery}"
             </ThemedText>
-          )}
+          ) : null}
 
+          {/* Content */}
           <ScrollView
-            ref={scrollViewRef}
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="always"
             keyboardDismissMode="none"
-            onTouchStart={handleScrollViewTouch}
+            onTouchStart={() => { if (!isSearchFocused) Keyboard.dismiss() }}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -975,10 +1246,9 @@ export default function StudentsMarksStats({ visible, onClose }) {
                 tintColor={colors.primary}
               />
             }
-            showsVerticalScrollIndicator={true}
+            showsVerticalScrollIndicator
           >
             {isSearching ? (
-              // Search Results
               searchLoading ? (
                 <View style={styles.loadingContainer}>
                   <ActivityIndicator size="large" color={colors.primary} />
@@ -988,97 +1258,22 @@ export default function StudentsMarksStats({ visible, onClose }) {
                   <StudentCard
                     key={student.id}
                     student={student}
-                    onPress={(selectedStudent) => {
-                      handleStudentPress(selectedStudent)
-                    }}
+                    onPress={handleSearchStudentPress}
                   />
                 ))
               ) : (
                 <View style={styles.emptyContainer}>
                   <Ionicons name="search-outline" size={48} color={colors.textSecondary} />
-                  <ThemedText style={[styles.emptyMessage, { color: colors.textSecondary, marginTop: 12 }]}>
+                  <ThemedText style={[styles.emptyMessage, { marginTop: 12 }]}>
                     No students found matching "{debouncedSearchQuery}"
                   </ThemedText>
                 </View>
               )
             ) : (
-              // Exam Stats
-              isLoading ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color={colors.primary} />
-                  <ThemedText style={styles.loadingText}>
-                    Loading marks statistics...
-                  </ThemedText>
-                </View>
-              ) : error ? (
-                <View style={styles.errorContainer}>
-                  <Feather name="alert-triangle" size={50} color="#dc2626" />
-                  <ThemedText style={styles.errorText}>{error}</ThemedText>
-                </View>
-              ) : !stats || stats.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                  <View style={styles.emptyIcon}>
-                    <Ionicons name="analytics-outline" size={70} color={colors.textSecondary} />
-                  </View>
-                  <ThemedText style={styles.emptyTitle}>No Data Available</ThemedText>
-                  <ThemedText style={styles.emptyMessage}>
-                    No marks records found in the system
-                  </ThemedText>
-                </View>
-              ) : (
-                <>
-                  {/* School Summary - Inside ScrollView */}
-                  {schoolSummary && (
-                    <View style={styles.schoolSummarySection}>
-                      <View style={styles.overallCardsGrid}>
-                        <OverallStatCard
-                          title="Total Students"
-                          value={schoolSummary.totalStudents}
-                          icon="users"
-                          color="#3b82f6"
-                        />
-                        <OverallStatCard
-                          title="With Marks"
-                          value={schoolSummary.uniqueStudentsWithMarks}
-                          icon="check-circle"
-                          color="#10b981"
-                        />
-                        <OverallStatCard
-                          title="Without Marks"
-                          value={schoolSummary.studentsWithoutAnyMarks}
-                          icon="x-circle"
-                          color="#ef4444"
-                        />
-                        <OverallStatCard
-                          title="Total Exams"
-                          value={schoolSummary.totalExams}
-                          icon="award"
-                          color="#8b5cf6"
-                        />
-                      </View>
-                    </View>
-                  )}
-
-                  {/* Available Exams Hint */}
-                  {availableExams.length > 0 && (
-                    <ThemedText style={styles.availableExamsHint}>
-                      {availableExams.length} {availableExams.length === 1 ? 'exam' : 'exams'} available
-                    </ThemedText>
-                  )}
-
-                  {/* Exams List */}
-                  {stats.map((exam, index) => (
-                    <ExamCard
-                      key={`${exam.examType}-${index}`}
-                      exam={exam}
-                    />
-                  ))}
-                </>
-              )
+              renderContent()
             )}
           </ScrollView>
 
-          {/* Toast Notification */}
           <ToastNotification
             visible={!!toast}
             type={toast?.type}
@@ -1086,12 +1281,11 @@ export default function StudentsMarksStats({ visible, onClose }) {
             onHide={hideToast}
             position="bottom-center"
             duration={toast?.duration || 3000}
-            showCloseButton={true}
+            showCloseButton
           />
         </View>
       </Modal>
 
-      {/* Student Marks Modal */}
       {selectedStudent && (
         <StudentMarks
           visible={showStudentMarks}

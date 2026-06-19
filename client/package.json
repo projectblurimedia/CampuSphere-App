@@ -15,12 +15,18 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "9.1.0",
     "@react-native-picker/picker": "2.11.4",
+<<<<<<< HEAD
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
     "@reduxjs/toolkit": "^2.11.1",
     "axios": "^1.13.2",
     "expo": "~56.0.0",
+=======
+    "@reduxjs/toolkit": "^2.11.1",
+    "axios": "^1.13.2",
+    "expo": "^56.0.0",
+>>>>>>> 541a9bdaf0653887af3282343c4d2c36a8d14b9e
     "expo-blur": "~56.0.3",
     "expo-constants": "~56.0.18",
     "expo-dev-client": "~56.0.20",
@@ -66,5 +72,12 @@
     "eslint-config-expo": "~56.0.4",
     "typescript": "~6.0.3"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": ["react-native-fs", "expo-modules-jsi"]
+      }
+    }
+  }
 }

@@ -619,6 +619,206 @@ const DeleteConfirmationModal = React.memo(({
   )
 })
 
+// Submit Confirmation Modal Component
+const SubmitConfirmationModal = React.memo(({
+  visible,
+  onConfirm,
+  onCancel,
+  className,
+  section,
+  examName,
+  subjectName,
+  totalStudents,
+  absentCount,
+  totalMarks,
+  isOverride
+}) => {
+  const { colors } = useTheme()
+
+  const styles = StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+    },
+    modalContainer: {
+      width: '90%',
+      backgroundColor: colors.cardBackground,
+      borderRadius: 20,
+      padding: 24,
+      elevation: 5,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+    },
+    iconContainer: {
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    uploadIcon: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: colors.primary + '20',
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 2,
+      borderColor: colors.primary + '50',
+    },
+    title: {
+      fontSize: 20,
+      fontFamily: 'Poppins-Bold',
+      textAlign: 'center',
+      marginBottom: 8,
+      color: colors.text,
+    },
+    message: {
+      fontSize: 13,
+      fontFamily: 'Poppins-Medium',
+      textAlign: 'center',
+      marginBottom: 4,
+      color: colors.textSecondary,
+      lineHeight: 20,
+    },
+    details: {
+      backgroundColor: colors.inputBackground,
+      borderRadius: 12,
+      padding: 16,
+      marginVertical: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    detailRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    detailLabel: {
+      fontSize: 13,
+      fontFamily: 'Poppins-Medium',
+      color: colors.textSecondary,
+    },
+    detailValue: {
+      fontSize: 13,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+      maxWidth: '55%',
+      textAlign: 'right',
+    },
+    buttonContainer: {
+      flexDirection: 'row',
+      marginTop: 8,
+      gap: 12,
+    },
+    cancelButton: {
+      flex: 1,
+      backgroundColor: colors.inputBackground,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    cancelButtonText: {
+      fontSize: 15,
+      fontFamily: 'Poppins-SemiBold',
+      color: colors.text,
+    },
+    confirmButton: {
+      flex: 1,
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: 'center',
+    },
+    confirmButtonText: {
+      fontSize: 15,
+      fontFamily: 'Poppins-SemiBold',
+      color: '#ffffff',
+    },
+  })
+
+  const presentCount = totalStudents - absentCount
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={onCancel}
+      statusBarTranslucent
+    >
+      <View style={styles.overlay}>
+        <View style={styles.modalContainer}>
+          <View style={styles.iconContainer}>
+            <View style={styles.uploadIcon}>
+              <FontAwesome5 name="upload" size={26} color={colors.primary} />
+            </View>
+          </View>
+
+          <ThemedText style={styles.title}>
+            {isOverride ? 'Confirm Override' : 'Confirm Upload'}
+          </ThemedText>
+
+          <ThemedText style={styles.message}>
+            {isOverride
+              ? 'This will override existing marks records.'
+              : 'Are you sure you want to upload marks?'}
+          </ThemedText>
+
+          <View style={styles.details}>
+            <View style={styles.detailRow}>
+              <ThemedText style={styles.detailLabel}>Class & Section:</ThemedText>
+              <ThemedText style={styles.detailValue}>{className} - {section}</ThemedText>
+            </View>
+            <View style={styles.detailRow}>
+              <ThemedText style={styles.detailLabel}>Exam:</ThemedText>
+              <ThemedText style={styles.detailValue}>{examName}</ThemedText>
+            </View>
+            <View style={styles.detailRow}>
+              <ThemedText style={styles.detailLabel}>Subject:</ThemedText>
+              <ThemedText style={styles.detailValue}>{subjectName}</ThemedText>
+            </View>
+            <View style={styles.detailRow}>
+              <ThemedText style={styles.detailLabel}>Total Marks:</ThemedText>
+              <ThemedText style={styles.detailValue}>{totalMarks}</ThemedText>
+            </View>
+            <View style={[styles.detailRow, { marginBottom: 0 }]}>
+              <ThemedText style={styles.detailLabel}>Students:</ThemedText>
+              <ThemedText style={styles.detailValue}>
+                {totalStudents} ({presentCount} present, {absentCount} absent)
+              </ThemedText>
+            </View>
+          </View>
+
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={onCancel}
+              activeOpacity={0.7}
+            >
+              <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.confirmButton}
+              onPress={onConfirm}
+              activeOpacity={0.7}
+            >
+              <ThemedText style={styles.confirmButtonText}>
+                {isOverride ? 'Override' : 'Upload'}
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  )
+})
+
 // Statistics Card Component
 const StatisticsCard = React.memo(({ statistics }) => {
   const { colors } = useTheme()
@@ -1045,6 +1245,7 @@ export default function UploadMarks({ visible, onClose }) {
   const [showOverrideModal, setShowOverrideModal] = useState(false)
   const [overrideData, setOverrideData] = useState(null)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showSubmitModal, setShowSubmitModal] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   
   // State for keyboard visibility
@@ -1748,12 +1949,12 @@ export default function UploadMarks({ visible, onClose }) {
         // Immediately update UI for override theme
         updateUIForOverride({
           exists: true,
-          totalMarked: response.data.data.processed,
+          totalMarked: students.length,
           totalStudents: students.length,
           uploadedBy: uploadedBy
         })
-        
-        showToast(`Marks uploaded for ${response.data.data.processed} student${response.data.data.processed > 1 ? 's' : ''}`, 'success')
+
+        showToast(`Marks uploaded for ${students.length} student${students.length > 1 ? 's' : ''}`, 'success')
       } else {
         showToast(response.data.message || 'Failed to upload marks', 'error')
       }
@@ -1804,12 +2005,12 @@ export default function UploadMarks({ visible, onClose }) {
         // Immediately update UI for override theme
         updateUIForOverride({
           exists: true,
-          totalMarked: response.data.data.markedCount,
+          totalMarked: students.length,
           totalStudents: students.length,
           uploadedBy: uploadedBy
         })
-        
-        showToast(`Marks overridden for ${response.data.data.markedCount} student${response.data.data.markedCount > 1 ? 's' : ''}`, 'success')
+
+        showToast(`Marks overridden for ${students.length} student${students.length > 1 ? 's' : ''}`, 'success')
       } else {
         showToast(response.data.message || 'Failed to override marks', 'error')
       }
@@ -2496,7 +2697,7 @@ export default function UploadMarks({ visible, onClose }) {
                 style={styles.saveBtnGradient}
               >
                 <TouchableOpacity
-                  onPress={handleSave}
+                  onPress={() => setShowSubmitModal(true)}
                   activeOpacity={0.9}
                   style={styles.saveBtnPressable}
                   disabled={saving || isLoadingStudents || isLoadingClasses || deleting || refreshing || checkingMarks || !hasLoadedStudents}
@@ -2528,6 +2729,20 @@ export default function UploadMarks({ visible, onClose }) {
           />
         </View>
       </Modal>
+      {/* Submit Confirmation Modal */}
+      <SubmitConfirmationModal
+        visible={showSubmitModal}
+        onConfirm={() => { setShowSubmitModal(false); handleSave() }}
+        onCancel={() => setShowSubmitModal(false)}
+        className={selectedClass || ''}
+        section={selectedSection || ''}
+        examName={examTypes.find(e => e.value === examType)?.label || examType}
+        subjectName={subjects.find(s => s.value === subject)?.label || subject}
+        totalStudents={students.length}
+        absentCount={Object.values(absences).filter(Boolean).length}
+        totalMarks={totalMarks}
+        isOverride={marksExist?.exists || false}
+      />
       {/* Override Confirmation Modal */}
       <OverrideConfirmationModal
         visible={showOverrideModal}

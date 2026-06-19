@@ -93,7 +93,7 @@ const CustomDropdown = ({
           styles.dropdownList,
           styles.dropdownListBottom,
           {
-            backgroundColor: colors.background,
+            backgroundColor: colors.cardBackground,
             borderColor: colors.border,
             shadowColor: '#000',
           }
@@ -111,6 +111,7 @@ const CustomDropdown = ({
                   styles.dropdownItem,
                   {
                     backgroundColor: value === item.value ? colors.primary + '10' : 'transparent',
+                    borderBottomColor: colors.border,
                   }
                 ]}
                 onPress={() => handleSelect(item)}
@@ -177,7 +178,11 @@ const PaymentItem = React.memo(({ item, onPress, colors, formatDate, getPaymentM
                   {item.student?.displayClass || 'N/A'} - {item.student?.section || 'N/A'}
                 </ThemedText>
               </View>
+<<<<<<< HEAD
               <View style={[styles.separatorDot, { backgroundColor: colors.textSecondary }]} />
+=======
+              <View style={[styles.separatorDot, { backgroundColor: colors.border }]} />
+>>>>>>> 541a9bdaf0653887af3282343c4d2c36a8d14b9e
               <View style={styles.dateBadge}>
                 <Feather name="calendar" size={10} color={colors.textSecondary} />
                 <ThemedText style={[styles.dateText, { color: colors.textSecondary }]}>{formatDate(item.date)}</ThemedText>

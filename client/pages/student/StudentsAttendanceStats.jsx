@@ -566,23 +566,23 @@ export default function StudentsAttendanceStats({ visible, onClose }) {
           </View>
           <View style={styles.heroStatsRow}>
             <View style={styles.heroStat}>
-              <ThemedText style={styles.heroStatVal}>{schoolSummary.totalStudents}</ThemedText>
-              <ThemedText style={styles.heroStatLbl}>Students</ThemedText>
-            </View>
-            <View style={styles.heroStatDiv} />
-            <View style={styles.heroStat}>
-              <ThemedText style={styles.heroStatVal}>{schoolSummary.totalPresent}</ThemedText>
+              <ThemedText style={styles.heroStatVal}>{schoolSummary.totalPresentSessions ?? '—'}</ThemedText>
               <ThemedText style={styles.heroStatLbl}>Present</ThemedText>
             </View>
             <View style={styles.heroStatDiv} />
             <View style={styles.heroStat}>
-              <ThemedText style={styles.heroStatVal}>{schoolSummary.totalAbsent}</ThemedText>
+              <ThemedText style={styles.heroStatVal}>{schoolSummary.totalAbsentSessions ?? '—'}</ThemedText>
               <ThemedText style={styles.heroStatLbl}>Absent</ThemedText>
             </View>
             <View style={styles.heroStatDiv} />
             <View style={styles.heroStat}>
-              <ThemedText style={styles.heroStatVal}>{dateRange?.totalWorkingDays ?? '—'}</ThemedText>
-              <ThemedText style={styles.heroStatLbl}>Working Days</ThemedText>
+              <ThemedText style={styles.heroStatVal}>{schoolSummary.totalSessions ?? '—'}</ThemedText>
+              <ThemedText style={styles.heroStatLbl}>Sessions</ThemedText>
+            </View>
+            <View style={styles.heroStatDiv} />
+            <View style={styles.heroStat}>
+              <ThemedText style={styles.heroStatVal}>{schoolSummary.totalStudents}</ThemedText>
+              <ThemedText style={styles.heroStatLbl}>Students</ThemedText>
             </View>
           </View>
         </LinearGradient>
@@ -629,23 +629,23 @@ export default function StudentsAttendanceStats({ visible, onClose }) {
 
               <View style={[styles.classStatsStrip, { backgroundColor: colors.inputBackground }]}>
                 <View style={styles.classStat}>
-                  <ThemedText style={[styles.classStatVal, { color: '#10b981' }]}>{cs.summary.totalPresent}</ThemedText>
+                  <ThemedText style={[styles.classStatVal, { color: '#10b981' }]}>{cs.summary.totalPresentSessions ?? 0}</ThemedText>
                   <ThemedText style={styles.classStatLbl}>Present</ThemedText>
                 </View>
                 <View style={styles.divider} />
                 <View style={styles.classStat}>
-                  <ThemedText style={[styles.classStatVal, { color: '#ef4444' }]}>{cs.summary.totalAbsent}</ThemedText>
+                  <ThemedText style={[styles.classStatVal, { color: '#ef4444' }]}>{cs.summary.totalAbsentSessions ?? 0}</ThemedText>
                   <ThemedText style={styles.classStatLbl}>Absent</ThemedText>
                 </View>
                 <View style={styles.divider} />
                 <View style={styles.classStat}>
-                  <ThemedText style={[styles.classStatVal, { color: colors.text }]}>{cs.summary.totalStudents}</ThemedText>
-                  <ThemedText style={styles.classStatLbl}>Students</ThemedText>
+                  <ThemedText style={[styles.classStatVal, { color: colors.text }]}>{cs.summary.totalSessions ?? 0}</ThemedText>
+                  <ThemedText style={styles.classStatLbl}>Sessions</ThemedText>
                 </View>
                 <View style={styles.divider} />
                 <View style={styles.classStat}>
-                  <ThemedText style={[styles.classStatVal, { color: colors.primary }]}>{cs.summary.averageDailyAttendance}%</ThemedText>
-                  <ThemedText style={styles.classStatLbl}>Daily Avg</ThemedText>
+                  <ThemedText style={[styles.classStatVal, { color: colors.primary }]}>{cs.summary.overallAttendancePercentage}%</ThemedText>
+                  <ThemedText style={styles.classStatLbl}>Avg</ThemedText>
                 </View>
               </View>
             </View>

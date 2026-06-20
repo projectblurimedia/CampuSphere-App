@@ -2362,6 +2362,9 @@ export const getAttendanceStatsByClassSection = async (req, res) => {
           totalAttendanceRecords: sectionStats.totalAttendanceRecords,
           totalPresent: sectionStats.totalPresentCount,
           totalAbsent: sectionStats.totalAbsentCount,
+          totalSessions: sectionStats.totalSessions,
+          totalPresentSessions: sectionStats.totalPresentSessions,
+          totalAbsentSessions: sectionStats.totalSessions - sectionStats.totalPresentSessions,
           overallAttendancePercentage: sectionStats.attendancePercentage,
           averageDailyAttendance: avgDailyAttendance,
           status: sectionStats.studentsWithAttendance === 0 ? 'No attendance data' : 'Data available'
@@ -2398,6 +2401,9 @@ export const getAttendanceStatsByClassSection = async (req, res) => {
       totalAttendanceRecords: schoolStats.totalAttendanceRecords,
       totalPresent: schoolStats.totalPresentCount,
       totalAbsent: schoolStats.totalAbsentCount,
+      totalSessions: schoolStats.totalSessions,
+      totalPresentSessions: schoolStats.totalPresentSessions,
+      totalAbsentSessions: schoolStats.totalSessions - schoolStats.totalPresentSessions,
       overallAttendancePercentage: schoolStats.totalSessions > 0
         ? Number(((schoolStats.totalPresentSessions / schoolStats.totalSessions) * 100).toFixed(2))
         : 0,

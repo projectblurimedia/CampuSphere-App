@@ -36,112 +36,97 @@ export const unstable_settings = {
 SplashScreen.preventAutoHideAsync()
 
 // Update Download Modal Component
-const UpdateDownloadModal = ({ visible, downloadProgress, onRestart }) => {
+const UpdateDownloadModal = ({ visible, downloadProgress }) => {
   const spinValue = useRef(new Animated.Value(0)).current
   const progressAnim = useRef(new Animated.Value(0)).current
+  const dot1Anim = useRef(new Animated.Value(0.3)).current
+  const dot2Anim = useRef(new Animated.Value(0.3)).current
+  const dot3Anim = useRef(new Animated.Value(0.3)).current
   const colors = useTheme().colors
 
   useEffect(() => {
-    if (visible && downloadProgress < 1) {
-      // Rotation animation
+    if (!visible) return
+
+    // Spin the icon
+    Animated.loop(
+      Animated.timing(spinValue, { toValue: 1, duration: 1200, useNativeDriver: true })
+    ).start()
+
+    // Animate dots with proper RN delays
+    const makeDot = (anim, delay) =>
       Animated.loop(
-        Animated.timing(spinValue, {
-          toValue: 1,
-          duration: 1500,
-          useNativeDriver: true,
-        })
-      ).start()
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(anim, { toValue: 1, duration: 250, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 0.3, duration: 250, useNativeDriver: true }),
+          Animated.delay(500),
+        ])
+      )
+    Animated.parallel([
+      makeDot(dot1Anim, 0),
+      makeDot(dot2Anim, 200),
+      makeDot(dot3Anim, 400),
+    ]).start()
+  }, [visible])
 
-      // Animate progress bar
-      Animated.timing(progressAnim, {
-        toValue: downloadProgress,
-        duration: 300,
-        useNativeDriver: false,
-      }).start()
-    } else {
-      spinValue.setValue(0)
-    }
-  }, [visible, downloadProgress])
+  // Smooth progress bar
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: downloadProgress,
+      duration: 280,
+      useNativeDriver: false,
+    }).start()
+  }, [downloadProgress])
 
-  const spin = spinValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  })
-
-  const progressWidth = progressAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0%', '100%'],
-  })
-
-  const isDownloadComplete = downloadProgress >= 1
+  const spin = spinValue.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] })
+  const progressWidth = progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
+  const isComplete = downloadProgress >= 1
 
   return (
-    <Modal
-      visible={visible}
-      transparent={true}
-      animationType="fade"
-      statusBarTranslucent={true}
-    >
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <View style={[styles.updateOverlay, { backgroundColor: 'rgba(0,0,0,0.85)' }]}>
         <View style={[styles.updateContainer, { backgroundColor: colors.cardBackground }]}>
-          {!isDownloadComplete ? (
+          {!isComplete ? (
             <>
               <Animated.View style={{ transform: [{ rotate: spin }] }}>
                 <MaterialIcons name="system-update" size={60} color={colors.primary} />
               </Animated.View>
-              
-              <Text style={[styles.updateTitle, { color: colors.text }]}>
-                Update in Progress
-              </Text>
-              
+
+              <Text style={[styles.updateTitle, { color: colors.text }]}>Update in Progress</Text>
+
               <Text style={[styles.updateMessage, { color: colors.textSecondary }]}>
-                Please don't close the app while we're updating...
+                Please don't close the app while updating...
               </Text>
-              
+
               <View style={[styles.progressBarContainer, { backgroundColor: colors.border }]}>
-                <Animated.View 
-                  style={[
-                    styles.progressBarFill, 
-                    { 
-                      backgroundColor: colors.primary,
-                      width: progressWidth
-                    }
-                  ]} 
+                <Animated.View
+                  style={[styles.progressBarFill, { backgroundColor: colors.primary, width: progressWidth }]}
                 />
               </View>
-              
-              <Text style={[styles.progressText, { color: colors.textSecondary }]}>
+
+              <Text style={[styles.progressText, { color: colors.primary }]}>
                 {Math.round(downloadProgress * 100)}% Downloaded
               </Text>
-              
+
               <View style={styles.loadingDots}>
-                <Animated.View style={[styles.dot, { backgroundColor: colors.primary }]} />
-                <Animated.View style={[styles.dot, { backgroundColor: colors.primary, animationDelay: '0.2s' }]} />
-                <Animated.View style={[styles.dot, { backgroundColor: colors.primary, animationDelay: '0.4s' }]} />
+                <Animated.View style={[styles.dot, { backgroundColor: colors.primary, opacity: dot1Anim }]} />
+                <Animated.View style={[styles.dot, { backgroundColor: colors.primary, opacity: dot2Anim }]} />
+                <Animated.View style={[styles.dot, { backgroundColor: colors.primary, opacity: dot3Anim }]} />
               </View>
             </>
           ) : (
             <>
-              <View style={[styles.successIcon, { backgroundColor: colors.primary + '20' }]}>
-                <MaterialIcons name="check-circle" size={60} color={colors.primary} />
+              <View style={[styles.successIcon, { backgroundColor: '#10b981' + '20' }]}>
+                <MaterialIcons name="check-circle" size={60} color="#10b981" />
               </View>
-              
-              <Text style={[styles.updateTitle, { color: colors.text }]}>
-                Update Ready!
-              </Text>
-              
+
+              <Text style={[styles.updateTitle, { color: colors.text }]}>Update Complete!</Text>
+
               <Text style={[styles.updateMessage, { color: colors.textSecondary }]}>
-                Your app has been updated successfully. Restart to see the changes.
+                Restarting app with the latest version...
               </Text>
-              
-              <TouchableOpacity 
-                style={[styles.restartButton, { backgroundColor: colors.primary }]}
-                onPress={onRestart}
-                activeOpacity={0.8}
-              >
-                <MaterialIcons name="restart-alt" size={24} color="#fff" />
-                <Text style={styles.restartButtonText}>Restart App</Text>
-              </TouchableOpacity>
+
+              <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 10 }} />
             </>
           )}
         </View>
@@ -343,42 +328,37 @@ const MainApp = () => {
   const socketConnected = useRef(false)
   const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(0)
+  const progressIntervalRef = useRef(null)
 
-  // Function to check for updates
   const checkForUpdates = useCallback(async () => {
     try {
+      if (__DEV__) return // skip in development
       const update = await Updates.checkForUpdateAsync()
-      
-      if (update.isAvailable) {
-        setShowUpdateModal(true)
-        setDownloadProgress(0)
-        
-        // Download the update
-        await Updates.fetchUpdateAsync({ 
-          eventListener: (event) => {
-            if (event.type === Updates.UpdateEventType.DOWNLOAD_STARTED) {
-              console.log('Download started')
-            } else if (event.type === Updates.UpdateEventType.DOWNLOAD_PROGRESS) {
-              const progress = event.manifest?.totalBytesWritten / event.manifest?.totalBytesExpectedToWrite
-              setDownloadProgress(progress)
-            } else if (event.type === Updates.UpdateEventType.DOWNLOAD_FINISHED) {
-              setDownloadProgress(1)
-            }
-          }
-        })
-      }
-    } catch (error) {
-      console.log('Update check failed', error)
+      if (!update.isAvailable) return
+
+      setShowUpdateModal(true)
+      setDownloadProgress(0)
+
+      // expo-updates has no real progress events, so animate smoothly to ~88%
+      let fake = 0
+      progressIntervalRef.current = setInterval(() => {
+        fake += Math.random() * 0.1 + 0.04
+        if (fake >= 0.88) { fake = 0.88; clearInterval(progressIntervalRef.current) }
+        setDownloadProgress(fake)
+      }, 350)
+
+      await Updates.fetchUpdateAsync()
+
+      // Download done — snap to 100% then auto-restart
+      clearInterval(progressIntervalRef.current)
+      setDownloadProgress(1)
+      setTimeout(() => Updates.reloadAsync(), 1800)
+    } catch {
+      clearInterval(progressIntervalRef.current)
+      setShowUpdateModal(false)
+      setDownloadProgress(0)
     }
   }, [])
-
-  const handleRestart = async () => {
-    try {
-      await Updates.reloadAsync()
-    } catch (error) {
-      console.log('Restart failed', error)
-    }
-  }
 
   // Check for updates periodically
   useEffect(() => {
@@ -467,10 +447,9 @@ const MainApp = () => {
         />
       </Stack>
       
-      <UpdateDownloadModal 
+      <UpdateDownloadModal
         visible={showUpdateModal}
         downloadProgress={downloadProgress}
-        onRestart={handleRestart}
       />
     </View>
   )
@@ -903,20 +882,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,
-  },
-  restartButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 10,
-    marginTop: 10,
-    gap: 10,
-  },
-  restartButtonText: {
-    fontSize: 16,
-    fontFamily: 'Poppins-SemiBold',
-    color: '#fff',
   },
 })

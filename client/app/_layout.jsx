@@ -328,52 +328,53 @@ const MainApp = () => {
   const socketConnected = useRef(false)
   const [showUpdateModal, setShowUpdateModal] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(0)
-  const progressIntervalRef = useRef(null)
 
-  const checkForUpdates = useCallback(async () => {
-    try {
-      if (__DEV__) return // skip in development
-      const update = await Updates.checkForUpdateAsync()
-      if (!update.isAvailable) return
+  // Reactive update state — reflects real download lifecycle
+  const { isUpdateAvailable, isUpdatePending, isDownloading } = Updates.useUpdates()
 
-      setShowUpdateModal(true)
-      setDownloadProgress(0)
+  // Step 1: update detected → show modal and start download
+  useEffect(() => {
+    if (!isUpdateAvailable) return
+    setShowUpdateModal(true)
+    setDownloadProgress(0)
+    Updates.fetchUpdateAsync().catch(() => setShowUpdateModal(false))
+  }, [isUpdateAvailable])
 
-      // expo-updates has no real progress events, so animate smoothly to ~88%
-      let fake = 0
-      progressIntervalRef.current = setInterval(() => {
-        fake += Math.random() * 0.1 + 0.04
-        if (fake >= 0.88) { fake = 0.88; clearInterval(progressIntervalRef.current) }
-        setDownloadProgress(fake)
-      }, 350)
+  // Step 2: while downloading → animate fake progress 5% → 88%
+  useEffect(() => {
+    if (!isDownloading) return
+    let current = 0.05
+    setDownloadProgress(current)
+    const id = setInterval(() => {
+      current = Math.min(current + Math.random() * 0.1 + 0.04, 0.88)
+      setDownloadProgress(current)
+    }, 400)
+    return () => clearInterval(id)
+  }, [isDownloading])
 
-      await Updates.fetchUpdateAsync()
+  // Step 3: download complete → snap to 100% and auto-restart
+  useEffect(() => {
+    if (!isUpdatePending || !showUpdateModal) return
+    setDownloadProgress(1)
+    const t = setTimeout(() => {
+      Updates.reloadAsync().catch(() => {})
+    }, 1800)
+    return () => clearTimeout(t)
+  }, [isUpdatePending, showUpdateModal])
 
-      // Download done — snap to 100% then auto-restart
-      clearInterval(progressIntervalRef.current)
-      setDownloadProgress(1)
-      setTimeout(() => Updates.reloadAsync(), 1800)
-    } catch {
-      clearInterval(progressIntervalRef.current)
-      setShowUpdateModal(false)
-      setDownloadProgress(0)
-    }
+  // Periodically check for updates (dev builds skip silently)
+  const triggerUpdateCheck = useCallback(async () => {
+    if (__DEV__) return
+    try { await Updates.checkForUpdateAsync() } catch {}
   }, [])
 
-  // Check for updates periodically
   useEffect(() => {
-    // Check for updates when app starts
-    checkForUpdates()
-
-    // Check for updates every 5 minutes (optional)
+    triggerUpdateCheck()
     const interval = setInterval(() => {
-      if (appState.current === 'active') {
-        checkForUpdates()
-      }
+      if (appState.current === 'active') triggerUpdateCheck()
     }, 5 * 60 * 1000)
-
     return () => clearInterval(interval)
-  }, [checkForUpdates])
+  }, [triggerUpdateCheck])
 
   useEffect(() => {
     function handleAppStateChange(nextAppState) {
@@ -389,7 +390,7 @@ const MainApp = () => {
         initializeSocket(employee.id, dispatch)
         socketConnected.current = true
         // Check for updates when app returns to foreground
-        checkForUpdates()
+        triggerUpdateCheck()
       }
 
       appState.current = nextAppState
@@ -409,7 +410,7 @@ const MainApp = () => {
         socketConnected.current = false
       }
     }
-  }, [employee.id, dispatch, checkForUpdates])
+  }, [employee.id, dispatch, triggerUpdateCheck])
   
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

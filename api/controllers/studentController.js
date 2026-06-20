@@ -2194,6 +2194,8 @@ export const getAttendanceStatsByClassSection = async (req, res) => {
       totalAttendanceRecords: 0,
       totalPresentCount: 0,
       totalAbsentCount: 0,
+      totalSessions: 0,
+      totalPresentSessions: 0,
       attendanceByDate: new Map() // For daily averages
     }
 
@@ -2214,6 +2216,8 @@ export const getAttendanceStatsByClassSection = async (req, res) => {
           totalAttendanceRecords: 0,
           totalPresentCount: 0,
           totalAbsentCount: 0,
+          totalSessions: 0,
+          totalPresentSessions: 0,
           attendancePercentage: 0,
           attendanceByDate: new Map(),
           students: []
@@ -2225,18 +2229,29 @@ export const getAttendanceStatsByClassSection = async (req, res) => {
 
       // Calculate individual student statistics
       const attendanceCount = student.attendance.length
-      const presentCount = student.attendance.filter(a => 
+      const presentCount = student.attendance.filter(a =>
         a.morning === true || a.afternoon === true
       ).length
-      const absentCount = student.attendance.filter(a => 
-        a.morning === false && a.afternoon === false
+      const absentCount = student.attendance.filter(a =>
+        a.morning !== true && a.afternoon !== true &&
+        (a.morning === false || a.afternoon === false)
       ).length
+
+      // Session-based counts for accurate percentage (each morning/afternoon is a separate session)
+      let totalSessions = 0
+      let presentSessions = 0
+      student.attendance.forEach(a => {
+        if (a.morning !== null) { totalSessions++; if (a.morning === true) presentSessions++ }
+        if (a.afternoon !== null) { totalSessions++; if (a.afternoon === true) presentSessions++ }
+      })
+      const absentSessions = totalSessions - presentSessions
 
       // Track per-date attendance for this section
       student.attendance.forEach(record => {
         const dateStr = record.date.toISOString().split('T')[0]
         const isPresent = record.morning === true || record.afternoon === true
-        
+        const isAbsent = !isPresent && (record.morning === false || record.afternoon === false)
+
         // Update section's per-date stats
         if (!sectionStats.attendanceByDate.has(dateStr)) {
           sectionStats.attendanceByDate.set(dateStr, {
@@ -2250,7 +2265,7 @@ export const getAttendanceStatsByClassSection = async (req, res) => {
         dateStats.total++
         if (isPresent) {
           dateStats.present++
-        } else {
+        } else if (isAbsent) {
           dateStats.absent++
         }
 
@@ -2267,7 +2282,7 @@ export const getAttendanceStatsByClassSection = async (req, res) => {
         schoolDateStats.total++
         if (isPresent) {
           schoolDateStats.present++
-        } else {
+        } else if (isAbsent) {
           schoolDateStats.absent++
         }
       })
@@ -2276,29 +2291,33 @@ export const getAttendanceStatsByClassSection = async (req, res) => {
       if (attendanceCount > 0) {
         sectionStats.studentsWithAttendance++
         schoolStats.studentsWithAttendance++
-        
+
         sectionStats.totalAttendanceRecords += attendanceCount
         sectionStats.totalPresentCount += presentCount
         sectionStats.totalAbsentCount += absentCount
-        
+        sectionStats.totalSessions += totalSessions
+        sectionStats.totalPresentSessions += presentSessions
+
         schoolStats.totalAttendanceRecords += attendanceCount
         schoolStats.totalPresentCount += presentCount
         schoolStats.totalAbsentCount += absentCount
+        schoolStats.totalSessions += totalSessions
+        schoolStats.totalPresentSessions += presentSessions
       } else {
         sectionStats.studentsWithoutAttendance++
         schoolStats.studentsWithoutAttendance++
       }
 
-      // Add student details
+      // Add student details (session-based counts for display)
       sectionStats.students.push({
         id: student.id,
         name: `${student.firstName || ''} ${student.lastName || ''}`.trim(),
         rollNo: student.rollNo || student.admissionNo,
-        attendanceCount,
-        presentCount,
-        absentCount,
-        attendancePercentage: attendanceCount > 0 
-          ? Number(((presentCount / attendanceCount) * 100).toFixed(2))
+        attendanceCount: totalSessions,
+        presentCount: presentSessions,
+        absentCount: absentSessions,
+        attendancePercentage: totalSessions > 0
+          ? Number(((presentSessions / totalSessions) * 100).toFixed(2))
           : 0,
         hasAttendance: attendanceCount > 0
       })
@@ -2309,10 +2328,10 @@ export const getAttendanceStatsByClassSection = async (req, res) => {
 
     // Process each class-section
     for (const [_, sectionStats] of classSectionMap) {
-      // Calculate section attendance percentage
-      if (sectionStats.totalAttendanceRecords > 0) {
+      // Calculate section attendance percentage (session-based for accuracy)
+      if (sectionStats.totalSessions > 0) {
         sectionStats.attendancePercentage = Number(
-          ((sectionStats.totalPresentCount / sectionStats.totalAttendanceRecords) * 100).toFixed(2)
+          ((sectionStats.totalPresentSessions / sectionStats.totalSessions) * 100).toFixed(2)
         )
       }
 
@@ -2379,8 +2398,8 @@ export const getAttendanceStatsByClassSection = async (req, res) => {
       totalAttendanceRecords: schoolStats.totalAttendanceRecords,
       totalPresent: schoolStats.totalPresentCount,
       totalAbsent: schoolStats.totalAbsentCount,
-      overallAttendancePercentage: schoolStats.totalAttendanceRecords > 0
-        ? Number(((schoolStats.totalPresentCount / schoolStats.totalAttendanceRecords) * 100).toFixed(2))
+      overallAttendancePercentage: schoolStats.totalSessions > 0
+        ? Number(((schoolStats.totalPresentSessions / schoolStats.totalSessions) * 100).toFixed(2))
         : 0,
       averageDailyAttendance: avgSchoolDailyAttendance,
       averagePresentPerDay: schoolDailyAttendance.length > 0

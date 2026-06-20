@@ -136,7 +136,7 @@ function RankedAttendanceCard({ student, colors, onPress }) {
         <View style={raStyles.statDiv} />
         <View style={raStyles.statItem}>
           <ThemedText style={[raStyles.statVal, { color: '#6b7280' }]}>{student.attendanceCount}</ThemedText>
-          <ThemedText style={raStyles.statLbl}>Total Days</ThemedText>
+          <ThemedText style={raStyles.statLbl}>Sessions</ThemedText>
         </View>
       </View>
     </View>
@@ -206,7 +206,7 @@ function AttendancePodium({ rankedStudents, colors }) {
                 {student.name?.split(' ')[0]}
               </ThemedText>
               <ThemedText style={[podStyles.podiumDays, { color: colors.textSecondary }]}>
-                {student.presentCount}/{student.attendanceCount}d
+                {student.presentCount}/{student.attendanceCount}s
               </ThemedText>
               <ThemedText style={[podStyles.podiumPct, { color: attColor }]}>
                 {student.attendancePercentage?.toFixed(1)}%
@@ -353,7 +353,13 @@ export default function StudentsAttendanceStats({ visible, onClose }) {
 
   const classRankings = useMemo(() => {
     if (!stats.length) return []
-    return assignClassRanks(stats)
+    const classesWithData = stats.filter(s => s.summary.totalAttendanceRecords > 0)
+    return assignClassRanks(classesWithData)
+  }, [stats])
+
+  const classesNoAttendance = useMemo(() => {
+    if (!stats.length) return []
+    return stats.filter(s => s.summary.totalAttendanceRecords === 0)
   }, [stats])
 
   const rankedStudents = useMemo(() => {
@@ -374,7 +380,12 @@ export default function StudentsAttendanceStats({ visible, onClose }) {
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
   const handleStudentPress = (student) => {
-    setSelectedStudent(student)
+    setSelectedStudent({
+      ...student,
+      class: selectedClass,
+      section: selectedSection,
+      classLabel: CLASS_LABELS[selectedClass],
+    })
     setShowStudentAttendance(true)
   }
 
@@ -640,6 +651,37 @@ export default function StudentsAttendanceStats({ visible, onClose }) {
             </View>
           )
         })}
+
+        {classesNoAttendance.length > 0 && (
+          <View style={{ marginTop: 8 }}>
+            <ThemedText style={{ fontSize: 11, fontFamily: 'Poppins-SemiBold', color: colors.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Attendance Not Taken ({classesNoAttendance.length})
+            </ThemedText>
+            {classesNoAttendance.map((cs, idx) => (
+              <View key={idx} style={[styles.classRankCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={[styles.rankBadgeSmall, { backgroundColor: colors.inputBackground }]}>
+                    <Ionicons name="time-outline" size={16} color={colors.textSecondary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <ThemedText style={[styles.classCardTitle, { color: colors.text }]}>{cs.classLabel}</ThemedText>
+                      <View style={[styles.secBadge, { backgroundColor: colors.primary + '15' }]}>
+                        <ThemedText style={[styles.secBadgeText, { color: colors.primary }]}>Sec {cs.section}</ThemedText>
+                      </View>
+                    </View>
+                    <ThemedText style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>
+                      {cs.summary.totalStudents} students
+                    </ThemedText>
+                  </View>
+                  <View style={{ backgroundColor: '#f59e0b15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
+                    <ThemedText style={{ fontSize: 12, color: '#f59e0b', fontFamily: 'Poppins-SemiBold' }}>Not Taken</ThemedText>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
     )
   }

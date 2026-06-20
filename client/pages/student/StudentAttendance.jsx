@@ -117,7 +117,7 @@ export default function StudentAttendance({ visible, onClose, student }) {
             Attendance Overview
           </ThemedText>
           <ThemedText style={styles.subtitle}>
-            {student?.firstName || ''} {student?.lastName || ''} • {student?.displayClass}-{student?.section}
+            {student?.name || ''} • {student?.classLabel || student?.class || ''}{student?.section ? `-${student.section}` : ''}
           </ThemedText>
         </View>
         
